@@ -1,12 +1,81 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User, Place, CheckIn, List } from '../types';
+import { User, Place, CheckIn, List } from '../types/database';
+
+// Database type definitions for Supabase
+export interface Database {
+  public: {
+    Tables: {
+      users: {
+        Row: User;
+        Insert: Omit<User, 'id' | 'created_at'>;
+        Update: Partial<Omit<User, 'id' | 'created_at'>>;
+      };
+      places: {
+        Row: Place & { created_at: string };
+        Insert: Omit<Place, 'id'> & { created_at?: string };
+        Update: Partial<Omit<Place, 'id'>>;
+      };
+      check_ins: {
+        Row: CheckIn & { created_at: string };
+        Insert: Omit<CheckIn, 'id'> & { created_at?: string };
+        Update: Partial<Omit<CheckIn, 'id'>>;
+      };
+      lists: {
+        Row: List & { created_at: string };
+        Insert: Omit<List, 'id'> & { created_at?: string };
+        Update: Partial<Omit<List, 'id'>>;
+      };
+      list_places: {
+        Row: {
+          list_id: string;
+          place_id: string;
+          added_at: string;
+          notes?: string;
+        };
+        Insert: {
+          list_id: string;
+          place_id: string;
+          notes?: string;
+        };
+        Update: {
+          notes?: string;
+        };
+      };
+      recommendation_requests: {
+        Row: {
+          id: string;
+          user_id: string;
+          context: any;
+          suggested_places: string[];
+          user_feedback?: string;
+          timestamp: string;
+        };
+        Insert: {
+          user_id: string;
+          context: any;
+          suggested_places?: string[];
+          user_feedback?: string;
+        };
+        Update: {
+          context?: any;
+          suggested_places?: string[];
+          user_feedback?: string;
+        };
+      };
+    };
+  };
+}
 
 // Supabase configuration
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables. Please check your .env file.');
+}
+
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,
@@ -25,6 +94,25 @@ export const authService = {
         data: userData,
       },
     });
+    
+    // Create user profile after successful signup
+    if (data.user && !error) {
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert({
+          id: data.user.id,
+          email: data.user.email!,
+          full_name: userData?.full_name,
+          avatar_url: userData?.avatar_url,
+          auth_provider: 'email',
+          preferences: userData?.preferences || {},
+        });
+      
+      if (profileError) {
+        console.error('Error creating user profile:', profileError);
+      }
+    }
+    
     return { data, error };
   },
 
@@ -55,6 +143,15 @@ export const authService = {
       .single();
     return { data, error };
   },
+
+  async getUserProfile(userId: string) {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+    return { data, error };
+  },
 };
 
 // Places service functions
@@ -62,12 +159,8 @@ export const placesService = {
   async getPlaces(userId?: string) {
     let query = supabase.from('places').select('*');
     
-    if (userId) {
-      query = query.or(`user_id.eq.${userId},is_public.eq.true`);
-    } else {
-      query = query.eq('is_public', true);
-    }
-    
+    // For now, return all public places
+    // Later we can add user-specific filtering
     const { data, error } = await query.order('created_at', { ascending: false });
     return { data, error };
   },
@@ -81,31 +174,57 @@ export const placesService = {
     return { data, error };
   },
 
-  async createPlace(place: Omit<Place, 'id' | 'created_at' | 'updated_at'>) {
+  async getPlaceByGoogleId(googlePlaceId: string) {
     const { data, error } = await supabase
       .from('places')
-      .insert(place)
+      .select('*')
+      .eq('google_place_id', googlePlaceId)
+      .single();
+    return { data, error };
+  },
+
+  async createPlace(place: Omit<Place, 'id'>) {
+    const { data, error } = await supabase
+      .from('places')
+      .insert({
+        google_place_id: place.google_place_id,
+        name: place.name,
+        address: place.address,
+        coordinates: `POINT(${place.coordinates[1]} ${place.coordinates[0]})` as any,
+        place_type: place.place_type,
+        price_level: place.price_level,
+        bangkok_context: place.bangkok_context,
+      })
       .select()
       .single();
     return { data, error };
   },
 
   async updatePlace(id: string, updates: Partial<Place>) {
+    const updateData: any = { ...updates };
+    
+    // Handle coordinates update
+    if (updates.coordinates) {
+      updateData.coordinates = `POINT(${updates.coordinates[1]} ${updates.coordinates[0]})`;
+    }
+    
     const { data, error } = await supabase
       .from('places')
-      .update(updates)
+      .update(updateData)
       .eq('id', id)
       .select()
       .single();
     return { data, error };
   },
 
-  async deletePlace(id: string) {
-    const { error } = await supabase
-      .from('places')
-      .delete()
-      .eq('id', id);
-    return { error };
+  async searchNearbyPlaces(lat: number, lng: number, radiusMeters: number = 5000) {
+    const { data, error } = await supabase
+      .rpc('search_places_near_location', {
+        lat,
+        lng,
+        radius_meters: radiusMeters,
+      });
+    return { data, error };
   },
 };
 
@@ -113,20 +232,37 @@ export const placesService = {
 export const checkInsService = {
   async getCheckIns(userId: string) {
     const { data, error } = await supabase
-      .from('checkins')
+      .rpc('get_user_check_ins_with_places', {
+        user_uuid: userId,
+      });
+    return { data, error };
+  },
+
+  async getCheckIn(id: string) {
+    const { data, error } = await supabase
+      .from('check_ins')
       .select(`
         *,
         places (*)
       `)
-      .eq('user_id', userId)
-      .order('visited_at', { ascending: false });
+      .eq('id', id)
+      .single();
     return { data, error };
   },
 
-  async createCheckIn(checkIn: Omit<CheckIn, 'id' | 'created_at' | 'updated_at'>) {
+  async createCheckIn(checkIn: Omit<CheckIn, 'id'>) {
     const { data, error } = await supabase
-      .from('checkins')
-      .insert(checkIn)
+      .from('check_ins')
+      .insert({
+        user_id: checkIn.user_id,
+        place_id: checkIn.place_id,
+        timestamp: checkIn.timestamp,
+        rating: checkIn.rating,
+        tags: checkIn.tags,
+        context: checkIn.context,
+        photos: checkIn.photos,
+        notes: checkIn.notes,
+      })
       .select()
       .single();
     return { data, error };
@@ -134,7 +270,7 @@ export const checkInsService = {
 
   async updateCheckIn(id: string, updates: Partial<CheckIn>) {
     const { data, error } = await supabase
-      .from('checkins')
+      .from('check_ins')
       .update(updates)
       .eq('id', id)
       .select()
@@ -144,7 +280,7 @@ export const checkInsService = {
 
   async deleteCheckIn(id: string) {
     const { error } = await supabase
-      .from('checkins')
+      .from('check_ins')
       .delete()
       .eq('id', id);
     return { error };
@@ -167,17 +303,27 @@ export const listsService = {
       .from('lists')
       .select(`
         *,
-        places!inner(*)
+        list_places (
+          place_id,
+          added_at,
+          notes,
+          places (*)
+        )
       `)
       .eq('id', id)
       .single();
     return { data, error };
   },
 
-  async createList(list: Omit<List, 'id' | 'created_at' | 'updated_at'>) {
+  async createList(list: Omit<List, 'id'>) {
     const { data, error } = await supabase
       .from('lists')
-      .insert(list)
+      .insert({
+        user_id: list.user_id,
+        name: list.name,
+        auto_generated: list.auto_generated,
+        privacy_level: list.privacy_level,
+      })
       .select()
       .single();
     return { data, error };
@@ -199,5 +345,62 @@ export const listsService = {
       .delete()
       .eq('id', id);
     return { error };
+  },
+
+  async addPlaceToList(listId: string, placeId: string, notes?: string) {
+    const { data, error } = await supabase
+      .from('list_places')
+      .insert({
+        list_id: listId,
+        place_id: placeId,
+        notes,
+      })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  async removePlaceFromList(listId: string, placeId: string) {
+    const { error } = await supabase
+      .from('list_places')
+      .delete()
+      .eq('list_id', listId)
+      .eq('place_id', placeId);
+    return { error };
+  },
+};
+
+// Recommendation service functions
+export const recommendationService = {
+  async createRecommendationRequest(userId: string, context: any, suggestedPlaces: string[] = []) {
+    const { data, error } = await supabase
+      .from('recommendation_requests')
+      .insert({
+        user_id: userId,
+        context,
+        suggested_places: suggestedPlaces,
+      })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  async updateRecommendationFeedback(id: string, feedback: string) {
+    const { data, error } = await supabase
+      .from('recommendation_requests')
+      .update({ user_feedback: feedback })
+      .eq('id', id)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  async getUserRecommendationHistory(userId: string) {
+    const { data, error } = await supabase
+      .from('recommendation_requests')
+      .select('*')
+      .eq('user_id', userId)
+      .order('timestamp', { ascending: false });
+    return { data, error };
   },
 }; 
