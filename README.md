@@ -34,7 +34,7 @@ A React Native Expo app for discovering, saving, and sharing your favorite place
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/khunjon/placemarks.git
    cd placemarks
    ```
 
@@ -140,22 +140,24 @@ CREATE TABLE lists (
 
 ```
 placemarks/
-├── components/          # Reusable UI components
-├── screens/            # Screen components
-├── services/           # API services and utilities
-├── types/              # TypeScript type definitions
-├── utils/              # Helper functions
-├── App.tsx             # Main app component
+├── src/
+│   ├── components/      # Reusable UI components
+│   ├── screens/         # Screen components
+│   ├── services/        # API services and utilities
+│   ├── types/           # TypeScript type definitions
+│   ├── utils/           # Helper functions
+│   └── constants/       # App constants
+├── App.tsx              # Main app component
 └── package.json
 ```
 
 ### Key Files
 
-- `services/supabase.ts` - Supabase client and API functions
-- `services/auth-context.tsx` - Authentication context provider
-- `types/index.ts` - TypeScript interfaces and types
-- `utils/location.ts` - Location utilities and permissions
-- `components/Navigation.tsx` - App navigation setup
+- `src/services/supabase.ts` - Supabase client and API functions
+- `src/services/auth-context.tsx` - Authentication context provider
+- `src/types/database.ts` - TypeScript interfaces and types
+- `src/utils/location.ts` - Location utilities and permissions
+- `src/components/Navigation.tsx` - App navigation setup
 
 ## Contributing
 
@@ -171,4 +173,4 @@ This project is licensed under the MIT License.
 
 ## Support
 
-For support, please open an issue on GitHub or contact the development team. 
+For support, please open an issue on GitHub or contact the development team.
