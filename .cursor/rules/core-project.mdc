@@ -1,0 +1,58 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Placemarks - React Native Expo App with Supabase
+
+## Project Overview
+This is a React Native Expo app called "Placemarks" that allows users to save, organize, and share their favorite places. The app uses Supabase as the backend for authentication, database, and real-time features.
+
+## Tech Stack
+- React Native with Expo
+- TypeScript
+- Supabase (Backend as a Service)
+- React Navigation
+- Expo Location Services
+- React Native Maps
+- AsyncStorage for offline caching
+
+## Database Schema (Supabase)
+The app uses the following main tables:
+- `users` - User profiles and authentication data
+- `places` - Location data with coordinates, descriptions, and metadata
+- `checkins` - User check-ins at places with notes and ratings
+- `lists` - User-created lists of places
+
+## Key Features
+- User authentication (email/password, OAuth)
+- Location-based place discovery
+- Personal place collections and lists
+- Check-ins with photos and notes
+- Offline support with local caching
+- Real-time updates via Supabase subscriptions
+
+## Development Guidelines
+- Use TypeScript for all new code
+- Follow React Native best practices
+- Implement proper error handling
+- Use Supabase client for all backend operations
+- Maintain offline-first approach where possible
+- Follow the established folder structure
+
+## Folder Structure
+- `/components` - Reusable UI components
+- `/screens` - Screen components for navigation
+- `/services` - API services and utilities
+- `/types` - TypeScript type definitions
+- `/utils` - Helper functions and utilities
+
+## Environment Variables
+Required environment variables (see env.example):
+- EXPO_PUBLIC_SUPABASE_URL
+- EXPO_PUBLIC_SUPABASE_ANON_KEY
+- EXPO_PUBLIC_GOOGLE_MAPS_API_KEY (for maps)
+- OAuth credentials (if using social login)
+
+## Supabase MCP Integration
+When working with database operations, prefer using Supabase MCP for direct database queries and schema management. The app's service layer in `/services/supabase.ts` provides typed interfaces for all database operations. 
