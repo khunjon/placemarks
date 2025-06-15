@@ -4,7 +4,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { RootStackParamList } from '../types';
 import { useAuth } from '../services/auth-context';
 
-// Import screens (we'll create these next)
+// Import screens
 import HomeScreen from '../screens/HomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -13,6 +13,15 @@ import AddPlaceScreen from '../screens/AddPlaceScreen';
 import PlaceDetailsScreen from '../screens/PlaceDetailsScreen';
 import ListsScreen from '../screens/ListsScreen';
 import ListDetailsScreen from '../screens/ListDetailsScreen';
+
+// Import new auth screens
+import WelcomeScreen from '../screens/auth/WelcomeScreen';
+import SignUpScreen from '../screens/auth/SignUpScreen';
+import ProfileSetupScreen from '../screens/auth/ProfileSetupScreen';
+
+// Import new profile screens
+import UserProfileScreen from '../screens/profile/UserProfileScreen';
+import PreferencesScreen from '../screens/profile/PreferencesScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -75,14 +84,41 @@ export default function Navigation() {
               component={ProfileScreen}
               options={{ title: 'Profile' }}
             />
+            <Stack.Screen 
+              name="UserProfile" 
+              component={UserProfileScreen}
+              options={{ title: 'My Profile' }}
+            />
+            <Stack.Screen 
+              name="Preferences" 
+              component={PreferencesScreen}
+              options={{ title: 'Preferences' }}
+            />
           </>
         ) : (
           // Unauthenticated screens
-          <Stack.Screen 
-            name="Login" 
-            component={LoginScreen}
-            options={{ headerShown: false }}
-          />
+          <>
+            <Stack.Screen 
+              name="Welcome" 
+              component={WelcomeScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen 
+              name="Login" 
+              component={LoginScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen 
+              name="SignUp" 
+              component={SignUpScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen 
+              name="ProfileSetup" 
+              component={ProfileSetupScreen}
+              options={{ headerShown: false }}
+            />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>

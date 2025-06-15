@@ -1,8 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../services/auth-context';
 
 export default function ProfileScreen() {
+  const navigation = useNavigation();
   const { user, signOut } = useAuth();
 
   return (
@@ -14,6 +16,20 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.buttonContainer}>
+        <TouchableOpacity
+          style={[styles.button, styles.profileButton]}
+          onPress={() => navigation.navigate('UserProfile' as never)}
+        >
+          <Text style={styles.buttonText}>Edit Profile</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.button, styles.preferencesButton]}
+          onPress={() => navigation.navigate('Preferences' as never)}
+        >
+          <Text style={styles.buttonText}>Preferences</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={[styles.button, styles.signOutButton]}
           onPress={signOut}
@@ -59,6 +75,12 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
+  },
+  profileButton: {
+    backgroundColor: '#2563eb',
+  },
+  preferencesButton: {
+    backgroundColor: '#059669',
   },
   signOutButton: {
     backgroundColor: '#dc2626',
