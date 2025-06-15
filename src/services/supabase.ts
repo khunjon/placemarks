@@ -190,7 +190,7 @@ export const placesService = {
         google_place_id: place.google_place_id,
         name: place.name,
         address: place.address,
-        coordinates: `POINT(${place.coordinates[1]} ${place.coordinates[0]})` as any,
+        coordinates: `POINT(${place.coordinates[1]} ${place.coordinates[0]})`,
         place_type: place.place_type,
         price_level: place.price_level,
         bangkok_context: place.bangkok_context,
@@ -203,7 +203,7 @@ export const placesService = {
   async updatePlace(id: string, updates: Partial<Place>) {
     const updateData: any = { ...updates };
     
-    // Handle coordinates update
+    // Handle coordinates update for PostGIS geometry
     if (updates.coordinates) {
       updateData.coordinates = `POINT(${updates.coordinates[1]} ${updates.coordinates[0]})`;
     }
