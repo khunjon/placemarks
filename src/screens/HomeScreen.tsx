@@ -1,8 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, SafeAreaView } from 'react-native';
+import { Button } from 'react-native-elements';
 import { StackNavigationProp } from '@react-navigation/stack';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import { RootStackParamList } from '../types';
 import { useAuth } from '../services/auth-context';
+import { DarkTheme } from '../constants/theme';
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
@@ -13,110 +16,185 @@ interface Props {
 export default function HomeScreen({ navigation }: Props) {
   const { user, signOut } = useAuth();
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Welcome to Placemarks</Text>
-      <Text style={styles.subtitle}>Hello, {user?.email}!</Text>
-      
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={[styles.button, styles.mapButton]}
-          onPress={() => navigation.navigate('Map')}
-        >
-          <Text style={styles.buttonText}>🗺️ Interactive Map</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => navigation.navigate('AddPlace')}
-        >
-          <Text style={styles.buttonText}>Add Place</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => navigation.navigate('Lists')}
-        >
-          <Text style={styles.buttonText}>My Lists</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => navigation.navigate('Profile')}
-        >
-          <Text style={styles.buttonText}>Profile</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.button, styles.demoButton]}
-          onPress={() => navigation.navigate('PlacesSearch')}
-        >
-          <Text style={styles.buttonText}>🗺️ Google Places Demo</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.button, styles.checkInButton]}
-          onPress={() => navigation.navigate('CheckInHistory')}
-        >
-          <Text style={styles.buttonText}>📍 My Check-ins</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.button, styles.signOutButton]}
-          onPress={signOut}
-        >
-          <Text style={styles.buttonText}>Sign Out</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
+  const navigationButtons = [
+    {
+      title: 'Interactive Map',
+      icon: 'map',
+      color: DarkTheme.colors.bangkok.sapphire,
+      onPress: () => navigation.navigate('Map'),
+    },
+    {
+      title: 'Add Place',
+      icon: 'add-location',
+      color: DarkTheme.colors.accent.green,
+      onPress: () => navigation.navigate('AddPlace'),
+    },
+    {
+      title: 'My Lists',
+      icon: 'list',
+      color: DarkTheme.colors.accent.purple,
+      onPress: () => navigation.navigate('Lists'),
+    },
+    {
+      title: 'Profile',
+      icon: 'person',
+      color: DarkTheme.colors.accent.orange,
+      onPress: () => navigation.navigate('Profile'),
+    },
+    {
+      title: 'Google Places Demo',
+      icon: 'search',
+      color: DarkTheme.colors.bangkok.emerald,
+      onPress: () => navigation.navigate('PlacesSearch'),
+    },
+    {
+      title: 'My Check-ins',
+      icon: 'location-on',
+      color: DarkTheme.colors.bangkok.gold,
+      onPress: () => navigation.navigate('CheckInHistory'),
+    },
+  ];
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-    padding: 20,
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 10,
-    color: '#2563eb',
-  },
-  subtitle: {
-    fontSize: 18,
-    textAlign: 'center',
-    marginBottom: 40,
-    color: '#666',
-  },
-  buttonContainer: {
-    gap: 15,
-  },
-  button: {
-    backgroundColor: '#2563eb',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  signOutButton: {
-    backgroundColor: '#dc2626',
-    marginTop: 20,
-  },
-  demoButton: {
-    backgroundColor: '#059669',
-  },
-  checkInButton: {
-    backgroundColor: '#7C3AED',
-  },
-  mapButton: {
-    backgroundColor: '#8B5CF6',
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-}); 
+  return (
+    <SafeAreaView className="flex-1 bg-black">
+      <ScrollView 
+        className="flex-1" 
+        contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View className="flex-1 px-6 py-8">
+          {/* Header Section */}
+          <View className="items-center mb-12">
+            <Text 
+              style={[
+                DarkTheme.typography.largeTitle,
+                { textAlign: 'center', marginBottom: DarkTheme.spacing.sm }
+              ]}
+            >
+              Welcome to Placemarks
+            </Text>
+            <View className="flex-row items-center">
+              <Icon 
+                name="location-on" 
+                size={20} 
+                color={DarkTheme.colors.bangkok.gold} 
+              />
+              <Text 
+                style={[
+                  DarkTheme.typography.headline,
+                  { 
+                    color: DarkTheme.colors.semantic.secondaryLabel,
+                    marginLeft: DarkTheme.spacing.xs 
+                  }
+                ]}
+              >
+                Hello, {user?.email?.split('@')[0]}!
+              </Text>
+            </View>
+          </View>
+
+          {/* Quick Stats Card */}
+          <View 
+            className="mb-8 p-4 rounded-2xl"
+            style={{ 
+              backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
+              ...DarkTheme.shadows.medium 
+            }}
+          >
+            <Text 
+              style={[
+                DarkTheme.typography.headline,
+                { marginBottom: DarkTheme.spacing.md }
+              ]}
+            >
+              Discover Bangkok
+            </Text>
+            <View className="flex-row justify-around">
+              <View className="items-center">
+                <Text style={DarkTheme.typography.title2}>🏛️</Text>
+                <Text style={DarkTheme.typography.caption1}>Temples</Text>
+              </View>
+              <View className="items-center">
+                <Text style={DarkTheme.typography.title2}>🍜</Text>
+                <Text style={DarkTheme.typography.caption1}>Street Food</Text>
+              </View>
+              <View className="items-center">
+                <Text style={DarkTheme.typography.title2}>🛍️</Text>
+                <Text style={DarkTheme.typography.caption1}>Markets</Text>
+              </View>
+              <View className="items-center">
+                <Text style={DarkTheme.typography.title2}>🌊</Text>
+                <Text style={DarkTheme.typography.caption1}>River</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Navigation Buttons */}
+          <View className="mb-8">
+            <Text 
+              style={[
+                DarkTheme.typography.title3,
+                { marginBottom: DarkTheme.spacing.lg }
+              ]}
+            >
+              Explore
+            </Text>
+            <View className="gap-y-3">
+              {navigationButtons.map((button, index) => (
+                <Button
+                  key={index}
+                  title={button.title}
+                  icon={
+                    <Icon 
+                      name={button.icon} 
+                      size={20} 
+                      color={DarkTheme.colors.system.white}
+                      style={{ marginRight: DarkTheme.spacing.sm }}
+                    />
+                  }
+                  buttonStyle={[
+                    DarkTheme.componentStyles.Button.buttonStyle,
+                    { 
+                      backgroundColor: button.color,
+                      justifyContent: 'flex-start',
+                      paddingHorizontal: DarkTheme.spacing.lg,
+                    }
+                  ]}
+                  titleStyle={[
+                    DarkTheme.componentStyles.Button.titleStyle,
+                    { textAlign: 'left', flex: 1 }
+                  ]}
+                  onPress={button.onPress}
+                />
+              ))}
+            </View>
+          </View>
+
+          {/* Sign Out Section */}
+          <View className="mt-auto pt-6">
+            <Button
+              title="Sign Out"
+              icon={
+                <Icon 
+                  name="logout" 
+                  size={20} 
+                  color={DarkTheme.colors.system.white}
+                  style={{ marginRight: DarkTheme.spacing.sm }}
+                />
+              }
+              buttonStyle={[
+                DarkTheme.componentStyles.Button.buttonStyle,
+                { 
+                  backgroundColor: DarkTheme.colors.status.error,
+                  justifyContent: 'center',
+                }
+              ]}
+              titleStyle={DarkTheme.componentStyles.Button.titleStyle}
+              onPress={signOut}
+            />
+          </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+} 

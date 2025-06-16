@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RouteProp } from '@react-navigation/native';
-import { RootStackParamList } from '../../types';
+import { CheckInStackScreenProps } from '../../navigation/types';
 import { 
   CheckInContext, 
   WeatherContext, 
@@ -27,13 +27,9 @@ import RatingSystem from '../../components/checkin/RatingSystem';
 import ContextCapture from '../../components/checkin/ContextCapture';
 import PhotoUpload from '../../components/checkin/PhotoUpload';
 
-type CheckInScreenNavigationProp = StackNavigationProp<RootStackParamList, 'CheckIn'>;
-type CheckInScreenRouteProp = RouteProp<RootStackParamList, 'CheckIn'>;
+type CheckInScreenProps = CheckInStackScreenProps<'CheckIn'>;
 
-interface Props {
-  navigation: CheckInScreenNavigationProp;
-  route: CheckInScreenRouteProp;
-}
+interface Props extends CheckInScreenProps {}
 
 export default function CheckInScreen({ navigation, route }: Props) {
   const { placeId, placeName } = route.params;

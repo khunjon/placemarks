@@ -1,297 +1,342 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Image,
-} from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { Place } from '../../types/places';
-import { RootStackParamList } from '../../types';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { MapPin, Star, Coffee, ShoppingBag, Building, TreePine, Camera, Utensils } from 'lucide-react-native';
+import { DarkTheme } from '../../constants/theme';
+import { LocationBadge } from '../ui';
 
-interface PlaceCardProps {
-  place: Place;
-  onPress: (place: Place) => void;
-  showDistance?: boolean;
-  distance?: number;
+export interface PlaceCardProps {
+  id: string;
+  name: string;
+  type: 'restaurant' | 'cafe' | 'shopping' | 'temple' | 'park' | 'hotel' | 'attraction';
+  description: string;
+  address: string;
+  distance: string;
+  rating?: number;
+  priceLevel?: 1 | 2 | 3 | 4;
+  isOpen?: boolean;
+  btsStation?: string;
+  onCheckIn: (placeId: string, placeName: string) => void;
+  onPress?: () => void;
 }
 
-type NavigationProp = StackNavigationProp<RootStackParamList>;
+const getTypeIcon = (type: PlaceCardProps['type']) => {
+  switch (type) {
+    case 'restaurant':
+      return Utensils;
+    case 'cafe':
+      return Coffee;
+    case 'shopping':
+      return ShoppingBag;
+    case 'temple':
+      return Building;
+    case 'park':
+      return TreePine;
+    case 'hotel':
+      return Building;
+    case 'attraction':
+      return Star;
+    default:
+      return MapPin;
+  }
+};
 
-export default function PlaceCard({ 
-  place, 
-  onPress, 
-  showDistance = false, 
-  distance 
+const getTypeColor = (type: PlaceCardProps['type']) => {
+  switch (type) {
+    case 'restaurant':
+      return DarkTheme.colors.bangkok.market;
+    case 'cafe':
+      return DarkTheme.colors.bangkok.saffron;
+    case 'shopping':
+      return DarkTheme.colors.accent.purple;
+    case 'temple':
+      return DarkTheme.colors.bangkok.temple;
+    case 'park':
+      return DarkTheme.colors.accent.green;
+    case 'hotel':
+      return DarkTheme.colors.accent.blue;
+    case 'attraction':
+      return DarkTheme.colors.bangkok.gold;
+    default:
+      return DarkTheme.colors.semantic.secondaryLabel;
+  }
+};
+
+export default function PlaceCard({
+  id,
+  name,
+  type,
+  description,
+  address,
+  distance,
+  rating,
+  priceLevel,
+  isOpen,
+  btsStation,
+  onCheckIn,
+  onPress,
 }: PlaceCardProps) {
-  const navigation = useNavigation<NavigationProp>();
-  const getBTSProximityColor = (proximity: string) => {
-    switch (proximity) {
-      case 'walking':
-        return '#4CAF50'; // Green
-      case 'near':
-        return '#FF9800'; // Orange
-      case 'far':
-        return '#F44336'; // Red
-      default:
-        return '#9E9E9E'; // Gray
-    }
-  };
+  const TypeIcon = getTypeIcon(type);
+  const typeColor = getTypeColor(type);
 
-  const getPriceTierSymbol = (tier: string) => {
-    switch (tier) {
-      case 'street':
-        return '฿';
-      case 'casual':
-        return '฿฿';
-      case 'mid':
-        return '฿฿฿';
-      case 'upscale':
-        return '฿฿฿฿';
-      case 'luxury':
-        return '฿฿฿฿฿';
-      default:
-        return '฿฿';
-    }
-  };
-
-  const getEnvironmentIcon = (environment: string) => {
-    switch (environment) {
-      case 'indoor':
-        return '🏢';
-      case 'outdoor':
-        return '🌳';
-      case 'mixed':
-        return '🏪';
-      default:
-        return '📍';
-    }
-  };
-
-  const formatPlaceTypes = (placeType: string) => {
-    if (!placeType) return 'Place';
-    return placeType
-      .split(',')
-      .slice(0, 2) // Show only first 2 types
-      .map(type => type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()))
-      .join(', ');
+  const handleCheckIn = () => {
+    onCheckIn(id, name);
   };
 
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => onPress(place)}
+    <TouchableOpacity 
+      onPress={onPress}
       activeOpacity={0.7}
+      style={{
+        backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
+        borderColor: DarkTheme.colors.semantic.separator,
+        borderWidth: 1,
+        borderRadius: DarkTheme.borderRadius.md,
+        padding: DarkTheme.spacing.md,
+        marginBottom: DarkTheme.spacing.sm,
+        ...DarkTheme.shadows.small,
+      }}
     >
-      <View style={styles.header}>
-        <View style={styles.titleContainer}>
-          <Text style={styles.name} numberOfLines={1}>
-            {place.name}
-          </Text>
-          <Text style={styles.address} numberOfLines={1}>
-            {place.address || 'Address not available'}
-          </Text>
-        </View>
-        
-        {showDistance && distance && (
-          <View style={styles.distanceContainer}>
-            <Text style={styles.distance}>
-              {distance < 1 
-                ? `${Math.round(distance * 1000)}m`
-                : `${distance.toFixed(1)}km`
-              }
-            </Text>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.details}>
-        <Text style={styles.placeTypes}>
-          {formatPlaceTypes(place.place_type)}
-        </Text>
-        
-        <View style={styles.contextRow}>
-          <View style={styles.contextItem}>
-            <Text style={styles.contextIcon}>
-              {getEnvironmentIcon(place.bangkok_context.environment)}
-            </Text>
-            <Text style={styles.contextText}>
-              {place.bangkok_context.environment}
-            </Text>
-          </View>
-
-          <View style={styles.contextItem}>
-            <View 
-              style={[
-                styles.btsIndicator, 
-                { backgroundColor: getBTSProximityColor(place.bangkok_context.bts_proximity) }
-              ]} 
+      {/* Header Row */}
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        marginBottom: DarkTheme.spacing.sm,
+      }}>
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          flex: 1,
+        }}>
+          <View 
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginRight: DarkTheme.spacing.sm,
+              backgroundColor: `${typeColor}20`,
+            }}
+          >
+            <TypeIcon 
+              size={20} 
+              color={typeColor}
+              strokeWidth={2}
             />
-            <Text style={styles.contextText}>
-              BTS {place.bangkok_context.bts_proximity}
-            </Text>
           </View>
-
-          <View style={styles.contextItem}>
-            <Text style={styles.priceSymbol}>
-              {getPriceTierSymbol(place.bangkok_context.price_tier)}
+          
+          <View style={{ flex: 1 }}>
+            <Text 
+              style={[
+                DarkTheme.typography.headline,
+                { 
+                  color: DarkTheme.colors.semantic.label,
+                  marginBottom: DarkTheme.spacing.xs 
+                }
+              ]}
+              numberOfLines={1}
+            >
+              {name}
             </Text>
+            
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text 
+                style={[
+                  DarkTheme.typography.caption1,
+                  { 
+                    color: typeColor,
+                    textTransform: 'capitalize',
+                    fontWeight: '600' 
+                  }
+                ]}
+              >
+                {type}
+              </Text>
+              
+              {isOpen !== undefined && (
+                <>
+                  <View 
+                    style={{
+                      width: 4,
+                      height: 4,
+                      borderRadius: 2,
+                      marginHorizontal: DarkTheme.spacing.xs,
+                      backgroundColor: DarkTheme.colors.semantic.separator,
+                    }}
+                  />
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View 
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        marginRight: 4,
+                        backgroundColor: isOpen 
+                          ? DarkTheme.colors.status.success 
+                          : DarkTheme.colors.status.error,
+                      }}
+                    />
+                    <Text 
+                      style={[
+                        DarkTheme.typography.caption1,
+                        { 
+                          color: isOpen 
+                            ? DarkTheme.colors.status.success 
+                            : DarkTheme.colors.status.error 
+                        }
+                      ]}
+                    >
+                      {isOpen ? 'Open' : 'Closed'}
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
           </View>
         </View>
-
-        <View style={styles.amenitiesRow}>
-          {place.bangkok_context.air_conditioning && (
-            <View style={styles.amenityTag}>
-              <Text style={styles.amenityText}>❄️ AC</Text>
+        
+        <View style={{ alignItems: 'flex-end' }}>
+          <View style={{ 
+            flexDirection: 'row', 
+            alignItems: 'center', 
+            marginBottom: 4 
+          }}>
+            <MapPin 
+              size={12} 
+              color={DarkTheme.colors.semantic.tertiaryLabel}
+            />
+            <Text 
+              style={[
+                DarkTheme.typography.caption2,
+                { 
+                  color: DarkTheme.colors.semantic.tertiaryLabel,
+                  marginLeft: DarkTheme.spacing.xs 
+                }
+              ]}
+            >
+              {distance}
+            </Text>
+          </View>
+          
+          {rating && (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Star 
+                size={12} 
+                color={DarkTheme.colors.accent.yellow}
+                fill={DarkTheme.colors.accent.yellow}
+              />
+              <Text 
+                style={[
+                  DarkTheme.typography.caption2,
+                  { 
+                    color: DarkTheme.colors.semantic.tertiaryLabel,
+                    marginLeft: DarkTheme.spacing.xs 
+                  }
+                ]}
+              >
+                {rating.toFixed(1)}
+              </Text>
             </View>
           )}
-          
-          <View style={styles.amenityTag}>
-            <Text style={styles.amenityText}>
-              🔊 {place.bangkok_context.noise_level}
-            </Text>
-          </View>
-
-          <View style={styles.amenityTag}>
-            <Text style={styles.amenityText}>
-              📍 {place.bangkok_context.location_type}
-            </Text>
-          </View>
         </View>
+      </View>
 
-        {/* Check-in Button */}
-        <TouchableOpacity
-          style={styles.checkInButton}
-          onPress={(e) => {
-            e.stopPropagation();
-            navigation.navigate('CheckIn', {
-              placeId: place.id,
-              placeName: place.name,
-            });
-          }}
+      {/* Description */}
+      <Text 
+        style={[
+          DarkTheme.typography.subhead,
+          { 
+            color: DarkTheme.colors.semantic.secondaryLabel,
+            marginBottom: DarkTheme.spacing.sm 
+          }
+        ]}
+        numberOfLines={2}
+      >
+        {description}
+      </Text>
+
+      {/* Address */}
+      <View style={{ 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        marginBottom: DarkTheme.spacing.sm 
+      }}>
+        <MapPin 
+          size={14} 
+          color={DarkTheme.colors.semantic.tertiaryLabel}
+        />
+        <Text 
+          style={[
+            DarkTheme.typography.caption1,
+            { 
+              color: DarkTheme.colors.semantic.tertiaryLabel,
+              marginLeft: DarkTheme.spacing.xs,
+              flex: 1 
+            }
+          ]}
+          numberOfLines={1}
         >
-          <Text style={styles.checkInButtonText}>📍 Check In</Text>
+          {address}
+        </Text>
+      </View>
+
+      {/* Badges and Check-in Button */}
+      <View style={{ 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        justifyContent: 'space-between' 
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {btsStation && (
+            <LocationBadge 
+              type="bts" 
+              value={btsStation} 
+              size="small" 
+              style={{ marginRight: DarkTheme.spacing.sm }}
+            />
+          )}
+          
+          {priceLevel && (
+            <LocationBadge 
+              type="price" 
+              value={priceLevel} 
+              size="small" 
+            />
+          )}
+        </View>
+        
+        <TouchableOpacity
+          onPress={handleCheckIn}
+          style={{
+            backgroundColor: DarkTheme.colors.bangkok.gold,
+            paddingHorizontal: DarkTheme.spacing.md,
+            paddingVertical: DarkTheme.spacing.sm,
+            borderRadius: DarkTheme.borderRadius.sm,
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}
+          activeOpacity={0.8}
+        >
+          <Camera 
+            size={16} 
+            color={DarkTheme.colors.system.black}
+            strokeWidth={2}
+          />
+          <Text 
+            style={[
+              DarkTheme.typography.callout,
+              { 
+                color: DarkTheme.colors.system.black,
+                fontWeight: '600',
+                marginLeft: DarkTheme.spacing.xs 
+              }
+            ]}
+          >
+            Check In
+          </Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
-}
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginVertical: 6,
-    marginHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  titleContainer: {
-    flex: 1,
-    marginRight: 12,
-  },
-  name: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    marginBottom: 2,
-  },
-  address: {
-    fontSize: 14,
-    color: '#666666',
-  },
-  distanceContainer: {
-    backgroundColor: '#F0F0F0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  distance: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#333333',
-  },
-  details: {
-    marginTop: 8,
-  },
-  placeTypes: {
-    fontSize: 14,
-    color: '#4A90E2',
-    marginBottom: 8,
-    fontWeight: '500',
-  },
-  contextRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  contextItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  contextIcon: {
-    fontSize: 14,
-    marginRight: 4,
-  },
-  contextText: {
-    fontSize: 12,
-    color: '#666666',
-    textTransform: 'capitalize',
-  },
-  btsIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 4,
-  },
-  priceSymbol: {
-    fontSize: 14,
-    color: '#4CAF50',
-    fontWeight: '600',
-  },
-  amenitiesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  amenityTag: {
-    backgroundColor: '#F5F5F5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginRight: 6,
-    marginBottom: 4,
-  },
-  amenityText: {
-    fontSize: 11,
-    color: '#666666',
-  },
-  checkInButton: {
-    backgroundColor: '#2196F3',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginTop: 12,
-    alignItems: 'center',
-  },
-  checkInButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-}); 
+} 

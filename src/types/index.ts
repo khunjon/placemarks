@@ -126,25 +126,8 @@ export interface List {
   updated_at: string;
 }
 
-// Navigation types
-export type RootStackParamList = {
-  Home: undefined;
-  Welcome: undefined;
-  Login: undefined;
-  SignUp: undefined;
-  ProfileSetup: undefined;
-  Profile: undefined;
-  UserProfile: undefined;
-  Preferences: undefined;
-  PlaceDetails: { placeId: string };
-  AddPlace: undefined;
-  Map: undefined;
-  Lists: undefined;
-  ListDetails: { listId: string };
-  PlacesSearch: undefined;
-  CheckIn: { placeId: string; placeName: string };
-  CheckInHistory: undefined;
-};
+// Legacy navigation types - moved to src/navigation/types.ts
+// These are kept for backward compatibility but should use the new navigation types
 
 // Auth types
 export interface AuthState {
