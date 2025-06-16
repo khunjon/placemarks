@@ -12,6 +12,11 @@ export type BottomTabParamList = {
 // Check In Stack Params
 export type CheckInStackParamList = {
   CheckIn: undefined;
+  CheckInSearch: undefined;
+  CheckInDetail: {
+    checkInId: string;
+    placeName: string;
+  };
   PlaceDetails: {
     placeId: string;
     placeName: string;

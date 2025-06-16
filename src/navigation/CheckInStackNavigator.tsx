@@ -5,6 +5,8 @@ import { CheckInStackParamList } from './types';
 
 // Import screens
 import CheckInScreen from '../screens/CheckInScreen';
+import CheckInSearchScreen from '../screens/CheckInSearchScreen';
+import CheckInDetailScreen from '../screens/CheckInDetailScreen';
 import PlaceDetailsScreen from '../screens/PlaceDetailsScreen';
 import CheckInFormScreen from '../screens/CheckInFormScreen';
 
@@ -39,6 +41,22 @@ export default function CheckInStackNavigator() {
       />
       
       <Stack.Screen 
+        name="CheckInSearch" 
+        component={CheckInSearchScreen}
+        options={{
+          headerShown: false, // CheckInSearchScreen has its own header
+        }}
+      />
+      
+      <Stack.Screen 
+        name="CheckInDetail" 
+        component={CheckInDetailScreen}
+        options={{
+          headerShown: false, // CheckInDetailScreen has its own header
+        }}
+      />
+      
+      <Stack.Screen 
         name="PlaceDetails" 
         component={PlaceDetailsScreen}
         options={({ route }) => ({
@@ -50,12 +68,11 @@ export default function CheckInStackNavigator() {
       <Stack.Screen 
         name="CheckInForm" 
         component={CheckInFormScreen}
-        options={({ route }) => ({
-          title: `Check in at ${route.params.placeName}`,
-          headerShown: true,
+        options={{
+          headerShown: false, // CheckInFormScreen has its own header
           presentation: 'modal',
           animation: 'slide_from_bottom',
-        })}
+        }}
       />
     </Stack.Navigator>
   );

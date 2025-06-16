@@ -1,113 +1,341 @@
-import React, { useState } from 'react';
-import { View, ScrollView, Alert } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, ScrollView, TouchableOpacity, TextInput, Alert, Keyboard, Platform, KeyboardAvoidingView, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { X, Check, Camera, Star, MapPin } from 'lucide-react-native';
 import { Colors } from '../constants/Colors';
 import { Spacing } from '../constants/Spacing';
 import { 
   Typography, 
-  Title2, 
   Title3,
   Body, 
   SecondaryText,
+  ElevatedCard,
   PrimaryButton,
-  GhostButton,
-  OutlineButton,
-  ElevatedCard 
+  LoadingState,
 } from '../components/common';
+import { useAuth } from '../services/auth-context';
+import { checkInsService, ThumbsRating, checkInUtils } from '../services/checkInsService';
 import type { CheckInStackScreenProps } from '../navigation/types';
 
 type CheckInFormScreenProps = CheckInStackScreenProps<'CheckInForm'>;
 
-export default function CheckInFormScreen({ route, navigation }: CheckInFormScreenProps) {
+export default function CheckInFormScreen({ navigation, route }: CheckInFormScreenProps) {
+  const { user } = useAuth();
   const { placeId, placeName, placeType } = route.params;
-  const [rating, setRating] = useState(0);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const textInputRef = useRef<TextInput>(null);
+  
+  const [selectedRating, setSelectedRating] = useState<ThumbsRating | null>(null);
+  const [comment, setComment] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  const handleCheckIn = () => {
-    if (rating === 0) {
-      Alert.alert('Rating Required', 'Please rate your experience before checking in.');
+  // Keyboard listeners for precise height tracking
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, []);
+
+  // Handle rating selection
+  const handleRatingSelect = (rating: ThumbsRating) => {
+    setSelectedRating(rating);
+  };
+
+  // Handle text input focus
+  const handleTextInputFocus = () => {
+    // Small delay to ensure keyboard animation starts
+    setTimeout(() => {
+      textInputRef.current?.measureInWindow((x, y, width, height) => {
+        // Use actual keyboard height if available, otherwise estimate
+        const actualKeyboardHeight = keyboardHeight || (Platform.OS === 'ios' ? 300 : 250);
+        const screenHeight = Dimensions.get('window').height;
+        const availableHeight = screenHeight - actualKeyboardHeight;
+        
+        // Position the input in the upper portion of the available space
+        const targetY = y - (availableHeight * 0.3); // Position at 30% from top of available space
+        
+        scrollViewRef.current?.scrollTo({
+          y: Math.max(0, targetY),
+          animated: true,
+        });
+      });
+    }, 150);
+  };
+
+  // Handle check-in submission
+  const handleCheckIn = async () => {
+    if (!user) {
+      Alert.alert('Error', 'You must be logged in to check in.');
       return;
     }
 
-    Alert.alert(
-      'Check In Successful!',
-      `You've checked in at ${placeName}!`,
-      [{ text: 'OK', onPress: () => navigation.goBack() }]
+    try {
+      setLoading(true);
+      Keyboard.dismiss();
+
+      // Create check-in (rating and comment are optional)
+      await checkInsService.createCheckIn(user.id, {
+        google_place_id: placeId,
+        rating: selectedRating || undefined,
+        comment: comment.trim() || undefined,
+      });
+
+      // Show success feedback briefly
+      Alert.alert(
+        'Check-in Successful! 🎉',
+        `You've checked in at ${placeName}`,
+        [
+          {
+            text: 'Great!',
+            onPress: () => {
+              // Navigate back to main CheckIn tab
+              navigation.navigate('CheckIn');
+            },
+          },
+        ]
+      );
+
+    } catch (error) {
+      console.error('Error creating check-in:', error);
+      Alert.alert(
+        'Check-in Failed',
+        'Something went wrong. Please try again.',
+        [
+          { text: 'OK' }
+        ]
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Render rating option
+  const renderRatingOption = (rating: ThumbsRating, emoji: string, label: string) => {
+    const isSelected = selectedRating === rating;
+    
+    return (
+      <TouchableOpacity
+        key={rating}
+        onPress={() => handleRatingSelect(rating)}
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          paddingVertical: Spacing.md,
+          paddingHorizontal: Spacing.sm,
+          borderRadius: 16,
+          backgroundColor: isSelected 
+            ? checkInUtils.getRatingColor(rating) + '20' // 20% opacity
+            : Colors.semantic.backgroundSecondary,
+          borderWidth: isSelected ? 2 : 1,
+          borderColor: isSelected 
+            ? checkInUtils.getRatingColor(rating)
+            : Colors.semantic.borderSecondary,
+          marginHorizontal: Spacing.xs,
+          minHeight: 80,
+          justifyContent: 'center',
+        }}
+        activeOpacity={0.7}
+      >
+        <Typography 
+          variant="body" 
+          style={{ 
+            fontSize: 28, 
+            marginBottom: Spacing.sm,
+            lineHeight: 32,
+            textAlign: 'center',
+          }}
+        >
+          {emoji}
+        </Typography>
+        <Body 
+          style={{ 
+            fontWeight: isSelected ? '600' : '400',
+            color: isSelected 
+              ? checkInUtils.getRatingColor(rating)
+              : Colors.semantic.textSecondary,
+            fontSize: 14,
+            textAlign: 'center',
+          }}
+        >
+          {label}
+        </Body>
+      </TouchableOpacity>
     );
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={{ 
+        flex: 1, 
+        backgroundColor: Colors.semantic.backgroundPrimary 
+      }}>
+        <LoadingState message="Checking you in..." />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ 
       flex: 1, 
       backgroundColor: Colors.semantic.backgroundPrimary 
     }}>
+      {/* Header */}
       <View style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
         paddingHorizontal: Spacing.layout.screenPadding,
         paddingVertical: Spacing.md,
         borderBottomWidth: 1,
         borderBottomColor: Colors.semantic.borderPrimary,
+        flexDirection: 'row',
+        alignItems: 'center',
       }}>
-        <GhostButton
-          title=""
+        <TouchableOpacity
           onPress={() => navigation.goBack()}
-          icon={X}
-          size="sm"
-        />
-
-        <Title2>Check In</Title2>
-
-        <PrimaryButton
-          title=""
-          onPress={handleCheckIn}
-          icon={Check}
-          size="sm"
-          disabled={rating === 0}
-        />
+          style={{ marginRight: Spacing.md }}
+        >
+          <Typography variant="body" color="primary">
+            ← Cancel
+          </Typography>
+        </TouchableOpacity>
+        <Typography variant="title2" style={{ fontWeight: 'bold', flex: 1 }}>
+          Check In
+        </Typography>
       </View>
 
-      <ScrollView style={{ flex: 1, padding: Spacing.layout.screenPadding }}>
-        <ElevatedCard padding="lg" style={{ marginBottom: Spacing.xl }}>
-          <Title3 style={{ marginBottom: Spacing.md }}>
-            {placeName}
-          </Title3>
-          
-          <Body color="secondary">
-            Rate your experience and check in!
-          </Body>
-
-          <View style={{
-            flexDirection: 'row',
-            justifyContent: 'center',
-            gap: Spacing.sm,
-            marginVertical: Spacing.lg,
-          }}>
-            {[1, 2, 3, 4, 5].map((star) => (
-              <View
-                key={star}
-                style={{ padding: Spacing.xs }}
-                onTouchEnd={() => setRating(star)}
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <ScrollView 
+          ref={scrollViewRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ 
+            paddingHorizontal: Spacing.layout.screenPadding,
+            paddingVertical: Spacing.lg,
+          }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
+          {/* Place Information */}
+          <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
+            <View style={{ alignItems: 'center', paddingVertical: Spacing.sm }}>
+              <Typography 
+                variant="body" 
+                style={{ 
+                  fontSize: 20, 
+                  marginBottom: Spacing.sm,
+                  lineHeight: 24,
+                }}
               >
-                <Star
-                  size={32}
-                  color={star <= rating ? Colors.accent.yellow : Colors.semantic.textSecondary}
-                  fill={star <= rating ? Colors.accent.yellow : 'transparent'}
-                  strokeWidth={2}
-                />
-              </View>
-            ))}
+                📍
+              </Typography>
+              <Title3 style={{ textAlign: 'center', marginBottom: Spacing.xs }}>
+                {placeName}
+              </Title3>
+              <SecondaryText style={{ textAlign: 'center', fontSize: 14 }}>
+                {placeType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+              </SecondaryText>
+            </View>
+          </ElevatedCard>
+
+          {/* Rating Selection */}
+          <View style={{ marginBottom: Spacing.xl }}>
+            <Body style={{ 
+              fontWeight: '600', 
+              marginBottom: Spacing.md,
+              textAlign: 'center',
+            }}>
+              How was your experience? (optional)
+            </Body>
+            
+            <View style={{ 
+              flexDirection: 'row', 
+              justifyContent: 'space-between',
+              marginHorizontal: Spacing.sm,
+            }}>
+              {renderRatingOption('thumbs_down', '👎', 'Not Great')}
+              {renderRatingOption('neutral', '😐', 'Okay')}
+              {renderRatingOption('thumbs_up', '👍', 'Great!')}
+            </View>
           </View>
 
+          {/* Comment Field */}
+          <View style={{ marginBottom: Spacing.xl }}>
+            <Body style={{ 
+              fontWeight: '600', 
+              marginBottom: Spacing.md 
+            }}>
+              Add a comment (optional)
+            </Body>
+            
+            <ElevatedCard padding="none">
+              <TextInput
+                ref={textInputRef}
+                value={comment}
+                onChangeText={setComment}
+                placeholder="Share your thoughts about this place..."
+                placeholderTextColor={Colors.semantic.textTertiary}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                style={{
+                  padding: Spacing.lg,
+                  fontSize: 16,
+                  lineHeight: 22,
+                  color: Colors.semantic.textPrimary,
+                  minHeight: 100,
+                  fontFamily: 'System', // Use system font
+                }}
+                maxLength={500}
+                onFocus={handleTextInputFocus}
+              />
+            </ElevatedCard>
+            
+            <SecondaryText style={{ 
+              fontSize: 12, 
+              marginTop: Spacing.xs,
+              textAlign: 'right',
+            }}>
+              {comment.length}/500
+            </SecondaryText>
+          </View>
+
+          {/* Check In Button */}
           <PrimaryButton
             title="Check In"
             onPress={handleCheckIn}
-            icon={MapPin}
-            disabled={rating === 0}
+            disabled={loading}
+            style={{
+              marginBottom: Spacing.lg,
+            }}
           />
-        </ElevatedCard>
-      </ScrollView>
+
+          {/* Helper Text */}
+          <SecondaryText style={{ 
+            textAlign: 'center', 
+            fontSize: 14,
+            lineHeight: 20,
+          }}>
+            You can always edit your rating or add a comment later from the place details.
+          </SecondaryText>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
