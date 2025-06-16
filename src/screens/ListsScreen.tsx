@@ -23,6 +23,34 @@ import type { ListsStackScreenProps } from '../navigation/types';
 
 type ListsScreenProps = ListsStackScreenProps<'Lists'>;
 
+// Mock data for smart lists (moved from DecideScreen)
+const mockSmartListsData = [
+  {
+    id: '5',
+    name: 'Most Visited',
+    type: 'auto' as const,
+    listType: 'visited' as const,
+    placeCount: 15,
+    previewPlaces: ['Siam Paragon', 'Chatuchak Market', 'MBK Center'],
+  },
+  {
+    id: '6',
+    name: 'Highly Rated',
+    type: 'auto' as const,
+    listType: 'rated' as const,
+    placeCount: 20,
+    previewPlaces: ['Wat Pho Temple', 'Grand Palace', 'Gaggan Anand'],
+  },
+  {
+    id: '7',
+    name: 'Recent Check-ins',
+    type: 'auto' as const,
+    listType: 'recent' as const,
+    placeCount: 10,
+    previewPlaces: ['Blue Elephant Restaurant', 'Lumpini Park', 'Café Tartine'],
+  },
+];
+
 export default function ListsScreen({ navigation }: ListsScreenProps) {
   const { user } = useAuth();
   const [userLists, setUserLists] = useState<ListWithPlaceCount[]>([]);
@@ -174,21 +202,17 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       return a.name.localeCompare(b.name);
     });
 
-  // Auto-generated lists (filtered from the same data)
-  const autoListsWithHandlers: ListItemProps[] = userLists
-    .filter(list => list.type === 'auto')
-    .map(list => ({
-      id: list.id,
-      name: list.name,
-      type: (list.type || 'auto') as 'user' | 'auto',
-      listType: (list.list_type || 'general') as ListItemProps['listType'],
-      placeCount: list.place_count,
-      icon: list.icon,
-      color: list.color,
-      previewPlaces: [], // Will be populated later if needed
-      isEditable: false,
-      onPress: () => handleNavigateToList(list.id, list.name, (list.type || 'auto') as 'user' | 'auto', false),
-    }));
+  // Smart lists with mock data
+  const smartListsWithHandlers: ListItemProps[] = mockSmartListsData.map(list => ({
+    id: list.id,
+    name: list.name,
+    type: list.type,
+    listType: list.listType,
+    placeCount: list.placeCount,
+    previewPlaces: list.previewPlaces,
+    isEditable: false,
+    onPress: () => handleNavigateToList(list.id, list.name, list.type, false),
+  }));
 
 
 
@@ -308,14 +332,24 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
             Automatically generated based on your activity
           </SecondaryText>
 
-                     <View>
-             {autoListsWithHandlers.map((list) => (
-               <ListItem
-                 key={list.id}
-                 {...list}
-               />
-             ))}
-           </View>
+          {smartListsWithHandlers.length > 0 ? (
+            <View>
+              {smartListsWithHandlers.map((list) => (
+                <ListItem
+                  key={list.id}
+                  {...list}
+                />
+              ))}
+            </View>
+          ) : (
+            <ElevatedCard padding="lg">
+              <View style={{ alignItems: 'center', paddingVertical: Spacing.lg }}>
+                <Body color="secondary" style={{ textAlign: 'center' }}>
+                  Smart lists will appear here as you use the app
+                </Body>
+              </View>
+            </ElevatedCard>
+          )}
         </View>
       </ScrollView>
 

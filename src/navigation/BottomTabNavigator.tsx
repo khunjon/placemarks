@@ -55,22 +55,6 @@ export default function BottomTabNavigator() {
       }}
     >
       <Tab.Screen
-        name="CheckInStack"
-        component={CheckInStackNavigator}
-        options={{
-          title: 'Check In',
-          headerShown: false, // Stack navigator handles headers
-          tabBarIcon: ({ color, size }) => (
-            <MapPin 
-              size={size} 
-              color={color}
-              strokeWidth={2}
-            />
-          ),
-        }}
-      />
-      
-      <Tab.Screen
         name="DecideStack"
         component={DecideStackNavigator}
         options={{
@@ -94,6 +78,22 @@ export default function BottomTabNavigator() {
           headerShown: false, // Stack navigator handles headers
           tabBarIcon: ({ color, size }) => (
             <List 
+              size={size} 
+              color={color}
+              strokeWidth={2}
+            />
+          ),
+        }}
+      />
+      
+      <Tab.Screen
+        name="CheckInStack"
+        component={CheckInStackNavigator}
+        options={{
+          title: 'Check In',
+          headerShown: false, // Stack navigator handles headers
+          tabBarIcon: ({ color, size }) => (
+            <MapPin 
               size={size} 
               color={color}
               strokeWidth={2}

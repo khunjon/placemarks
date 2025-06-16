@@ -56,5 +56,19 @@ export {
   RootStackParamList
 } from './navigation';
 
+// Recommendation engine types
+export {
+  TimeOfDay,
+  CityTier,
+  RecommendationType,
+  TimeContext,
+  RecommendationContext,
+  Recommendation,
+  RecommendationSet,
+  RecommendationFilters,
+  RecommendationRequest,
+  TimeBasedConfig
+} from './recommendations';
+
 // Supabase database schema types
 export type { Database } from './supabase'; 
