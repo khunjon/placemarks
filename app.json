@@ -16,6 +16,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.placemarks.app",
+      "config": {
+        "googleMapsApiKey": "process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY"
+      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "This app uses location to help you discover and save places around you.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "This app uses location to help you discover and save places around you."
@@ -28,6 +31,11 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.placemarks.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY"
+        }
+      },
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"

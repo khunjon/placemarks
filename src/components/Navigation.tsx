@@ -8,7 +8,7 @@ import { useAuth } from '../services/auth-context';
 import HomeScreen from '../screens/HomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import ProfileScreen from '../screens/ProfileScreen';
-import MapScreen from '../screens/MapScreen';
+import { MapScreen } from '../screens/maps/MapScreen';
 import AddPlaceScreen from '../screens/AddPlaceScreen';
 import PlaceDetailsScreen from '../screens/PlaceDetailsScreen';
 import ListsScreen from '../screens/ListsScreen';

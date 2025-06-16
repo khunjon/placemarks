@@ -20,10 +20,10 @@ export default function HomeScreen({ navigation }: Props) {
       
       <View style={styles.buttonContainer}>
         <TouchableOpacity
-          style={styles.button}
+          style={[styles.button, styles.mapButton]}
           onPress={() => navigation.navigate('Map')}
         >
-          <Text style={styles.buttonText}>View Map</Text>
+          <Text style={styles.buttonText}>🗺️ Interactive Map</Text>
         </TouchableOpacity>
         
         <TouchableOpacity
@@ -110,6 +110,9 @@ const styles = StyleSheet.create({
   },
   checkInButton: {
     backgroundColor: '#7C3AED',
+  },
+  mapButton: {
+    backgroundColor: '#8B5CF6',
   },
   buttonText: {
     color: 'white',
