@@ -48,6 +48,20 @@ export default function HomeScreen({ navigation }: Props) {
         </TouchableOpacity>
         
         <TouchableOpacity
+          style={[styles.button, styles.demoButton]}
+          onPress={() => navigation.navigate('PlacesSearch')}
+        >
+          <Text style={styles.buttonText}>🗺️ Google Places Demo</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.button, styles.checkInButton]}
+          onPress={() => navigation.navigate('CheckInHistory')}
+        >
+          <Text style={styles.buttonText}>📍 My Check-ins</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
           style={[styles.button, styles.signOutButton]}
           onPress={signOut}
         >
@@ -90,6 +104,12 @@ const styles = StyleSheet.create({
   signOutButton: {
     backgroundColor: '#dc2626',
     marginTop: 20,
+  },
+  demoButton: {
+    backgroundColor: '#059669',
+  },
+  checkInButton: {
+    backgroundColor: '#7C3AED',
   },
   buttonText: {
     color: 'white',

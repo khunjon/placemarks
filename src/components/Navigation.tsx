@@ -23,6 +23,13 @@ import ProfileSetupScreen from '../screens/auth/ProfileSetupScreen';
 import UserProfileScreen from '../screens/profile/UserProfileScreen';
 import PreferencesScreen from '../screens/profile/PreferencesScreen';
 
+// Import places screens
+import PlacesSearchScreen from '../screens/places/PlacesSearchScreen';
+
+// Import check-in screens
+import CheckInScreen from '../screens/checkin/CheckInScreen';
+import CheckInHistoryScreen from '../screens/checkin/CheckInHistoryScreen';
+
 const Stack = createStackNavigator<RootStackParamList>();
 
 export default function Navigation() {
@@ -93,6 +100,21 @@ export default function Navigation() {
               name="Preferences" 
               component={PreferencesScreen}
               options={{ title: 'Preferences' }}
+            />
+            <Stack.Screen 
+              name="PlacesSearch" 
+              component={PlacesSearchScreen}
+              options={{ title: 'Google Places Demo' }}
+            />
+            <Stack.Screen 
+              name="CheckIn" 
+              component={CheckInScreen}
+              options={{ title: 'Check In' }}
+            />
+            <Stack.Screen 
+              name="CheckInHistory" 
+              component={CheckInHistoryScreen}
+              options={{ title: 'Check-in History' }}
             />
           </>
         ) : (

@@ -141,6 +141,9 @@ export type RootStackParamList = {
   Map: undefined;
   Lists: undefined;
   ListDetails: { listId: string };
+  PlacesSearch: undefined;
+  CheckIn: { placeId: string; placeName: string };
+  CheckInHistory: undefined;
 };
 
 // Auth types
