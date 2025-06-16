@@ -13,6 +13,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, userData?: Partial<AppUser>) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: ProfileUpdate) => Promise<{ error: any }>;
+  refreshUser: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
   resendEmailVerification: () => Promise<{ error: any }>;
 }
@@ -66,7 +67,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const loadUserProfile = async (userId: string) => {
     try {
+      console.log('Auth context: Loading user profile for:', userId);
       const userProfile = await authService.getCurrentUser();
+      console.log('Auth context: User profile loaded:', userProfile?.full_name);
       setUser(userProfile);
     } catch (error) {
       console.error('Error loading user profile:', error);
@@ -135,16 +138,37 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const updateProfile = async (updates: ProfileUpdate) => {
     if (!user) return { error: new Error('No user logged in') };
     
-    setLoading(true);
     try {
+      console.log('Auth context: Starting profile update...');
       await authService.updateProfile(updates);
-      // Reload user profile after update
-      await loadUserProfile(user.id);
+      console.log('Auth context: Profile updated successfully');
+      
+      // Update local user state immediately instead of reloading
+      setUser(prevUser => {
+        if (!prevUser) return prevUser;
+        return {
+          ...prevUser,
+          full_name: updates.full_name ?? prevUser.full_name,
+          avatar_url: updates.avatar_url ?? prevUser.avatar_url,
+          preferences: updates.preferences ? { ...prevUser.preferences, ...updates.preferences } : prevUser.preferences,
+        };
+      });
+      
+      console.log('Auth context: Profile update complete');
       return { error: null };
     } catch (error: any) {
+      console.error('Auth context: Profile update error:', error);
       return { error };
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const refreshUser = async () => {
+    if (!user) return;
+    
+    try {
+      await loadUserProfile(user.id);
+    } catch (error) {
+      console.error('Error refreshing user:', error);
     }
   };
 
@@ -172,6 +196,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signUp,
     signOut,
     updateProfile,
+    refreshUser,
     resetPassword,
     resendEmailVerification,
   };

@@ -131,30 +131,34 @@ export class AuthService {
   // Profile management
   async updateProfile(data: ProfileUpdate): Promise<void> {
     try {
+      console.log('Auth service: Starting updateProfile with data:', data);
+      
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No authenticated user');
 
-             // Update auth user metadata
-       if (data.full_name) {
-         const { error: authError } = await supabase.auth.updateUser({
-           data: {
-             full_name: data.full_name,
-           },
-         });
-         if (authError) throw authError;
-       }
+      console.log('Auth service: User found:', user.id);
 
       // Update user profile in database
+      console.log('Auth service: Updating user profile in database...');
+      const updateData: any = {};
+      if (data.full_name !== undefined) updateData.full_name = data.full_name;
+      if (data.avatar_url !== undefined) updateData.avatar_url = data.avatar_url;
+      if (data.preferences !== undefined) updateData.preferences = data.preferences;
+
+      console.log('Auth service: Database update data:', updateData);
+
       const { error: profileError } = await supabase
         .from('users')
-        .update({
-          full_name: data.full_name,
-          avatar_url: data.avatar_url,
-          preferences: data.preferences,
-        })
+        .update(updateData)
         .eq('id', user.id);
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error('Auth service: Database update error:', profileError);
+        throw profileError;
+      }
+      
+      console.log('Auth service: Database updated successfully');
+      console.log('Auth service: Profile updated successfully');
     } catch (error) {
       console.error('Update profile error:', error);
       throw error;

@@ -9,23 +9,7 @@ import type { ProfileStackScreenProps } from './types';
 import ProfileScreen from '../screens/ProfileScreen';
 import PreferencesScreen from '../screens/PreferencesScreen';
 import AchievementDetailScreen from '../screens/AchievementDetailScreen';
-// import EditProfileScreen from '../screens/EditProfileScreen';
-
-// Placeholder wrapper component for EditProfile screen to avoid inline function
-function EditProfileScreenWrapper({ navigation, route }: ProfileStackScreenProps<'EditProfile'>) {
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.semantic.backgroundPrimary }}>
-      <Text style={{ color: Colors.semantic.textPrimary, fontSize: 18, marginBottom: 20 }}>
-        Edit Profile Screen
-      </Text>
-      <Text style={{ color: Colors.semantic.textSecondary, fontSize: 14, textAlign: 'center', paddingHorizontal: 40 }}>
-        This screen will be implemented later.{'\n'}
-        User: {route.params.userName}{'\n'}
-        Email: {route.params.userEmail}
-      </Text>
-    </View>
-  );
-}
+import EditProfileScreen from '../screens/EditProfileScreen';
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
 
@@ -59,10 +43,10 @@ export default function ProfileStackNavigator() {
       
       <Stack.Screen 
         name="EditProfile" 
-        component={EditProfileScreenWrapper}
+        component={EditProfileScreen}
         options={{
           title: 'Edit Profile',
-          headerShown: true,
+          headerShown: false, // EditProfileScreen has its own header
           presentation: 'modal',
           animation: 'slide_from_bottom',
         }}

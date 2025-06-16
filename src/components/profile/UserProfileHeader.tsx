@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { Edit3, User } from 'lucide-react-native';
 import { DarkTheme } from '../../constants/theme';
 
@@ -42,11 +42,14 @@ export default function UserProfileHeader({
         }}
       >
         {avatarUrl ? (
-          // TODO: Add Image component when avatar URL is provided
-          <User
-            size={40}
-            color={DarkTheme.colors.bangkok.gold}
-            strokeWidth={2}
+          <Image
+            source={{ uri: avatarUrl }}
+            style={{
+              width: 74,
+              height: 74,
+              borderRadius: 37,
+            }}
+            resizeMode="cover"
           />
         ) : (
           <User

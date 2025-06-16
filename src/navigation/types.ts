@@ -65,11 +65,7 @@ export type ListsStackParamList = {
 // Profile Stack Params
 export type ProfileStackParamList = {
   Profile: undefined;
-  EditProfile: {
-    userId: string;
-    userName: string;
-    userEmail: string;
-  };
+  EditProfile: undefined;
   Preferences: {
     section?: 'location' | 'notifications' | 'privacy' | 'data';
   };
