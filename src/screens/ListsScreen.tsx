@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScrollView, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus, List, Zap } from 'lucide-react-native';
@@ -15,95 +15,38 @@ import {
 } from '../components/common';
 import ListItem, { ListItemProps } from '../components/lists/ListItem';
 import CreateListScreen from './CreateListScreen';
+import { useAuth } from '../services/auth-context';
+import { listService, ListWithPlaceCount } from '../services/lists';
 import type { ListsStackScreenProps } from '../navigation/types';
-
-// Base list data type without handlers
-type ListData = {
-  id: string;
-  name: string;
-  type: 'user' | 'auto';
-  listType: 'favorites' | 'coffee' | 'date' | 'work' | 'want_to_try' | 'visited' | 'rated' | 'recent';
-  placeCount: number;
-  isEditable: boolean;
-};
-
-// Mock data for user lists - will be updated with navigation handlers in the component
-const initialUserListsData: ListData[] = [
-  {
-    id: '1',
-    name: 'Favorites',
-    type: 'user' as const,
-    listType: 'favorites' as const,
-    placeCount: 12,
-    isEditable: true,
-  },
-  {
-    id: '2',
-    name: 'Coffee Spots',
-    type: 'user' as const,
-    listType: 'coffee' as const,
-    placeCount: 8,
-    isEditable: true,
-  },
-  {
-    id: '3',
-    name: 'Date Night',
-    type: 'user' as const,
-    listType: 'date' as const,
-    placeCount: 5,
-    isEditable: true,
-  },
-  {
-    id: '4',
-    name: 'Work Spots',
-    type: 'user' as const,
-    listType: 'work' as const,
-    placeCount: 15,
-    isEditable: true,
-  },
-  {
-    id: '5',
-    name: 'Want to Try',
-    type: 'user' as const,
-    listType: 'want_to_try' as const,
-    placeCount: 20,
-    isEditable: true,
-  },
-];
-
-// Mock data for auto-generated lists - will be updated with navigation handlers in the component
-const autoListsData: ListData[] = [
-  {
-    id: 'auto-1',
-    name: 'Most Visited',
-    type: 'auto' as const,
-    listType: 'visited' as const,
-    placeCount: 25,
-    isEditable: false,
-  },
-  {
-    id: 'auto-2',
-    name: 'Highly Rated',
-    type: 'auto' as const,
-    listType: 'rated' as const,
-    placeCount: 18,
-    isEditable: false,
-  },
-  {
-    id: 'auto-3',
-    name: 'Recent Check-ins',
-    type: 'auto' as const,
-    listType: 'recent' as const,
-    placeCount: 12,
-    isEditable: false,
-  },
-];
 
 type ListsScreenProps = ListsStackScreenProps<'Lists'>;
 
 export default function ListsScreen({ navigation }: ListsScreenProps) {
-  const [userLists, setUserLists] = useState(initialUserListsData);
+  const { user } = useAuth();
+  const [userLists, setUserLists] = useState<ListWithPlaceCount[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // Load user's lists on component mount
+  useEffect(() => {
+    if (user) {
+      loadUserLists();
+    }
+  }, [user]);
+
+  const loadUserLists = async () => {
+    if (!user) return;
+    
+    try {
+      setLoading(true);
+      const lists = await listService.getUserLists(user.id);
+      setUserLists(lists);
+    } catch (error) {
+      console.error('Error loading lists:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleNavigateToList = (listId: string, listName: string, listType: 'user' | 'auto', isEditable: boolean = false) => {
     navigation.navigate('ListDetail', {
@@ -122,26 +65,39 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     setShowCreateModal(false);
   };
 
-  const handleSaveNewList = (listData: { name: string; description: string; icon: string; color: string }) => {
-    // Create new list item
-    const newListId = `user-${Date.now()}`;
-    const newList: ListData = {
-      id: newListId,
-      name: listData.name,
-      type: 'user',
-      listType: 'want_to_try', // Default type, could be determined by icon
-      placeCount: 0,
-      isEditable: true,
-    };
+  const handleSaveNewList = async (listData: { name: string; description: string; icon: string; color: string }) => {
+    if (!user) return;
+    
+    try {
+      // Create new list in database
+      const newList = await listService.createList({
+        user_id: user.id,
+        name: listData.name,
+        description: listData.description || undefined,
+        type: 'user',
+        list_type: 'general', // Default type
+        icon: listData.icon,
+        color: listData.color,
+        is_public: false,
+      });
 
-    setUserLists(prev => [...prev, newList]);
-    setShowCreateModal(false);
-    console.log('New list created:', listData);
+      // Reload lists to get updated data
+      await loadUserLists();
+      setShowCreateModal(false);
+      console.log('New list created:', newList);
+    } catch (error) {
+      console.error('Error creating list:', error);
+    }
   };
 
-  const handleDeleteList = (listId: string) => {
-    setUserLists(prev => prev.filter(list => list.id !== listId));
-    console.log('List deleted:', listId);
+  const handleDeleteList = async (listId: string) => {
+    try {
+      await listService.deleteList(listId);
+      await loadUserLists(); // Reload lists
+      console.log('List deleted:', listId);
+    } catch (error) {
+      console.error('Error deleting list:', error);
+    }
   };
 
   const handleEditList = (listId: string) => {
@@ -151,24 +107,41 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       navigation.navigate('EditList', {
         listId: listToEdit.id,
         listName: listToEdit.name,
-        listDescription: 'Sample list description', // You could store this in the list data
-        listIcon: 'heart', // You could store this in the list data
+        listDescription: listToEdit.description || '',
+        listIcon: listToEdit.icon || 'heart',
       });
     }
   };
 
-  // Convert ListData to ListItemProps with handlers
-  const userListsWithHandlers: ListItemProps[] = userLists.map(list => ({
-    ...list,
-    onPress: () => handleNavigateToList(list.id, list.name, list.type, list.isEditable),
-    onDelete: () => handleDeleteList(list.id),
-    onEdit: () => handleEditList(list.id),
-  }));
+  // Convert ListWithPlaceCount to ListItemProps with handlers
+  const userListsWithHandlers: ListItemProps[] = userLists
+    .filter(list => list.type === 'user')
+    .map(list => ({
+      id: list.id,
+      name: list.name,
+      type: list.type,
+      listType: list.list_type as ListItemProps['listType'],
+      placeCount: list.place_count,
+      previewPlaces: [], // Will be populated later if needed
+      isEditable: true,
+      onPress: () => handleNavigateToList(list.id, list.name, list.type, true),
+      onDelete: () => handleDeleteList(list.id),
+      onEdit: () => handleEditList(list.id),
+    }));
 
-  const autoListsWithHandlers: ListItemProps[] = autoListsData.map(list => ({
-    ...list,
-    onPress: () => handleNavigateToList(list.id, list.name, list.type, list.isEditable),
-  }));
+  // Auto-generated lists (filtered from the same data)
+  const autoListsWithHandlers: ListItemProps[] = userLists
+    .filter(list => list.type === 'auto')
+    .map(list => ({
+      id: list.id,
+      name: list.name,
+      type: list.type,
+      listType: list.list_type as ListItemProps['listType'],
+      placeCount: list.place_count,
+      previewPlaces: [], // Will be populated later if needed
+      isEditable: false,
+      onPress: () => handleNavigateToList(list.id, list.name, list.type, false),
+    }));
 
   const totalUserLists = userListsWithHandlers.length;
   const totalAutoLists = autoListsWithHandlers.length;

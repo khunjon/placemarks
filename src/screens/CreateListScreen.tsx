@@ -143,48 +143,98 @@ export default function CreateListScreen({ onClose, onSave }: CreateListScreenPr
           borderColor: DarkTheme.colors.semantic.separator,
           borderWidth: 1,
           borderRadius: DarkTheme.borderRadius.md,
-          padding: DarkTheme.spacing.lg,
+          padding: DarkTheme.spacing.md,
           marginBottom: DarkTheme.spacing.lg,
-          alignItems: 'center',
+          ...DarkTheme.shadows.small,
         }}>
-          <View 
-            style={{
-              width: 60,
-              height: 60,
-              borderRadius: 30,
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: DarkTheme.spacing.md,
-              backgroundColor: `${selectedIcon.color}20`,
-            }}
-          >
-            <selectedIcon.icon 
-              size={28} 
-              color={selectedIcon.color}
-              strokeWidth={2}
-            />
-          </View>
-          
-          <Text style={[
-            DarkTheme.typography.title3,
-            { 
-              color: DarkTheme.colors.semantic.label,
-              marginBottom: DarkTheme.spacing.xs,
-              textAlign: 'center',
-            }
-          ]}>
-            {listName || 'List Name'}
-          </Text>
-          
           <Text style={[
             DarkTheme.typography.subhead,
             { 
               color: DarkTheme.colors.semantic.secondaryLabel,
-              textAlign: 'center',
+              marginBottom: DarkTheme.spacing.sm,
+              fontWeight: '600',
             }
           ]}>
-            {description || 'Add a description to help you remember what this list is for'}
+            Preview
           </Text>
+          
+          {/* Header Row - matching ListCard format */}
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: DarkTheme.spacing.sm,
+          }}>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              flex: 1,
+            }}>
+              <View 
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: DarkTheme.spacing.sm,
+                  backgroundColor: `${selectedIcon.color}20`,
+                }}
+              >
+                <selectedIcon.icon 
+                  size={20} 
+                  color={selectedIcon.color}
+                  strokeWidth={2}
+                />
+              </View>
+              
+              <View style={{ flex: 1 }}>
+                <Text 
+                  style={[
+                    DarkTheme.typography.headline,
+                    { 
+                      color: DarkTheme.colors.semantic.label,
+                      marginBottom: 2,
+                    }
+                  ]}
+                  numberOfLines={1}
+                >
+                  {listName || 'My New List'}
+                </Text>
+                
+                <Text 
+                  style={[
+                    DarkTheme.typography.caption1,
+                    { 
+                      color: DarkTheme.colors.semantic.secondaryLabel,
+                      fontWeight: '600' 
+                    }
+                  ]}
+                >
+                  0 places
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Description preview */}
+          {description && (
+            <View style={{
+              backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+              borderRadius: DarkTheme.borderRadius.xs,
+              padding: DarkTheme.spacing.sm,
+              marginTop: DarkTheme.spacing.xs,
+            }}>
+              <Text style={[
+                DarkTheme.typography.caption1,
+                { 
+                  color: DarkTheme.colors.semantic.secondaryLabel,
+                }
+              ]}>
+                {description}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* List Name Input */}
