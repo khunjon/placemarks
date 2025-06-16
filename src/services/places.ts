@@ -1,6 +1,7 @@
 import { Place, PlaceDetails, PlaceSuggestion, Location, PlaceSearchParams } from '../types/places';
 import { BangkokContext } from '../types/database';
 import { placesCacheService } from './placesCache';
+import { Database } from '../types/supabase';
 
 interface GooglePlaceResult {
   place_id: string;
@@ -42,6 +43,113 @@ interface GoogleAutocompleteResult {
     secondary_text: string;
   };
 }
+
+// Type definitions based on Supabase schema
+export type PlaceRow = Database['public']['Tables']['places']['Row'];
+export type PlaceInsert = Database['public']['Tables']['places']['Insert'];
+export type PlaceUpdate = Database['public']['Tables']['places']['Update'];
+
+export interface PlaceWithDistance extends PlaceRow {
+  distance?: string;
+}
+
+export interface NearbyPlace extends PlaceRow {
+  distance: number; // in kilometers
+}
+
+// Mock data structure
+const mockPlaces: PlaceRow[] = [
+  {
+    id: 'place-1',
+    name: 'Chatuchak Weekend Market',
+    type: 'shopping',
+    description: 'Famous weekend market with thousands of stalls selling everything from clothes to food',
+    address: 'Kamphaeng Phet 2 Rd, Chatuchak, Bangkok 10900',
+    latitude: 13.7997,
+    longitude: 100.5510,
+    rating: 4.5,
+    price_level: 2,
+    bts_station: 'Mo Chit',
+    is_open: true,
+    opening_hours: 'Sat-Sun 9:00-18:00',
+    phone: '+66 2 272 4813',
+    website: undefined,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'place-2',
+    name: 'Wat Pho Temple',
+    type: 'temple',
+    description: 'Historic Buddhist temple famous for its giant reclining Buddha statue',
+    address: '2 Sanamchai Road, Grand Palace Subdistrict, Phra Nakhon District, Bangkok 10200',
+    latitude: 13.7465,
+    longitude: 100.4927,
+    rating: 4.8,
+    price_level: 1,
+    is_open: true,
+    opening_hours: 'Daily 8:00-18:30',
+    phone: '+66 2 226 0335',
+    website: 'https://www.watpho.com',
+    bts_station: undefined,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'place-3',
+    name: 'Café Tartine',
+    type: 'cafe',
+    description: 'Cozy French-style café with excellent coffee and pastries',
+    address: '496/1 Ploenchit Rd, Lumpini, Pathumwan, Bangkok 10330',
+    latitude: 13.7440,
+    longitude: 100.5416,
+    rating: 4.3,
+    price_level: 3,
+    bts_station: 'Ploenchit',
+    is_open: true,
+    opening_hours: 'Daily 7:00-22:00',
+    phone: '+66 2 252 3804',
+    website: undefined,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'place-4',
+    name: 'Gaggan Anand',
+    type: 'restaurant',
+    description: 'Progressive Indian cuisine restaurant by celebrity chef Gaggan Anand',
+    address: '68/1 Soi Langsuan, Ploenchit Rd, Lumpini, Pathumwan, Bangkok 10330',
+    latitude: 13.7408,
+    longitude: 100.5370,
+    rating: 4.9,
+    price_level: 4,
+    bts_station: 'Ploenchit',
+    is_open: false,
+    opening_hours: 'Tue-Sun 18:00-23:00',
+    phone: '+66 2 652 1700',
+    website: 'https://www.gaggan.com',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'place-5',
+    name: 'Lumpini Park',
+    type: 'park',
+    description: 'Large public park in the heart of Bangkok, perfect for jogging and relaxation',
+    address: 'Rama IV Rd, Pathumwan, Bangkok 10330',
+    latitude: 13.7307,
+    longitude: 100.5418,
+    rating: 4.4,
+    price_level: 0,
+    bts_station: 'Sala Daeng',
+    is_open: true,
+    opening_hours: 'Daily 4:30-21:00',
+    phone: undefined,
+    website: undefined,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+];
 
 export class PlacesService {
   private apiKey: string;
@@ -316,8 +424,6 @@ export class PlacesService {
     };
   }
 
-
-
   // Calculate distance between two points (Haversine formula)
   private calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
     const R = 6371; // Earth's radius in kilometers
@@ -332,4 +438,218 @@ export class PlacesService {
 }
 
 // Export singleton instance
-export const placesService = new PlacesService(); 
+export const placesService = new PlacesService();
+
+// Service functions (mock implementations)
+export const placeService = {
+  // Get nearby places
+  async getNearbyPlaces(
+    latitude: number, 
+    longitude: number, 
+    radius = 5, // km
+    limit = 20
+  ): Promise<NearbyPlace[]> {
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    // Mock distance calculation (simplified)
+    const placesWithDistance = mockPlaces.map(place => {
+      const distance = Math.sqrt(
+        Math.pow(place.latitude - latitude, 2) + 
+        Math.pow(place.longitude - longitude, 2)
+      ) * 111; // Rough conversion to km
+      
+      return {
+        ...place,
+        distance: Math.round(distance * 10) / 10,
+      };
+    });
+    
+    return placesWithDistance
+      .filter(place => place.distance <= radius)
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, limit);
+  },
+
+  // Search places
+  async searchPlaces(query: string, limit = 20): Promise<PlaceWithDistance[]> {
+    await new Promise(resolve => setTimeout(resolve, 600));
+    
+    const searchTerm = query.toLowerCase();
+    const results = mockPlaces.filter(place => 
+      place.name.toLowerCase().includes(searchTerm) ||
+      place.type.toLowerCase().includes(searchTerm) ||
+      (place.description && place.description.toLowerCase().includes(searchTerm)) ||
+      (place.address && place.address.toLowerCase().includes(searchTerm))
+    );
+    
+    return results.slice(0, limit).map(place => ({
+      ...place,
+      distance: `${Math.random() * 5 + 0.5}km`, // Mock distance
+    }));
+  },
+
+  // Get place by ID
+  async getPlaceById(id: string): Promise<PlaceRow | null> {
+    await new Promise(resolve => setTimeout(resolve, 400));
+    
+    return mockPlaces.find(place => place.id === id) || null;
+  },
+
+  // Get places by type
+  async getPlacesByType(type: string, limit = 20): Promise<PlaceWithDistance[]> {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    const results = mockPlaces.filter(place => place.type === type);
+    
+    return results.slice(0, limit).map(place => ({
+      ...place,
+      distance: `${Math.random() * 3 + 0.2}km`, // Mock distance
+    }));
+  },
+
+  // Get popular places
+  async getPopularPlaces(limit = 10): Promise<PlaceWithDistance[]> {
+    await new Promise(resolve => setTimeout(resolve, 700));
+    
+    // Sort by rating and return top places
+    const popular = [...mockPlaces]
+      .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+      .slice(0, limit);
+    
+    return popular.map(place => ({
+      ...place,
+      distance: `${Math.random() * 4 + 0.3}km`, // Mock distance
+    }));
+  },
+
+  // Create a new place
+  async createPlace(place: PlaceInsert): Promise<PlaceRow> {
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    
+    const newPlace: PlaceRow = {
+      id: `place-${Date.now()}`,
+      name: place.name,
+      type: place.type,
+      description: place.description || undefined,
+      address: place.address || undefined,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      rating: place.rating || undefined,
+      price_level: place.price_level || undefined,
+      bts_station: place.bts_station || undefined,
+      is_open: place.is_open || undefined,
+      opening_hours: place.opening_hours || undefined,
+      phone: place.phone || undefined,
+      website: place.website || undefined,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    
+    return newPlace;
+  },
+
+  // Update a place
+  async updatePlace(id: string, updates: PlaceUpdate): Promise<PlaceRow> {
+    await new Promise(resolve => setTimeout(resolve, 900));
+    
+    const existingPlace = mockPlaces.find(p => p.id === id);
+    if (!existingPlace) {
+      throw new PlaceError('Place not found', 'NOT_FOUND');
+    }
+    
+    return {
+      ...existingPlace,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+  },
+
+  // Delete a place
+  async deletePlace(id: string): Promise<void> {
+    await new Promise(resolve => setTimeout(resolve, 600));
+    
+    const index = mockPlaces.findIndex(p => p.id === id);
+    if (index === -1) {
+      throw new PlaceError('Place not found', 'NOT_FOUND');
+    }
+    
+    console.log(`Place ${id} deleted`);
+  },
+
+  // Get place statistics
+  async getPlaceStats(): Promise<{
+    totalPlaces: number;
+    placesByType: Record<string, number>;
+    averageRating: number;
+    topRatedPlaces: PlaceRow[];
+  }> {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    const placesByType = mockPlaces.reduce((acc, place) => {
+      acc[place.type] = (acc[place.type] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    const ratingsSum = mockPlaces.reduce((sum, place) => sum + (place.rating || 0), 0);
+    const averageRating = ratingsSum / mockPlaces.length;
+    
+    const topRatedPlaces = [...mockPlaces]
+      .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+      .slice(0, 5);
+    
+    return {
+      totalPlaces: mockPlaces.length,
+      placesByType,
+      averageRating: Math.round(averageRating * 10) / 10,
+      topRatedPlaces,
+    };
+  },
+
+  // Get places with filters
+  async getPlacesWithFilters(filters: {
+    type?: string;
+    priceLevel?: number;
+    rating?: number;
+    isOpen?: boolean;
+    hasBtsStation?: boolean;
+    limit?: number;
+  }): Promise<PlaceWithDistance[]> {
+    await new Promise(resolve => setTimeout(resolve, 600));
+    
+    let filtered = mockPlaces;
+    
+    if (filters.type) {
+      filtered = filtered.filter(p => p.type === filters.type);
+    }
+    
+    if (filters.priceLevel !== undefined) {
+      filtered = filtered.filter(p => (p.price_level || 0) <= filters.priceLevel!);
+    }
+    
+    if (filters.rating !== undefined) {
+      filtered = filtered.filter(p => (p.rating || 0) >= filters.rating!);
+    }
+    
+    if (filters.isOpen !== undefined) {
+      filtered = filtered.filter(p => p.is_open === filters.isOpen);
+    }
+    
+    if (filters.hasBtsStation) {
+      filtered = filtered.filter(p => p.bts_station !== undefined);
+    }
+    
+    const limit = filters.limit || 20;
+    return filtered.slice(0, limit).map(place => ({
+      ...place,
+      distance: `${Math.random() * 3 + 0.1}km`, // Mock distance
+    }));
+  },
+};
+
+// Error types
+export class PlaceError extends Error {
+  constructor(message: string, public code?: string) {
+    super(message);
+    this.name = 'PlaceError';
+  }
+} 

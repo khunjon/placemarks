@@ -1,393 +1,176 @@
-import { supabase } from './supabase';
-import { CheckIn, CheckInCreate, CheckInUpdate } from '../types/checkins';
-import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
+// CheckIn Service - Mock functions for now, will connect to Supabase later
+import { Database } from '../types/supabase';
 
-export class CheckInsService {
-  /**
-   * Create a new check-in
-   */
-  async createCheckIn(checkInData: CheckInCreate): Promise<CheckIn> {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
+// Type definitions based on Supabase schema
+export type CheckInRow = Database['public']['Tables']['checkins']['Row'];
+export type CheckInInsert = Database['public']['Tables']['checkins']['Insert'];
+export type CheckInUpdate = Database['public']['Tables']['checkins']['Update'];
+export type PlaceRow = Database['public']['Tables']['places']['Row'];
 
-      // Upload photos if provided
-      let photoUrls: string[] = [];
-      if (checkInData.photos && checkInData.photos.length > 0) {
-        photoUrls = await this.uploadPhotos(checkInData.photos);
-      }
-
-      const { data, error } = await supabase
-        .from('check_ins')
-        .insert({
-          user_id: user.id,
-          place_id: checkInData.place_id,
-          rating: checkInData.rating,
-          aspect_ratings: checkInData.aspect_ratings || {},
-          tags: checkInData.tags || [],
-          context: checkInData.context,
-          photos: photoUrls,
-          notes: checkInData.notes,
-          weather_context: checkInData.weather_context,
-          companion_type: checkInData.companion_type,
-          meal_type: checkInData.meal_type,
-          transportation_method: checkInData.transportation_method,
-          visit_duration: checkInData.visit_duration,
-          would_return: checkInData.would_return,
-          timestamp: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data as CheckIn;
-    } catch (error) {
-      console.error('Error creating check-in:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update an existing check-in
-   */
-  async updateCheckIn(checkInId: string, updates: CheckInUpdate): Promise<CheckIn> {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      // Handle photo updates if provided
-      let photoUrls: string[] | undefined;
-      if (updates.photos) {
-        photoUrls = await this.uploadPhotos(updates.photos);
-      }
-
-      const updateData = {
-        ...updates,
-        ...(photoUrls && { photos: photoUrls }),
-        updated_at: new Date().toISOString(),
-      };
-
-      const { data, error } = await supabase
-        .from('check_ins')
-        .update(updateData)
-        .eq('id', checkInId)
-        .eq('user_id', user.id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data as CheckIn;
-    } catch (error) {
-      console.error('Error updating check-in:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get user's check-ins with pagination
-   */
-  async getUserCheckIns(limit: number = 20, offset: number = 0): Promise<CheckIn[]> {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      const { data, error } = await supabase
-        .from('check_ins')
-        .select(`
-          *,
-          places (
-            id,
-            name,
-            address,
-            google_place_id
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('timestamp', { ascending: false })
-        .range(offset, offset + limit - 1);
-
-      if (error) throw error;
-      return data as CheckIn[];
-    } catch (error) {
-      console.error('Error fetching user check-ins:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get check-ins for a specific place
-   */
-  async getPlaceCheckIns(placeId: string, limit: number = 10): Promise<CheckIn[]> {
-    try {
-      const { data, error } = await supabase
-        .from('check_ins')
-        .select(`
-          *,
-          users (
-            id,
-            full_name,
-            avatar_url
-          )
-        `)
-        .eq('place_id', placeId)
-        .order('timestamp', { ascending: false })
-        .limit(limit);
-
-      if (error) throw error;
-      return data as CheckIn[];
-    } catch (error) {
-      console.error('Error fetching place check-ins:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get a specific check-in by ID
-   */
-  async getCheckIn(checkInId: string): Promise<CheckIn | null> {
-    try {
-      const { data, error } = await supabase
-        .from('check_ins')
-        .select(`
-          *,
-          places (
-            id,
-            name,
-            address,
-            google_place_id
-          )
-        `)
-        .eq('id', checkInId)
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') return null; // Not found
-        throw error;
-      }
-      return data as CheckIn;
-    } catch (error) {
-      console.error('Error fetching check-in:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Delete a check-in
-   */
-  async deleteCheckIn(checkInId: string): Promise<void> {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      // Get check-in to delete associated photos
-      const checkIn = await this.getCheckIn(checkInId);
-      if (checkIn && checkIn.photos.length > 0) {
-        await this.deletePhotos(checkIn.photos);
-      }
-
-      const { error } = await supabase
-        .from('check_ins')
-        .delete()
-        .eq('id', checkInId)
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error deleting check-in:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get check-in statistics for a user
-   */
-  async getUserCheckInStats(): Promise<{
-    totalCheckIns: number;
-    averageRating: number;
-    favoritePlace: string | null;
-    mostUsedTags: string[];
-    checkInsByMonth: { month: string; count: number }[];
-  }> {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      // Get total check-ins and average rating
-      const { data: statsData, error: statsError } = await supabase
-        .from('check_ins')
-        .select('rating, place_id, tags, timestamp')
-        .eq('user_id', user.id);
-
-      if (statsError) throw statsError;
-
-      const totalCheckIns = statsData.length;
-      const averageRating = totalCheckIns > 0 
-        ? statsData.reduce((sum, checkIn) => sum + checkIn.rating, 0) / totalCheckIns 
-        : 0;
-
-      // Find most visited place
-      const placeCounts = statsData.reduce((acc, checkIn) => {
-        acc[checkIn.place_id] = (acc[checkIn.place_id] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
-      const favoritePlace = Object.keys(placeCounts).length > 0
-        ? Object.keys(placeCounts).reduce((a, b) => placeCounts[a] > placeCounts[b] ? a : b)
-        : null;
-
-      // Get most used tags
-      const allTags = statsData.flatMap(checkIn => checkIn.tags || []);
-      const tagCounts = allTags.reduce((acc, tag) => {
-        acc[tag] = (acc[tag] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
-      const mostUsedTags = Object.entries(tagCounts)
-        .sort(([,a], [,b]) => (b as number) - (a as number))
-        .slice(0, 5)
-        .map(([tag]) => tag);
-
-      // Check-ins by month (last 12 months)
-      const checkInsByMonth = this.groupCheckInsByMonth(statsData);
-
-      return {
-        totalCheckIns,
-        averageRating: Math.round(averageRating * 10) / 10,
-        favoritePlace,
-        mostUsedTags,
-        checkInsByMonth,
-      };
-    } catch (error) {
-      console.error('Error fetching check-in stats:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Upload photos to Supabase Storage
-   */
-  private async uploadPhotos(photoUris: string[]): Promise<string[]> {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      const uploadPromises = photoUris.map(async (uri, index) => {
-        // Compress and resize image
-        const compressedImage = await ImageManipulator.manipulateAsync(
-          uri,
-          [{ resize: { width: 1024 } }],
-          { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
-        );
-
-        // Convert to blob
-        const response = await fetch(compressedImage.uri);
-        const blob = await response.blob();
-
-        // Generate unique filename
-        const timestamp = Date.now();
-        const filename = `${user.id}/${timestamp}_${index}.jpg`;
-
-        // Upload to Supabase Storage
-        const { data, error } = await supabase.storage
-          .from('check-in-photos')
-          .upload(filename, blob, {
-            contentType: 'image/jpeg',
-            upsert: false,
-          });
-
-        if (error) throw error;
-
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('check-in-photos')
-          .getPublicUrl(data.path);
-
-        return publicUrl;
-      });
-
-      return await Promise.all(uploadPromises);
-    } catch (error) {
-      console.error('Error uploading photos:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Delete photos from Supabase Storage
-   */
-  private async deletePhotos(photoUrls: string[]): Promise<void> {
-    try {
-      const filePaths = photoUrls.map(url => {
-        const urlParts = url.split('/');
-        return urlParts.slice(-2).join('/'); // Get user_id/filename.jpg
-      });
-
-      const { error } = await supabase.storage
-        .from('check-in-photos')
-        .remove(filePaths);
-
-      if (error) {
-        console.warn('Error deleting photos:', error);
-        // Don't throw error for photo deletion failures
-      }
-    } catch (error) {
-      console.warn('Error deleting photos:', error);
-    }
-  }
-
-  /**
-   * Group check-ins by month for statistics
-   */
-  private groupCheckInsByMonth(checkIns: any[]): { month: string; count: number }[] {
-    const monthCounts = checkIns.reduce((acc, checkIn) => {
-      const date = new Date(checkIn.timestamp);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      acc[monthKey] = (acc[monthKey] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    // Get last 12 months
-    const months = [];
-    const now = new Date();
-    for (let i = 11; i >= 0; i--) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      months.push({
-        month: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-        count: monthCounts[monthKey] || 0,
-      });
-    }
-
-    return months;
-  }
-
-  /**
-   * Request camera permissions
-   */
-  async requestCameraPermissions(): Promise<boolean> {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      return status === 'granted';
-    } catch (error) {
-      console.error('Error requesting camera permissions:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Request media library permissions
-   */
-  async requestMediaLibraryPermissions(): Promise<boolean> {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      return status === 'granted';
-    } catch (error) {
-      console.error('Error requesting media library permissions:', error);
-      return false;
-    }
-  }
+export interface CheckInWithPlace extends CheckInRow {
+  place: PlaceRow;
 }
 
-// Export singleton instance
-export const checkInsService = new CheckInsService(); 
+// Mock data structure
+const mockCheckIns: CheckInWithPlace[] = [
+  {
+    id: '1',
+    user_id: 'user-1',
+    place_id: 'place-1',
+    rating: 5,
+    notes: 'Amazing weekend market with incredible variety!',
+    photo_count: 3,
+    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    place: {
+      id: 'place-1',
+      name: 'Chatuchak Weekend Market',
+      type: 'shopping',
+      description: 'Famous weekend market with thousands of stalls',
+      address: 'Kamphaeng Phet 2 Rd, Chatuchak, Bangkok',
+      latitude: 13.7997,
+      longitude: 100.5510,
+      rating: 4.5,
+      price_level: 2,
+      bts_station: 'Mo Chit',
+      is_open: true,
+      opening_hours: '9:00-18:00',
+      phone: undefined,
+      website: undefined,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  },
+  {
+    id: '2',
+    user_id: 'user-1',
+    place_id: 'place-2',
+    rating: 4,
+    notes: 'Beautiful temple, very peaceful atmosphere.',
+    photo_count: 1,
+    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    place: {
+      id: 'place-2',
+      name: 'Wat Pho Temple',
+      type: 'temple',
+      description: 'Historic Buddhist temple with reclining Buddha',
+      address: '2 Sanamchai Road, Grand Palace Subdistrict, Phra Nakhon District',
+      latitude: 13.7465,
+      longitude: 100.4927,
+      rating: 4.8,
+      price_level: 1,
+      is_open: true,
+      opening_hours: '8:00-17:00',
+      phone: undefined,
+      website: undefined,
+      bts_station: undefined,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  },
+];
+
+// Service functions (mock implementations)
+export const checkInService = {
+  // Get user's check-ins
+  async getUserCheckIns(userId: string, limit = 20, offset = 0): Promise<CheckInWithPlace[]> {
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    return mockCheckIns
+      .filter(checkIn => checkIn.user_id === userId)
+      .slice(offset, offset + limit);
+  },
+
+  // Get recent check-ins for a place
+  async getPlaceCheckIns(placeId: string, limit = 10): Promise<CheckInWithPlace[]> {
+    await new Promise(resolve => setTimeout(resolve, 600));
+    
+    return mockCheckIns
+      .filter(checkIn => checkIn.place_id === placeId)
+      .slice(0, limit);
+  },
+
+  // Create a new check-in
+  async createCheckIn(checkIn: CheckInInsert): Promise<CheckInRow> {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    const newCheckIn: CheckInRow = {
+      id: `checkin-${Date.now()}`,
+      user_id: checkIn.user_id,
+      place_id: checkIn.place_id,
+      rating: checkIn.rating || null,
+      notes: checkIn.notes || null,
+      photo_count: checkIn.photo_count || 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    
+    return newCheckIn;
+  },
+
+  // Update a check-in
+  async updateCheckIn(id: string, updates: CheckInUpdate): Promise<CheckInRow> {
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    const existingCheckIn = mockCheckIns.find(c => c.id === id);
+    if (!existingCheckIn) {
+      throw new CheckInError('Check-in not found', 'NOT_FOUND');
+    }
+    
+    return {
+      ...existingCheckIn,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+  },
+
+  // Delete a check-in
+  async deleteCheckIn(id: string): Promise<void> {
+    await new Promise(resolve => setTimeout(resolve, 600));
+    
+    const index = mockCheckIns.findIndex(c => c.id === id);
+    if (index === -1) {
+      throw new CheckInError('Check-in not found', 'NOT_FOUND');
+    }
+    
+    console.log(`Check-in ${id} deleted`);
+  },
+
+  // Get check-in statistics
+  async getCheckInStats(userId: string): Promise<{
+    totalCheckIns: number;
+    placesVisited: number;
+    averageRating: number;
+    thisMonth: number;
+  }> {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    const userCheckIns = mockCheckIns.filter(c => c.user_id === userId);
+    const uniquePlaces = new Set(userCheckIns.map(c => c.place_id)).size;
+    const ratingsSum = userCheckIns.reduce((sum, c) => sum + (c.rating || 0), 0);
+    const averageRating = ratingsSum / userCheckIns.length || 0;
+    
+    const thisMonth = userCheckIns.filter(c => {
+      const checkInDate = new Date(c.created_at);
+      const now = new Date();
+      return checkInDate.getMonth() === now.getMonth() && 
+             checkInDate.getFullYear() === now.getFullYear();
+    }).length;
+    
+    return {
+      totalCheckIns: userCheckIns.length,
+      placesVisited: uniquePlaces,
+      averageRating: Math.round(averageRating * 10) / 10,
+      thisMonth,
+    };
+  },
+};
+
+// Error types
+export class CheckInError extends Error {
+  constructor(message: string, public code?: string) {
+    super(message);
+    this.name = 'CheckInError';
+  }
+} 

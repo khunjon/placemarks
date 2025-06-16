@@ -55,8 +55,11 @@ export default function ListDetailScreen({ route, navigation }: ListDetailScreen
   const isEditable = 'isEditable' in route.params ? route.params.isEditable : false;
 
   const handleEditList = () => {
-    if ('EditList' in navigation.getState().routeNames) {
-      // We're in the Lists stack
+    // Check if we have the isEditable param - this indicates we're in the Lists stack
+    const isInListsStack = 'isEditable' in route.params;
+    
+    if (isInListsStack) {
+      // We're in the Lists stack, navigate directly to EditList
       (navigation as any).navigate('EditList', {
         listId,
         listName,
@@ -64,7 +67,29 @@ export default function ListDetailScreen({ route, navigation }: ListDetailScreen
         listIcon: 'heart',
       });
     } else {
-      Alert.alert('Edit List', 'List editing is only available from the Lists tab.');
+      // We're in the Decide stack, offer to navigate to Lists tab
+      Alert.alert(
+        'Edit List', 
+        'To edit this list, you need to go to the Lists tab.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Go to Lists', 
+            onPress: () => {
+              // Navigate to the root navigator and then to Lists tab
+              (navigation as any).getParent()?.navigate('ListsStack', {
+                screen: 'EditList',
+                params: {
+                  listId,
+                  listName,
+                  listDescription: 'Sample list description',
+                  listIcon: 'heart',
+                }
+              });
+            }
+          }
+        ]
+      );
     }
   };
 

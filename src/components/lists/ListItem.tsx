@@ -283,14 +283,16 @@ export default function ListItem({
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                padding: DarkTheme.spacing.sm,
+                paddingVertical: DarkTheme.spacing.md,
+                paddingHorizontal: DarkTheme.spacing.md,
                 borderBottomWidth: 1,
                 borderBottomColor: DarkTheme.colors.semantic.separator,
+                minHeight: 48, // Ensure minimum tap target size
               }}
               activeOpacity={0.7}
             >
               <Edit3 
-                size={16} 
+                size={18} 
                 color={DarkTheme.colors.semantic.label}
                 strokeWidth={2}
               />
@@ -298,7 +300,8 @@ export default function ListItem({
                 DarkTheme.typography.subhead,
                 { 
                   color: DarkTheme.colors.semantic.label,
-                  marginLeft: DarkTheme.spacing.sm,
+                  marginLeft: DarkTheme.spacing.md,
+                  fontSize: 16,
                 }
               ]}>
                 Edit
@@ -312,12 +315,14 @@ export default function ListItem({
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                padding: DarkTheme.spacing.sm,
+                paddingVertical: DarkTheme.spacing.md,
+                paddingHorizontal: DarkTheme.spacing.md,
+                minHeight: 48, // Ensure minimum tap target size
               }}
               activeOpacity={0.7}
             >
               <Trash2 
-                size={16} 
+                size={18} 
                 color={DarkTheme.colors.status.error}
                 strokeWidth={2}
               />
@@ -325,7 +330,8 @@ export default function ListItem({
                 DarkTheme.typography.subhead,
                 { 
                   color: DarkTheme.colors.status.error,
-                  marginLeft: DarkTheme.spacing.sm,
+                  marginLeft: DarkTheme.spacing.md,
+                  fontSize: 16,
                 }
               ]}>
                 Delete

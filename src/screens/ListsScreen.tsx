@@ -145,8 +145,16 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
   };
 
   const handleEditList = (listId: string) => {
-    console.log('Edit list:', listId);
-    // Here you would typically navigate to an edit screen or show edit modal
+    // Find the list data to get the name and other details
+    const listToEdit = userLists.find(list => list.id === listId);
+    if (listToEdit) {
+      navigation.navigate('EditList', {
+        listId: listToEdit.id,
+        listName: listToEdit.name,
+        listDescription: 'Sample list description', // You could store this in the list data
+        listIcon: 'heart', // You could store this in the list data
+      });
+    }
   };
 
   // Convert ListData to ListItemProps with handlers

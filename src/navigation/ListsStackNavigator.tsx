@@ -2,6 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Colors } from '../constants/Colors';
 import { ListsStackParamList } from './types';
+import type { ListsStackScreenProps } from './types';
 
 // Import screens
 import ListsScreen from '../screens/ListsScreen';
@@ -9,6 +10,20 @@ import ListDetailScreen from '../screens/ListDetailScreen';
 import EditListScreen from '../screens/EditListScreen';
 import CreateListScreen from '../screens/CreateListScreen';
 import PlaceDetailsScreen from '../screens/PlaceDetailsScreen';
+
+// Wrapper component for CreateList screen to avoid inline function
+function CreateListScreenWrapper({ navigation }: ListsStackScreenProps<'CreateList'>) {
+  return (
+    <CreateListScreen
+      onClose={() => navigation.goBack()}
+      onSave={(listData) => {
+        // Handle save logic here
+        console.log('Saving list:', listData);
+        navigation.goBack();
+      }}
+    />
+  );
+}
 
 const Stack = createNativeStackNavigator<ListsStackParamList>();
 
@@ -62,16 +77,7 @@ export default function ListsStackNavigator() {
       
       <Stack.Screen 
         name="CreateList" 
-        component={({ navigation }: { navigation: any }) => (
-          <CreateListScreen
-            onClose={() => navigation.goBack()}
-            onSave={(listData) => {
-              // Handle save logic here
-              console.log('Saving list:', listData);
-              navigation.goBack();
-            }}
-          />
-        )}
+        component={CreateListScreenWrapper}
         options={{
           title: 'Create List',
           headerShown: false, // CreateListScreen has its own header
