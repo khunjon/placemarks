@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Plus, List, Zap } from 'lucide-react-native';
 import { Colors } from '../constants/Colors';
 import { Spacing } from '../constants/Spacing';
@@ -11,7 +12,8 @@ import {
   SecondaryText,
   PrimaryButton,
   Card,
-  ElevatedCard 
+  ElevatedCard,
+  RoundedSearchBar
 } from '../components/common';
 import ListItem, { ListItemProps } from '../components/lists/ListItem';
 import CreateListScreen from './CreateListScreen';
@@ -34,15 +36,51 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     }
   }, [user]);
 
+  // Refresh data when screen comes into focus (e.g., returning from EditListScreen)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user) {
+        loadUserLists();
+      }
+    }, [user])
+  );
+
   const loadUserLists = async () => {
-    if (!user) return;
+    if (!user?.id) return;
     
     try {
       setLoading(true);
       const lists = await listService.getUserLists(user.id);
-      setUserLists(lists);
+      
+      // Check if Favorites list exists, if not create it
+      const hasFavorites = lists.some(list => list.list_type === 'favorites');
+      if (!hasFavorites) {
+        try {
+          await listService.createList({
+            user_id: user.id,
+            name: 'Favorites',
+            description: 'Your favorite places in Bangkok',
+            type: 'user',
+            list_type: 'favorites',
+            icon: 'heart',
+            color: '#EF4444', // Red color for favorites
+            is_public: false,
+          });
+          
+          // Reload lists to include the new Favorites list
+          const updatedLists = await listService.getUserLists(user.id);
+          setUserLists(updatedLists);
+          // Show a toast notification that Favorites list was created
+          // TODO: Add toast notification here if needed
+        } catch (createError) {
+          console.error('Error creating Favorites list:', createError);
+          setUserLists(lists); // Use original lists if creation fails
+        }
+      } else {
+        setUserLists(lists);
+      }
     } catch (error) {
-      console.error('Error loading lists:', error);
+      console.error('Error loading user lists:', error);
     } finally {
       setLoading(false);
     }
@@ -66,16 +104,15 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
   };
 
   const handleSaveNewList = async (listData: { name: string; description: string; icon: string; color: string }) => {
-    if (!user) return;
+    if (!user?.id) return;
     
     try {
-      // Create new list in database
       const newList = await listService.createList({
         user_id: user.id,
         name: listData.name,
-        description: listData.description || undefined,
+        description: listData.description,
         type: 'user',
-        list_type: 'general', // Default type
+        list_type: 'general',
         icon: listData.icon,
         color: listData.color,
         is_public: false,
@@ -84,7 +121,6 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       // Reload lists to get updated data
       await loadUserLists();
       setShowCreateModal(false);
-      console.log('New list created:', newList);
     } catch (error) {
       console.error('Error creating list:', error);
     }
@@ -94,7 +130,6 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     try {
       await listService.deleteList(listId);
       await loadUserLists(); // Reload lists
-      console.log('List deleted:', listId);
     } catch (error) {
       console.error('Error deleting list:', error);
     }
@@ -109,6 +144,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
         listName: listToEdit.name,
         listDescription: listToEdit.description || '',
         listIcon: listToEdit.icon || 'heart',
+        listType: listToEdit.list_type || 'general',
       });
     }
   };
@@ -119,15 +155,24 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     .map(list => ({
       id: list.id,
       name: list.name,
-      type: list.type,
-      listType: list.list_type as ListItemProps['listType'],
+      type: (list.type || 'user') as 'user' | 'auto',
+      listType: (list.list_type || 'general') as ListItemProps['listType'],
       placeCount: list.place_count,
+      icon: list.icon,
+      color: list.color,
       previewPlaces: [], // Will be populated later if needed
       isEditable: true,
-      onPress: () => handleNavigateToList(list.id, list.name, list.type, true),
-      onDelete: () => handleDeleteList(list.id),
+      onPress: () => handleNavigateToList(list.id, list.name, (list.type || 'user') as 'user' | 'auto', true),
+      onDelete: list.list_type === 'favorites' ? undefined : () => handleDeleteList(list.id),
       onEdit: () => handleEditList(list.id),
-    }));
+    }))
+    .sort((a, b) => {
+      // Pin Favorites list to the top
+      if (a.listType === 'favorites') return -1;
+      if (b.listType === 'favorites') return 1;
+      // Sort others alphabetically
+      return a.name.localeCompare(b.name);
+    });
 
   // Auto-generated lists (filtered from the same data)
   const autoListsWithHandlers: ListItemProps[] = userLists
@@ -135,17 +180,17 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     .map(list => ({
       id: list.id,
       name: list.name,
-      type: list.type,
-      listType: list.list_type as ListItemProps['listType'],
+      type: (list.type || 'auto') as 'user' | 'auto',
+      listType: (list.list_type || 'general') as ListItemProps['listType'],
       placeCount: list.place_count,
+      icon: list.icon,
+      color: list.color,
       previewPlaces: [], // Will be populated later if needed
       isEditable: false,
-      onPress: () => handleNavigateToList(list.id, list.name, list.type, false),
+      onPress: () => handleNavigateToList(list.id, list.name, (list.type || 'auto') as 'user' | 'auto', false),
     }));
 
-  const totalUserLists = userListsWithHandlers.length;
-  const totalAutoLists = autoListsWithHandlers.length;
-  const totalPlaces = [...userListsWithHandlers, ...autoListsWithHandlers].reduce((sum, list) => sum + list.placeCount, 0);
+
 
   return (
     <SafeAreaView style={{ 
@@ -179,51 +224,24 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
         contentContainerStyle={{ paddingBottom: Spacing.xl }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Stats Dashboard */}
+        {/* Search Bar */}
         <View style={{
           paddingHorizontal: Spacing.layout.screenPadding,
-          paddingTop: Spacing.lg,
-          paddingBottom: Spacing.md,
+          paddingTop: Spacing.md,
+          paddingBottom: Spacing.sm,
         }}>
-          <ElevatedCard padding="lg">
-            <View style={{
-              flexDirection: 'row',
-              justifyContent: 'space-around',
-              alignItems: 'center',
-            }}>
-              <View style={{ alignItems: 'center' }}>
-                <Typography variant="title2" color="brand" style={{ fontWeight: 'bold' }}>
-                  {totalUserLists + totalAutoLists}
-                </Typography>
-                <SecondaryText style={{ fontSize: 12 }}>
-                  Total Lists
-                </SecondaryText>
-              </View>
-              
-              <View style={{ alignItems: 'center' }}>
-                <Typography variant="title2" color="brand" style={{ fontWeight: 'bold' }}>
-                  {totalPlaces}
-                </Typography>
-                <SecondaryText style={{ fontSize: 12 }}>
-                  Total Places
-                </SecondaryText>
-              </View>
-              
-              <View style={{ alignItems: 'center' }}>
-                <Typography variant="title2" color="brand" style={{ fontWeight: 'bold' }}>
-                  {totalUserLists}
-                </Typography>
-                <SecondaryText style={{ fontSize: 12 }}>
-                  Custom Lists
-                </SecondaryText>
-              </View>
-            </View>
-          </ElevatedCard>
+          <RoundedSearchBar
+            placeholder="Search your lists..."
+            value=""
+            onChangeText={() => {}}
+            onClear={() => {}}
+          />
         </View>
 
         {/* Your Lists Section */}
         <View style={{
           paddingHorizontal: Spacing.layout.screenPadding,
+          paddingTop: Spacing.lg,
           marginBottom: Spacing.layout.sectionSpacing,
         }}>
           <View style={{

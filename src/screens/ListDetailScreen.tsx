@@ -1,7 +1,30 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, Edit3, Share, Plus } from 'lucide-react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { 
+  MapPin, 
+  Edit3, 
+  Share, 
+  Plus,
+  Heart, 
+  Coffee, 
+  Briefcase, 
+  TrendingUp, 
+  Star, 
+  Clock, 
+  Sparkles,
+  Utensils,
+  Camera,
+  Music,
+  ShoppingBag,
+  Plane,
+  Home,
+  Users,
+  Book,
+  Gamepad2,
+  Dumbbell
+} from 'lucide-react-native';
 import { Colors } from '../constants/Colors';
 import { Spacing } from '../constants/Spacing';
 import { 
@@ -14,11 +37,55 @@ import {
   ElevatedCard 
 } from '../components/common';
 import type { ListsStackScreenProps, DecideStackScreenProps } from '../navigation/types';
+import { listService } from '../services/lists';
+import type { List } from '../types/database';
 
 // This screen can be used from both Lists and Decide stacks
 type ListDetailScreenProps = 
   | ListsStackScreenProps<'ListDetail'>
   | DecideStackScreenProps<'ListDetail'>;
+
+// Icon mapping function (same as in ListItem.tsx)
+const getIconComponent = (iconKey: string) => {
+  switch (iconKey) {
+    case 'heart':
+      return Heart;
+    case 'coffee':
+      return Coffee;
+    case 'briefcase':
+      return Briefcase;
+    case 'star':
+      return Star;
+    case 'sparkles':
+      return Sparkles;
+    case 'utensils':
+      return Utensils;
+    case 'camera':
+      return Camera;
+    case 'music':
+      return Music;
+    case 'shopping-bag':
+      return ShoppingBag;
+    case 'plane':
+      return Plane;
+    case 'home':
+      return Home;
+    case 'users':
+      return Users;
+    case 'book':
+      return Book;
+    case 'gamepad-2':
+      return Gamepad2;
+    case 'dumbbell':
+      return Dumbbell;
+    case 'clock':
+      return Clock;
+    case 'trending-up':
+      return TrendingUp;
+    default:
+      return MapPin;
+  }
+};
 
 // Mock places data for the list
 const mockListPlaces = [
@@ -53,6 +120,38 @@ const mockListPlaces = [
 export default function ListDetailScreen({ route, navigation }: ListDetailScreenProps) {
   const { listId, listName, listType } = route.params;
   const isEditable = 'isEditable' in route.params ? route.params.isEditable : false;
+  
+  // State for list data
+  const [listData, setListData] = useState<List | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load list data
+  const loadListData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await listService.getListWithPlaces(listId);
+      setListData(data);
+    } catch (err) {
+      console.error('Error loading list:', err);
+      setError('Failed to load list details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load data on mount
+  useEffect(() => {
+    loadListData();
+  }, [listId]);
+
+  // Refresh data when screen comes into focus (e.g., returning from EditListScreen)
+  useFocusEffect(
+    React.useCallback(() => {
+      loadListData();
+    }, [listId])
+  );
 
   const handleEditList = () => {
     // Check if we have the isEditable param - this indicates we're in the Lists stack
@@ -62,9 +161,12 @@ export default function ListDetailScreen({ route, navigation }: ListDetailScreen
       // We're in the Lists stack, navigate directly to EditList
       (navigation as any).navigate('EditList', {
         listId,
-        listName,
-        listDescription: 'Sample list description',
-        listIcon: 'heart',
+        listName: listData?.name || listName,
+        listDescription: listData?.description || '',
+        listIcon: listData?.icon || 'heart',
+        listColor: listData?.color || Colors.primary[500],
+        listType: listData?.list_type || 'general',
+        privacyLevel: listData?.privacy_level || 'private',
       });
     } else {
       // We're in the Decide stack, offer to navigate to Lists tab
@@ -81,9 +183,12 @@ export default function ListDetailScreen({ route, navigation }: ListDetailScreen
                 screen: 'EditList',
                 params: {
                   listId,
-                  listName,
-                  listDescription: 'Sample list description',
-                  listIcon: 'heart',
+                  listName: listData?.name || listName,
+                  listDescription: listData?.description || '',
+                  listIcon: listData?.icon || 'heart',
+                  listColor: listData?.color || Colors.primary[500],
+                  listType: listData?.list_type || 'general',
+                  privacyLevel: listData?.privacy_level || 'private',
                 }
               });
             }
@@ -133,6 +238,42 @@ export default function ListDetailScreen({ route, navigation }: ListDetailScreen
     }
   };
 
+  // Show loading state
+  if (loading) {
+    return (
+      <SafeAreaView style={{ 
+        flex: 1, 
+        backgroundColor: Colors.semantic.backgroundPrimary,
+        justifyContent: 'center',
+        alignItems: 'center'
+      }}>
+        <Body>Loading list details...</Body>
+      </SafeAreaView>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <SafeAreaView style={{ 
+        flex: 1, 
+        backgroundColor: Colors.semantic.backgroundPrimary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: Spacing.layout.screenPadding
+      }}>
+        <Body color="secondary" style={{ textAlign: 'center', marginBottom: Spacing.md }}>
+          {error}
+        </Body>
+        <PrimaryButton
+          title="Try Again"
+          onPress={loadListData}
+          size="sm"
+        />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={{ 
       flex: 1, 
@@ -160,17 +301,22 @@ export default function ListDetailScreen({ route, navigation }: ListDetailScreen
                   width: 48,
                   height: 48,
                   borderRadius: 24,
-                  backgroundColor: `${getListTypeColor()}20`,
+                  backgroundColor: `${listData?.color || getListTypeColor()}20`,
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginRight: Spacing.md,
                 }}
               >
-                <MapPin
-                  size={24}
-                  color={getListTypeColor()}
-                  strokeWidth={2}
-                />
+                {(() => {
+                  const IconComponent = listData?.icon ? getIconComponent(listData.icon) : MapPin;
+                  return (
+                    <IconComponent
+                      size={24}
+                      color={listData?.color || getListTypeColor()}
+                      strokeWidth={2}
+                    />
+                  );
+                })()}
               </View>
 
               <View style={{ flex: 1 }}>
@@ -179,11 +325,11 @@ export default function ListDetailScreen({ route, navigation }: ListDetailScreen
                   alignItems: 'center',
                   marginBottom: Spacing.xs,
                 }}>
-                  <Title3 style={{ flex: 1 }}>{listName}</Title3>
+                  <Title3 style={{ flex: 1 }}>{listData?.name || listName}</Title3>
                   {getListTypeBadge() && (
                     <View
                       style={{
-                        backgroundColor: `${getListTypeColor()}20`,
+                        backgroundColor: `${listData?.color || getListTypeColor()}20`,
                         paddingHorizontal: Spacing.sm,
                         paddingVertical: 2,
                         borderRadius: 12,
@@ -201,8 +347,14 @@ export default function ListDetailScreen({ route, navigation }: ListDetailScreen
                 </View>
 
                 <SecondaryText>
-                  {mockListPlaces.length} place{mockListPlaces.length !== 1 ? 's' : ''}
+                  {(listData as any)?.places?.length || 0} place{((listData as any)?.places?.length || 0) !== 1 ? 's' : ''}
                 </SecondaryText>
+                
+                {listData?.description && (
+                  <Body color="secondary" style={{ marginTop: Spacing.xs }}>
+                    {listData.description}
+                  </Body>
+                )}
               </View>
             </View>
 
@@ -251,8 +403,8 @@ export default function ListDetailScreen({ route, navigation }: ListDetailScreen
             Places in this list
           </Title3>
 
-          {mockListPlaces.length > 0 ? (
-            mockListPlaces.map((place) => (
+          {((listData as any)?.places?.length || 0) > 0 ? (
+            ((listData as any)?.places || []).map((place: any) => (
               <ElevatedCard
                 key={place.id}
                 padding="md"
@@ -287,7 +439,7 @@ export default function ListDetailScreen({ route, navigation }: ListDetailScreen
                     </Typography>
                     
                     <SecondaryText numberOfLines={1}>
-                      {place.description}
+                      {place.address}
                     </SecondaryText>
 
                     <View style={{
@@ -297,14 +449,16 @@ export default function ListDetailScreen({ route, navigation }: ListDetailScreen
                       gap: Spacing.sm,
                     }}>
                       <SecondaryText style={{ fontSize: 12 }}>
-                        ⭐ {place.rating}
+                        📍 {place.place_type}
                       </SecondaryText>
                       
-                      <SecondaryText style={{ fontSize: 12 }}>
-                        📍 {place.distance}
-                      </SecondaryText>
+                      {place.price_level && (
+                        <SecondaryText style={{ fontSize: 12 }}>
+                          💰 {'$'.repeat(place.price_level)}
+                        </SecondaryText>
+                      )}
 
-                      {place.btsStation && (
+                      {place.bangkok_context?.bts_proximity === 'walking' && (
                         <View
                           style={{
                             backgroundColor: Colors.accent.green + '20',
@@ -314,7 +468,7 @@ export default function ListDetailScreen({ route, navigation }: ListDetailScreen
                           }}
                         >
                           <SecondaryText style={{ fontSize: 10, color: Colors.accent.green }}>
-                            BTS {place.btsStation}
+                            BTS Nearby
                           </SecondaryText>
                         </View>
                       )}

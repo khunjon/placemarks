@@ -13,7 +13,18 @@ import {
   Edit3,
   Trash2,
   Sparkles,
-  Lock
+  Lock,
+  Utensils,
+  Camera,
+  Music,
+  ShoppingBag,
+  Plane,
+  Home,
+  Users,
+  Book,
+  Gamepad2,
+  Dumbbell,
+  Pin
 } from 'lucide-react-native';
 import { DarkTheme } from '../../constants/theme';
 
@@ -21,13 +32,57 @@ export interface ListItemProps {
   id: string;
   name: string;
   type: 'user' | 'auto';
-  listType: 'favorites' | 'coffee' | 'date' | 'work' | 'want_to_try' | 'visited' | 'rated' | 'recent';
+  listType: 'favorites' | 'coffee' | 'date' | 'work' | 'want_to_try' | 'visited' | 'rated' | 'recent' | 'general';
   placeCount: number;
   isEditable: boolean;
+  icon?: string; // Icon key from database
+  color?: string; // Color from database
+  previewPlaces: string[];
   onPress: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
 }
+
+const getIconComponent = (iconKey: string) => {
+  switch (iconKey) {
+    case 'heart':
+      return Heart;
+    case 'coffee':
+      return Coffee;
+    case 'briefcase':
+      return Briefcase;
+    case 'star':
+      return Star;
+    case 'sparkles':
+      return Sparkles;
+    case 'utensils':
+      return Utensils;
+    case 'camera':
+      return Camera;
+    case 'music':
+      return Music;
+    case 'shopping-bag':
+      return ShoppingBag;
+    case 'plane':
+      return Plane;
+    case 'home':
+      return Home;
+    case 'users':
+      return Users;
+    case 'book':
+      return Book;
+    case 'gamepad-2':
+      return Gamepad2;
+    case 'dumbbell':
+      return Dumbbell;
+    case 'clock':
+      return Clock;
+    case 'trending-up':
+      return TrendingUp;
+    default:
+      return MapPin;
+  }
+};
 
 const getListIcon = (listType: ListItemProps['listType']) => {
   switch (listType) {
@@ -90,13 +145,18 @@ export default function ListItem({
   listType,
   placeCount,
   isEditable,
+  icon,
+  color,
+  previewPlaces,
   onPress,
   onEdit,
   onDelete,
 }: ListItemProps) {
   const [showOptions, setShowOptions] = useState(false);
-  const ListIcon = getListIcon(listType);
-  const listColor = getListColor(listType, type);
+  
+  // Use database icon/color if available, otherwise fall back to hardcoded mappings
+  const ListIcon = icon ? getIconComponent(icon) : getListIcon(listType);
+  const listColor = color || getListColor(listType, type);
   const isAutoList = type === 'auto';
 
   const handleOptionsPress = () => {
@@ -191,6 +251,15 @@ export default function ListItem({
                 >
                   {name}
                 </Text>
+                
+                {listType === 'favorites' && (
+                  <Pin 
+                    size={14} 
+                    color={DarkTheme.colors.bangkok.gold}
+                    strokeWidth={2}
+                    style={{ marginRight: DarkTheme.spacing.xs }}
+                  />
+                )}
                 
                 {isAutoList && (
                   <View style={{

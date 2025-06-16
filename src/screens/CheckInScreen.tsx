@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
 import { Spacing } from '../constants/Spacing';
 import { 
-  SearchBar, 
+  RoundedSearchBar, 
   Typography, 
   Title3, 
   Body, 
@@ -182,7 +182,7 @@ export default function CheckInScreen() {
           paddingTop: Spacing.lg,
           paddingBottom: Spacing.md,
         }}>
-          <SearchBar
+          <RoundedSearchBar
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search places..."

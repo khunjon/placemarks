@@ -4,7 +4,7 @@ import { Marker, Callout } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { MapMarkerData } from '../../services/maps';
 import { TransitStation } from '../../data/btsStations';
-import { Place } from '../../types';
+import { Place } from '../../types/database';
 
 interface CustomMarkerProps {
   marker: MapMarkerData;
@@ -119,8 +119,8 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
             {place.address && (
               <Text style={styles.calloutSubtitle}>{place.address}</Text>
             )}
-            {place.category && (
-              <Text style={styles.calloutCategory}>{place.category}</Text>
+            {place.place_type && (
+              <Text style={styles.calloutCategory}>{place.place_type}</Text>
             )}
           </View>
         </Callout>

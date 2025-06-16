@@ -53,6 +53,7 @@ export type ListsStackParamList = {
     listName: string;
     listDescription?: string;
     listIcon?: string;
+    listType?: string;
   };
   CreateList: undefined;
   PlaceDetails: {

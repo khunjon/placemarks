@@ -16,6 +16,30 @@ export interface CheckInContext {
   mood?: 'adventurous' | 'comfort' | 'healthy' | 'indulgent';
 }
 
+// Bangkok-specific types
+export type BangkokDistrict = 
+  | 'sukhumvit' | 'silom' | 'siam' | 'chatuchak' | 'khao_san'
+  | 'thonglor' | 'ekkamai' | 'ari' | 'phrom_phong' | 'asok'
+  | 'saphan_phut' | 'chinatown' | 'dusit' | 'bang_sue'
+  | 'lat_phrao' | 'huai_khwang' | 'ratchada' | 'ramkhamhaeng';
+
+export type CuisineType = 
+  | 'thai' | 'japanese' | 'korean' | 'chinese' | 'italian'
+  | 'american' | 'indian' | 'mexican' | 'french' | 'vietnamese'
+  | 'street_food' | 'seafood' | 'vegetarian' | 'desserts';
+
+export type DietaryRestriction = 
+  | 'vegetarian' | 'vegan' | 'halal' | 'kosher' | 'gluten_free'
+  | 'dairy_free' | 'nut_free' | 'low_carb' | 'keto';
+
+export type PriceRange = 'budget' | 'moderate' | 'upscale' | 'luxury';
+
+export type TransportMethod = 'bts' | 'mrt' | 'bus' | 'taxi' | 'grab' | 'walking' | 'motorcycle' | 'car';
+
+export type ActivityType = 
+  | 'dining' | 'shopping' | 'nightlife' | 'culture' | 'nature'
+  | 'fitness' | 'entertainment' | 'business' | 'relaxation';
+
 export interface UserPreferences {
   favorite_districts: string[];
   dietary_restrictions: string[];
@@ -41,7 +65,7 @@ export interface Place {
   google_place_id: string;
   name: string;
   address: string;
-  coordinates: [number, number];
+  coordinates: [number, number]; // [longitude, latitude] format
   place_type: string;
   price_level?: number;
   bangkok_context: BangkokContext;
@@ -65,5 +89,10 @@ export interface List {
   name: string;
   auto_generated: boolean;
   privacy_level: 'private' | 'friends' | 'public';
+  description?: string;
+  list_type?: string;
+  icon?: string;
+  color?: string;
+  type?: 'user' | 'auto';
   created_at: string;
 } 

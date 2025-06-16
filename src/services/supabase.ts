@@ -323,6 +323,12 @@ export const listsService = {
         name: list.name,
         auto_generated: list.auto_generated,
         privacy_level: list.privacy_level,
+        description: list.description,
+        list_type: list.list_type,
+        icon: list.icon,
+        color: list.color,
+        type: list.type,
+        created_at: list.created_at,
       })
       .select()
       .single();
@@ -332,7 +338,16 @@ export const listsService = {
   async updateList(id: string, updates: Partial<List>) {
     const { data, error } = await supabase
       .from('lists')
-      .update(updates)
+      .update({
+        name: updates.name,
+        auto_generated: updates.auto_generated,
+        privacy_level: updates.privacy_level,
+        description: updates.description,
+        list_type: updates.list_type,
+        icon: updates.icon,
+        color: updates.color,
+        type: updates.type,
+      })
       .eq('id', id)
       .select()
       .single();

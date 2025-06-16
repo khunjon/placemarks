@@ -92,6 +92,11 @@ export const listService = {
         name: listData.name,
         auto_generated: listData.type === 'auto',
         privacy_level: listData.is_public ? 'public' : 'private',
+        description: listData.description,
+        list_type: listData.list_type,
+        icon: listData.icon,
+        color: listData.color,
+        type: listData.type,
         created_at: new Date().toISOString(),
       });
       
@@ -101,10 +106,6 @@ export const listService = {
       return {
         ...newList,
         type: listData.type || 'user',
-        description: listData.description,
-        list_type: listData.list_type,
-        icon: listData.icon,
-        color: listData.color,
       } as ExtendedList;
     } catch (error) {
       console.error('Error creating list:', error);
@@ -119,6 +120,11 @@ export const listService = {
         name: updates.name,
         auto_generated: updates.type === 'auto',
         privacy_level: updates.privacy_level,
+        description: updates.description,
+        list_type: updates.list_type,
+        icon: updates.icon,
+        color: updates.color,
+        type: updates.type,
       });
       
       if (error) throw error;

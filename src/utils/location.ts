@@ -1,5 +1,5 @@
 import * as Location from 'expo-location';
-import { LocationCoords, MapRegion } from '../types';
+import { LocationCoords, MapRegion } from '../types/navigation';
 
 export const locationUtils = {
   // Request location permissions

@@ -1,5 +1,5 @@
 import * as Location from 'expo-location';
-import { Place } from '../types';
+import { Place } from '../types/database';
 import { TransitStation, findNearestStation } from '../data/btsStations';
 
 export interface MapRegion {
@@ -133,8 +133,8 @@ export class MapsService {
     return places.map(place => ({
       id: place.id,
       coordinate: {
-        latitude: place.latitude,
-        longitude: place.longitude,
+        latitude: place.coordinates[1], // coordinates are [longitude, latitude]
+        longitude: place.coordinates[0],
       },
       title: place.name,
       description: place.address,
@@ -312,8 +312,8 @@ export class MapsService {
       const distance = this.calculateDistance(
         centerLat,
         centerLon,
-        place.latitude,
-        place.longitude
+        place.coordinates[1], // coordinates are [longitude, latitude]
+        place.coordinates[0]
       );
       return distance <= radiusMeters;
     });
