@@ -16,7 +16,7 @@ import {
 import Toast from '../components/ui/Toast';
 import { useAuth } from '../services/auth-context';
 import { checkInsService, ThumbsRating, checkInUtils, CheckInWithPlace } from '../services/checkInsService';
-import { listService, ListWithPlaceCount } from '../services/lists';
+import { enhancedListsService, ListWithPlaces } from '../services/listsService';
 import type { CheckInStackScreenProps } from '../navigation/types';
 
 type CheckInDetailScreenProps = CheckInStackScreenProps<'CheckInDetail'>;
@@ -32,7 +32,7 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
   const [saving, setSaving] = useState(false);
   const [selectedRating, setSelectedRating] = useState<ThumbsRating | null>(null);
   const [comment, setComment] = useState('');
-  const [userLists, setUserLists] = useState<ListWithPlaceCount[]>([]);
+  const [userLists, setUserLists] = useState<ListWithPlaces[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' }>({
     visible: false,
@@ -80,8 +80,8 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
   const loadUserLists = async () => {
     try {
       if (!user) return;
-      const lists = await listService.getUserLists(user.id);
-      setUserLists(lists.filter(list => list.type === 'user'));
+      const lists = await enhancedListsService.getUserLists(user.id);
+      setUserLists(lists.filter((list: any) => list.type === 'user'));
     } catch (error) {
       console.error('Error loading user lists:', error);
     }
@@ -178,7 +178,13 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
           if (buttonIndex < userLists.length) {
             const selectedList = userLists[buttonIndex];
             try {
-              await listService.addPlaceToList(selectedList.id, checkIn.place_id);
+              await enhancedListsService.addPlaceToList(selectedList.id, {
+                google_place_id: checkIn.place.google_place_id,
+                name: checkIn.place.name,
+                address: checkIn.place.address,
+                coordinates: checkIn.place.coordinates,
+                place_type: checkIn.place.place_type
+              });
               Alert.alert('Added', `Added ${checkIn.place.name} to ${selectedList.name}`);
             } catch (error) {
               console.error('Error adding to list:', error);
@@ -196,7 +202,13 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
             text: list.name,
             onPress: async () => {
               try {
-                await listService.addPlaceToList(list.id, checkIn.place_id);
+                await enhancedListsService.addPlaceToList(list.id, {
+                  google_place_id: checkIn.place.google_place_id,
+                  name: checkIn.place.name,
+                  address: checkIn.place.address,
+                  coordinates: checkIn.place.coordinates,
+                  place_type: checkIn.place.place_type
+                });
                 Alert.alert('Added', `Added ${checkIn.place.name} to ${list.name}`);
               } catch (error) {
                 console.error('Error adding to list:', error);

@@ -17,8 +17,8 @@ import {
 import { DarkTheme } from '../constants/theme';
 import { UserProfileHeader, SettingItem, AchievementSection } from '../components/profile';
 import { useAuth } from '../services/auth-context';
-import { checkInsService, listsService } from '../services/supabase';
-import { CheckIn } from '../types/database';
+import { checkInsService, CheckInWithPlace } from '../services/checkInsService';
+import { enhancedListsService } from '../services/listsService';
 import type { ProfileStackScreenProps } from '../navigation/types';
 
 type ProfileScreenProps = ProfileStackScreenProps<'Profile'>;
@@ -48,18 +48,18 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       const { data: checkIns } = await checkInsService.getCheckIns(user.id);
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
-      const checkInsThisMonth = checkIns?.filter((checkIn: CheckIn) => {
+      const checkInsThisMonth = checkIns?.filter((checkIn: CheckInWithPlace) => {
         const checkInDate = new Date(checkIn.timestamp);
         return checkInDate.getMonth() === currentMonth && checkInDate.getFullYear() === currentYear;
       }).length || 0;
 
       // Get total unique places visited (from check-ins)
-      const uniquePlaces = new Set(checkIns?.map((checkIn: CheckIn) => checkIn.place_id) || []);
+      const uniquePlaces = new Set(checkIns?.map((checkIn: CheckInWithPlace) => checkIn.place_id) || []);
       const totalPlacesVisited = uniquePlaces.size;
 
       // Get user's lists
-      const { data: lists } = await listsService.getLists(user.id);
-      const listsCreated = lists?.filter(list => !list.auto_generated).length || 0;
+      const lists = await enhancedListsService.getUserLists(user.id);
+      const listsCreated = lists?.filter((list: any) => list.type === 'user').length || 0;
 
       setUserStats({
         checkInsThisMonth,

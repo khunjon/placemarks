@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { checkInsService } from '../../services/checkins';
+import { checkInsService } from '../../services/checkInsService';
 
 interface PhotoUploadProps {
   photos: string[];

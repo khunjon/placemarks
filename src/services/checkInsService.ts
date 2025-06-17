@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { placesService } from './places';
 import { Place, BangkokContext } from '../types/database';
+import * as ImagePicker from 'expo-image-picker';
 
 // Thumbs rating system type
 export type ThumbsRating = 'thumbs_down' | 'neutral' | 'thumbs_up';
@@ -103,6 +104,46 @@ export interface CheckInStats {
 
 export class CheckInsService {
   private readonly GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY;
+
+  /**
+   * Request camera permissions
+   */
+  async requestCameraPermissions(): Promise<boolean> {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      return status === 'granted';
+    } catch (error) {
+      console.error('Error requesting camera permissions:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Request media library permissions
+   */
+  async requestMediaLibraryPermissions(): Promise<boolean> {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      return status === 'granted';
+    } catch (error) {
+      console.error('Error requesting media library permissions:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get user's check-ins (for backward compatibility)
+   */
+  async getCheckIns(userId: string, limit = 50): Promise<{ data: CheckInWithPlace[] }> {
+    try {
+      const checkInsByDate = await this.getUserCheckInsByDate(userId, limit);
+      const allCheckIns = checkInsByDate.flatMap(group => group.checkIns);
+      return { data: allCheckIns };
+    } catch (error) {
+      console.error('Error getting check-ins:', error);
+      throw error;
+    }
+  }
 
   /**
    * Get user's check-ins organized by date for history display
