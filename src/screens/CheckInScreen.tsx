@@ -169,7 +169,7 @@ export default function CheckInScreen({ navigation }: CheckInScreenProps) {
           marginTop: 2, // Slight offset to align with text
         }}>
           <Typography variant="body" style={{ fontSize: 16 }}>
-            {checkInUtils.getCategoryIcon(checkIn.place.place_type)}
+            {checkInUtils.getCategoryIcon(checkIn.place.place_type, undefined, checkIn.place.name)}
           </Typography>
         </View>
 

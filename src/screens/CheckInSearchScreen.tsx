@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { Colors } from '../constants/Colors';
@@ -15,6 +15,7 @@ import {
 import { MapsService } from '../services/maps';
 import { placesService } from '../services/places';
 import { checkInUtils } from '../services/checkInsService';
+import { checkInSearchCache } from '../services/checkInSearchCache';
 import type { CheckInStackScreenProps } from '../navigation/types';
 
 type CheckInSearchScreenProps = CheckInStackScreenProps<'CheckInSearch'>;
@@ -33,8 +34,13 @@ interface NearbyPlaceResult {
 export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenProps) {
   const [loading, setLoading] = useState(true);
   const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlaceResult[]>([]);
+  const [searchResults, setSearchResults] = useState<NearbyPlaceResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [activeTab, setActiveTab] = useState<'nearby' | 'search'>('nearby');
+  const [showCacheStats, setShowCacheStats] = useState(false);
 
 
 
@@ -77,11 +83,20 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
     return R * c;
   };
 
-  // Search for nearby places using Google Places API
+  // Search for nearby places using Google Places API with enhanced search and caching
   const searchNearbyPlaces = async (location: Location.LocationObject) => {
     try {
       setError(null);
       console.log('Searching for places near:', location.coords.latitude, location.coords.longitude);
+
+      const radius = 500; // Fixed 500m radius
+
+      // Check cache first
+      const cachedResults = await checkInSearchCache.getCachedNearbySearch(location, radius);
+      if (cachedResults) {
+        setNearbyPlaces(cachedResults);
+        return;
+      }
 
       // Use Google Places API directly for nearby search
       const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY;
@@ -90,9 +105,10 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
         throw new Error('Google Places API key not configured');
       }
 
-      const radius = 500; // Fixed 500m radius
+      const allPlaces = new Map<string, NearbyPlaceResult>();
       
-      // First, get basic place data from nearby search
+      // Step 1: Nearby Search (for businesses and commercial establishments)
+      console.log('1. Running nearby search...');
       const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json`;
       const nearbyParams = new URLSearchParams({
         location: `${location.coords.latitude},${location.coords.longitude}`,
@@ -103,20 +119,88 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
       const nearbyResponse = await fetch(`${nearbyUrl}?${nearbyParams}`);
       const nearbyData = await nearbyResponse.json();
 
-      if (nearbyData.status !== 'OK') {
-        if (nearbyData.status === 'ZERO_RESULTS') {
-          setNearbyPlaces([]);
-          return;
+      if (nearbyData.status === 'OK' && nearbyData.results) {
+        for (const place of nearbyData.results) {
+          const distance = calculateDistance(
+            location.coords.latitude,
+            location.coords.longitude,
+            place.geometry.location.lat,
+            place.geometry.location.lng
+          );
+
+          if (distance <= radius) {
+            allPlaces.set(place.place_id, {
+              google_place_id: place.place_id,
+              name: place.name,
+              address: getStreetAddress(place.vicinity || place.formatted_address || ''),
+              types: place.types || [],
+              distance: Math.round(distance),
+              coordinates: [place.geometry.location.lng, place.geometry.location.lat],
+              business_status: 'OPERATIONAL', // Will be checked later
+            });
+          }
         }
-        throw new Error(`Google Places API error: ${nearbyData.status}`);
       }
 
-      // Get detailed information for each place to check business status
+      // Step 2: Text Search for residential buildings and less prominent places
+      console.log('2. Running text search for residential buildings...');
+      const textSearchQueries = [
+        'condominium', 
+        'apartment', 
+        'residence', 
+        'building',
+        'room sukhumvit',
+        'the room',
+      ];
+
+      for (const query of textSearchQueries) {
+        try {
+          const textSearchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json`;
+          const textSearchParams = new URLSearchParams({
+            query: query,
+            location: `${location.coords.latitude},${location.coords.longitude}`,
+            radius: radius.toString(),
+            key: GOOGLE_PLACES_API_KEY,
+          });
+
+          const textSearchResponse = await fetch(`${textSearchUrl}?${textSearchParams}`);
+          const textSearchData = await textSearchResponse.json();
+
+          if (textSearchData.status === 'OK' && textSearchData.results) {
+            for (const place of textSearchData.results) {
+              const distance = calculateDistance(
+                location.coords.latitude,
+                location.coords.longitude,
+                place.geometry.location.lat,
+                place.geometry.location.lng
+              );
+
+              // Only include places within our radius that aren't already found
+              if (distance <= radius && !allPlaces.has(place.place_id)) {
+                allPlaces.set(place.place_id, {
+                  google_place_id: place.place_id,
+                  name: place.name,
+                  address: getStreetAddress(place.formatted_address || ''),
+                  types: place.types || [],
+                  distance: Math.round(distance),
+                  coordinates: [place.geometry.location.lng, place.geometry.location.lat],
+                  business_status: 'OPERATIONAL',
+                });
+              }
+            }
+          }
+        } catch (error) {
+          console.warn(`Text search failed for "${query}":`, error);
+        }
+      }
+
+      // Step 3: Check business status for all places
+      console.log('3. Checking business status...');
       const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json`;
-      const placePromises = nearbyData.results.map(async (place: any) => {
+      const placePromises = Array.from(allPlaces.values()).map(async (place) => {
         try {
           const detailsParams = new URLSearchParams({
-            place_id: place.place_id,
+            place_id: place.google_place_id,
             fields: 'business_status',
             key: GOOGLE_PLACES_API_KEY,
           });
@@ -124,39 +208,14 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
           const detailsResponse = await fetch(`${detailsUrl}?${detailsParams}`);
           const detailsData = await detailsResponse.json();
 
-          const distance = calculateDistance(
-            location.coords.latitude,
-            location.coords.longitude,
-            place.geometry.location.lat,
-            place.geometry.location.lng
-          );
-
           return {
-            google_place_id: place.place_id,
-            name: place.name,
-            address: place.vicinity || place.formatted_address || '',
-            types: place.types || [],
-            distance: Math.round(distance),
-            coordinates: [place.geometry.location.lng, place.geometry.location.lat],
+            ...place,
             business_status: detailsData.result?.business_status || 'OPERATIONAL',
           };
         } catch (error) {
-          console.warn(`Failed to get details for place ${place.place_id}:`, error);
-          // If we can't get business status, assume it's operational
-          const distance = calculateDistance(
-            location.coords.latitude,
-            location.coords.longitude,
-            place.geometry.location.lat,
-            place.geometry.location.lng
-          );
-
+          console.warn(`Failed to get details for place ${place.google_place_id}:`, error);
           return {
-            google_place_id: place.place_id,
-            name: place.name,
-            address: place.vicinity || place.formatted_address || '',
-            types: place.types || [],
-            distance: Math.round(distance),
-            coordinates: [place.geometry.location.lng, place.geometry.location.lat],
+            ...place,
             business_status: 'OPERATIONAL',
           };
         }
@@ -164,16 +223,17 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
 
       const placesWithStatus = await Promise.all(placePromises);
 
-      // Filter out permanently closed businesses and places beyond 500m, then sort by distance
-      const nearbyPlaces = placesWithStatus
-        .filter(place => 
-          place.distance <= 500 && 
-          place.business_status !== 'CLOSED_PERMANENTLY'
-        )
+      // Filter out permanently closed businesses and sort by distance
+      const finalPlaces = placesWithStatus
+        .filter(place => place.business_status !== 'CLOSED_PERMANENTLY')
         .sort((a, b) => a.distance - b.distance);
 
-      console.log(`Found ${nearbyPlaces.length} operational places within 500m`);
-      setNearbyPlaces(nearbyPlaces);
+      console.log(`Found ${finalPlaces.length} operational places within 500m (${allPlaces.size} total before filtering)`);
+      
+      // Cache the results
+      await checkInSearchCache.cacheNearbySearch(location, radius, finalPlaces);
+      
+      setNearbyPlaces(finalPlaces);
 
     } catch (err) {
       console.error('Error searching nearby places:', err);
@@ -233,6 +293,117 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
     loadNearbyPlaces();
   };
 
+  // Clear cache and retry
+  const handleClearCacheAndRetry = async () => {
+    try {
+      await checkInSearchCache.clearCache();
+      loadNearbyPlaces();
+    } catch (error) {
+      console.error('Error clearing cache:', error);
+    }
+  };
+
+  // Show cache stats (for debugging)
+  const showCacheStatsInfo = async () => {
+    try {
+      const stats = await checkInSearchCache.getCacheStats();
+      Alert.alert(
+        'Cache Statistics',
+        `Nearby searches: ${stats.nearbySearches}\nText searches: ${stats.textSearches}\nTotal size: ${stats.totalSizeKB}KB\nOldest: ${stats.oldestEntry?.toLocaleString() || 'None'}\nNewest: ${stats.newestEntry?.toLocaleString() || 'None'}`,
+        [
+          { text: 'Clear Cache', onPress: handleClearCacheAndRetry, style: 'destructive' },
+          { text: 'OK', style: 'default' }
+        ]
+      );
+    } catch (error) {
+      console.error('Error getting cache stats:', error);
+    }
+  };
+
+  // Manual search for places with caching
+  const searchPlaces = async (query: string) => {
+    if (!query.trim() || !userLocation) return;
+
+    setIsSearching(true);
+    try {
+      // Check cache first
+      const cachedResults = await checkInSearchCache.getCachedTextSearch(query, userLocation);
+      if (cachedResults) {
+        setSearchResults(cachedResults);
+        setIsSearching(false);
+        return;
+      }
+
+      const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY;
+      
+      if (!GOOGLE_PLACES_API_KEY) {
+        throw new Error('Google Places API key not configured');
+      }
+
+      const textSearchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json`;
+      const textSearchParams = new URLSearchParams({
+        query: query.trim(),
+        location: `${userLocation.coords.latitude},${userLocation.coords.longitude}`,
+        radius: '1000', // Expand radius for manual search
+        key: GOOGLE_PLACES_API_KEY,
+      });
+
+      const response = await fetch(`${textSearchUrl}?${textSearchParams}`);
+      const data = await response.json();
+
+      if (data.status === 'OK' && data.results) {
+        const results: NearbyPlaceResult[] = data.results.map((place: any) => {
+          const distance = calculateDistance(
+            userLocation.coords.latitude,
+            userLocation.coords.longitude,
+            place.geometry.location.lat,
+            place.geometry.location.lng
+          );
+
+          return {
+            google_place_id: place.place_id,
+            name: place.name,
+            address: getStreetAddress(place.formatted_address || ''),
+            types: place.types || [],
+            distance: Math.round(distance),
+            coordinates: [place.geometry.location.lng, place.geometry.location.lat],
+            business_status: 'OPERATIONAL',
+          };
+        }).sort((a: NearbyPlaceResult, b: NearbyPlaceResult) => a.distance - b.distance);
+
+        // Cache the results
+        await checkInSearchCache.cacheTextSearch(query, userLocation, results);
+        
+        setSearchResults(results);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Error searching places:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Handle search input change
+  const handleSearchChange = (text: string) => {
+    setSearchQuery(text);
+    if (text.trim().length < 3) {
+      setSearchResults([]);
+    }
+  };
+
+  // Debounced search effect
+  useEffect(() => {
+    if (searchQuery.trim().length >= 3) {
+      const timeoutId = setTimeout(() => {
+        searchPlaces(searchQuery);
+      }, 500);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [searchQuery]);
+
   // Render place item
   const renderPlaceItem = (place: NearbyPlaceResult) => (
     <TouchableOpacity
@@ -253,7 +424,7 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
             marginRight: Spacing.md,
           }}>
             <Typography variant="body" style={{ fontSize: 20 }}>
-              {checkInUtils.getCategoryIcon(undefined, place.types)}
+              {checkInUtils.getCategoryIcon(undefined, place.types, place.name)}
             </Typography>
           </View>
 
@@ -292,20 +463,103 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
         paddingVertical: Spacing.md,
         borderBottomWidth: 1,
         borderBottomColor: Colors.semantic.borderPrimary,
-        flexDirection: 'row',
-        alignItems: 'center',
       }}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={{ marginRight: Spacing.md }}
-        >
-          <Typography variant="body" color="primary">
-            ← Back
-          </Typography>
-        </TouchableOpacity>
-        <Typography variant="title2" style={{ fontWeight: 'bold', flex: 1 }}>
-          Nearby Places
-        </Typography>
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginBottom: Spacing.md,
+        }}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={{ marginRight: Spacing.md }}
+          >
+            <Typography variant="body" color="primary">
+              ← Back
+            </Typography>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onLongPress={showCacheStatsInfo}
+            style={{ flex: 1 }}
+            activeOpacity={1}
+          >
+            <Typography variant="title2" style={{ fontWeight: 'bold' }}>
+              Find Places
+            </Typography>
+          </TouchableOpacity>
+        </View>
+
+        {/* Tabs */}
+        <View style={{
+          flexDirection: 'row',
+          backgroundColor: Colors.semantic.backgroundSecondary,
+          borderRadius: 8,
+          padding: 2,
+        }}>
+          <TouchableOpacity
+            onPress={() => setActiveTab('nearby')}
+            style={{
+              flex: 1,
+              paddingVertical: Spacing.sm,
+              paddingHorizontal: Spacing.md,
+              borderRadius: 6,
+              backgroundColor: activeTab === 'nearby' ? Colors.semantic.backgroundPrimary : 'transparent',
+            }}
+          >
+            <Typography 
+              variant="body" 
+              style={{ 
+                textAlign: 'center', 
+                fontWeight: activeTab === 'nearby' ? '600' : '400',
+                color: activeTab === 'nearby' ? Colors.semantic.textPrimary : Colors.semantic.textSecondary,
+              }}
+            >
+              Nearby
+            </Typography>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setActiveTab('search')}
+            style={{
+              flex: 1,
+              paddingVertical: Spacing.sm,
+              paddingHorizontal: Spacing.md,
+              borderRadius: 6,
+              backgroundColor: activeTab === 'search' ? Colors.semantic.backgroundPrimary : 'transparent',
+            }}
+          >
+            <Typography 
+              variant="body" 
+              style={{ 
+                textAlign: 'center', 
+                fontWeight: activeTab === 'search' ? '600' : '400',
+                color: activeTab === 'search' ? Colors.semantic.textPrimary : Colors.semantic.textSecondary,
+              }}
+            >
+              Search
+            </Typography>
+          </TouchableOpacity>
+        </View>
+
+        {/* Search Input (only visible on search tab) */}
+        {activeTab === 'search' && (
+          <View style={{ marginTop: Spacing.md }}>
+            <TextInput
+              style={{
+                backgroundColor: Colors.semantic.backgroundSecondary,
+                borderRadius: 8,
+                paddingHorizontal: Spacing.md,
+                paddingVertical: Spacing.sm,
+                fontSize: 16,
+                color: Colors.semantic.textPrimary,
+              }}
+              placeholder="Search for a place..."
+              placeholderTextColor={Colors.semantic.textSecondary}
+              value={searchQuery}
+              onChangeText={handleSearchChange}
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+          </View>
+        )}
       </View>
 
       {/* Loading State */}
@@ -331,7 +585,7 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
         </View>
       )}
 
-      {/* Places List */}
+      {/* Content Area */}
       {!loading && !error && (
         <ScrollView 
           style={{ flex: 1 }}
@@ -341,31 +595,91 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
           }}
           showsVerticalScrollIndicator={false}
         >
-          {nearbyPlaces.length > 0 ? (
-            <>
-              <View style={{ marginBottom: Spacing.lg }}>
-                <SecondaryText style={{ textAlign: 'center' }}>
-                  {nearbyPlaces.length} place{nearbyPlaces.length !== 1 ? 's' : ''} within 500m
-                </SecondaryText>
+          {activeTab === 'nearby' ? (
+            // Nearby Places Tab
+            nearbyPlaces.length > 0 ? (
+              <>
+                <View style={{ marginBottom: Spacing.lg }}>
+                  <SecondaryText style={{ textAlign: 'center' }}>
+                    {nearbyPlaces.length} place{nearbyPlaces.length !== 1 ? 's' : ''} within 500m
+                  </SecondaryText>
+                </View>
+                
+                {nearbyPlaces.map(renderPlaceItem)}
+              </>
+            ) : (
+              <View style={{ 
+                flex: 1, 
+                justifyContent: 'center',
+                minHeight: 400,
+              }}>
+                <EmptyState
+                  title="No places nearby?"
+                  description="Try the Search tab to find specific places like condos or apartments!"
+                  primaryAction={{
+                    title: "Switch to Search",
+                    onPress: () => setActiveTab('search'),
+                  }}
+                  secondaryAction={{
+                    title: "Try Again",
+                    onPress: handleRetry,
+                  }}
+                />
               </View>
-              
-              {nearbyPlaces.map(renderPlaceItem)}
-            </>
+            )
           ) : (
-            <View style={{ 
-              flex: 1, 
-              justifyContent: 'center',
-              minHeight: 400,
-            }}>
-              <EmptyState
-                title="No places nearby?"
-                description="Try exploring somewhere new!"
-                primaryAction={{
-                  title: "Try Again",
-                  onPress: handleRetry,
-                }}
-              />
-            </View>
+            // Search Results Tab
+            <>
+              {searchQuery.length > 0 && searchQuery.length < 3 && (
+                <View style={{ marginBottom: Spacing.lg }}>
+                  <SecondaryText style={{ textAlign: 'center' }}>
+                    Type at least 3 characters to search
+                  </SecondaryText>
+                </View>
+              )}
+              
+              {isSearching && (
+                <LoadingState message="Searching places..." />
+              )}
+              
+              {!isSearching && searchQuery.length >= 3 && (
+                searchResults.length > 0 ? (
+                  <>
+                    <View style={{ marginBottom: Spacing.lg }}>
+                      <SecondaryText style={{ textAlign: 'center' }}>
+                        {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for "{searchQuery}"
+                      </SecondaryText>
+                    </View>
+                    
+                    {searchResults.map(renderPlaceItem)}
+                  </>
+                ) : searchQuery.length >= 3 ? (
+                  <View style={{ 
+                    flex: 1, 
+                    justifyContent: 'center',
+                    minHeight: 400,
+                  }}>
+                    <EmptyState
+                      title="No results found"
+                      description={`Try searching for "${searchQuery.split(' ')[0]}" or a different term`}
+                    />
+                  </View>
+                ) : null
+              )}
+              
+              {searchQuery.length === 0 && (
+                <View style={{ 
+                  flex: 1, 
+                  justifyContent: 'center',
+                  minHeight: 400,
+                }}>
+                  <EmptyState
+                    title="Search for a place"
+                    description="Type the name of a specific place you're looking for"
+                  />
+                </View>
+              )}
+            </>
           )}
         </ScrollView>
       )}

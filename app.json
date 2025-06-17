@@ -21,7 +21,8 @@
       },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "This app uses location to help you discover and save places around you.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app uses location to help you discover and save places around you."
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app uses location to help you discover and save places around you.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {

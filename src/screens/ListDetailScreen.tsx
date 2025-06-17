@@ -971,12 +971,12 @@ function PlaceCard({
   const getCategoryIconForPlace = (place: EnhancedPlace): string => {
     // First, try to use the full google_types array if available (best option)
     if (place.google_types && place.google_types.length > 0) {
-      return checkInUtils.getCategoryIcon(undefined, place.google_types) || '📍';
+      return checkInUtils.getCategoryIcon(undefined, place.google_types, place.name) || '📍';
     }
     
     // Fallback to primary_type if available
     if (place.primary_type) {
-      return checkInUtils.getCategoryIcon(place.primary_type) || '📍';
+      return checkInUtils.getCategoryIcon(place.primary_type, undefined, place.name) || '📍';
     }
     
     // Legacy fallback: map place_type to appropriate categories
@@ -988,62 +988,62 @@ function PlaceCard({
     
     // Map common place types to appropriate categories
     if (placeType.includes('restaurant') || placeType.includes('food') || placeType.includes('meal_takeaway')) {
-      return checkInUtils.getCategoryIcon(undefined, ['restaurant']);
+      return checkInUtils.getCategoryIcon(undefined, ['restaurant'], place.name);
     }
     if (placeType.includes('cafe') || placeType.includes('coffee')) {
-      return checkInUtils.getCategoryIcon(undefined, ['cafe']);
+      return checkInUtils.getCategoryIcon(undefined, ['cafe'], place.name);
     }
     if (placeType.includes('shopping') || placeType.includes('store') || placeType.includes('clothing_store') || placeType.includes('department_store')) {
-      return checkInUtils.getCategoryIcon(undefined, ['shopping_mall']);
+      return checkInUtils.getCategoryIcon(undefined, ['shopping_mall'], place.name);
     }
     if (placeType.includes('hotel') || placeType.includes('lodging')) {
-      return checkInUtils.getCategoryIcon(undefined, ['lodging']);
+      return checkInUtils.getCategoryIcon(undefined, ['lodging'], place.name);
     }
     if (placeType.includes('hospital') || placeType.includes('pharmacy') || placeType.includes('doctor')) {
-      return checkInUtils.getCategoryIcon(undefined, ['hospital']);
+      return checkInUtils.getCategoryIcon(undefined, ['hospital'], place.name);
     }
     if (placeType.includes('gas_station')) {
-      return checkInUtils.getCategoryIcon(undefined, ['gas_station']);
+      return checkInUtils.getCategoryIcon(undefined, ['gas_station'], place.name);
     }
     if (placeType.includes('bank') || placeType.includes('atm') || placeType.includes('finance')) {
-      return checkInUtils.getCategoryIcon(undefined, ['bank']);
+      return checkInUtils.getCategoryIcon(undefined, ['bank'], place.name);
     }
     if (placeType.includes('gym') || placeType.includes('spa') || placeType.includes('beauty_salon')) {
-      return checkInUtils.getCategoryIcon(undefined, ['gym']);
+      return checkInUtils.getCategoryIcon(undefined, ['gym'], place.name);
     }
     if (placeType.includes('tourist_attraction') || placeType.includes('museum') || placeType.includes('art_gallery')) {
-      return checkInUtils.getCategoryIcon(undefined, ['tourist_attraction']);
+      return checkInUtils.getCategoryIcon(undefined, ['tourist_attraction'], place.name);
     }
     if (placeType.includes('park') || placeType.includes('campground')) {
-      return checkInUtils.getCategoryIcon(undefined, ['park']);
+      return checkInUtils.getCategoryIcon(undefined, ['park'], place.name);
     }
     if (placeType.includes('school') || placeType.includes('university') || placeType.includes('library')) {
-      return checkInUtils.getCategoryIcon(undefined, ['school']);
+      return checkInUtils.getCategoryIcon(undefined, ['school'], place.name);
     }
     if (placeType.includes('church') || placeType.includes('temple') || placeType.includes('hindu_temple') || placeType.includes('mosque')) {
-      return checkInUtils.getCategoryIcon(undefined, ['church']);
+      return checkInUtils.getCategoryIcon(undefined, ['church'], place.name);
     }
     if (placeType.includes('night_club') || placeType.includes('bar') || placeType.includes('liquor_store')) {
-      return checkInUtils.getCategoryIcon(undefined, ['night_club']);
+      return checkInUtils.getCategoryIcon(undefined, ['night_club'], place.name);
     }
     if (placeType.includes('movie_theater') || placeType.includes('amusement_park')) {
-      return checkInUtils.getCategoryIcon(undefined, ['movie_theater']);
+      return checkInUtils.getCategoryIcon(undefined, ['movie_theater'], place.name);
     }
     if (placeType.includes('subway_station') || placeType.includes('train_station') || placeType.includes('transit_station')) {
-      return checkInUtils.getCategoryIcon(undefined, ['subway_station']);
+      return checkInUtils.getCategoryIcon(undefined, ['subway_station'], place.name);
     }
     if (placeType.includes('car_repair') || placeType.includes('car_wash')) {
-      return checkInUtils.getCategoryIcon(undefined, ['car_repair']);
+      return checkInUtils.getCategoryIcon(undefined, ['car_repair'], place.name);
     }
     if (placeType.includes('supermarket') || placeType.includes('grocery')) {
-      return checkInUtils.getCategoryIcon(undefined, ['supermarket']);
+      return checkInUtils.getCategoryIcon(undefined, ['supermarket'], place.name);
     }
     if (placeType.includes('establishment') || placeType.includes('point_of_interest')) {
       return '📍'; // Generic pin for broad categories
     }
     
     // Final fallback to the original function with place_type
-    return checkInUtils.getCategoryIcon(place.place_type) || '📍';
+    return checkInUtils.getCategoryIcon(place.place_type, undefined, place.name) || '📍';
   };
 
   // Utility function to abbreviate Bangkok addresses

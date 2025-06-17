@@ -226,7 +226,7 @@ export default function AddPlaceToListScreen({
     const isAdding = place.isAdding;
 
     // Get category icon based on place types
-    const categoryIcon = checkInUtils.getCategoryIcon(undefined, place.types);
+    const categoryIcon = checkInUtils.getCategoryIcon(undefined, place.types, place.name);
 
     return (
       <Card key={place.google_place_id} padding="md" style={{ marginBottom: Spacing.sm }}>

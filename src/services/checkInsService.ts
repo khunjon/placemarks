@@ -771,9 +771,15 @@ export const checkInUtils = {
   /**
    * Get category icon based on place types
    */
-  getCategoryIcon(placeType?: string, types?: string[]): string {
+  getCategoryIcon(placeType?: string, types?: string[], placeName?: string): string {
     // Use types array if provided, otherwise fall back to single placeType
     const typesToCheck = types || (placeType ? [placeType] : []);
+    const name = placeName?.toLowerCase() || '';
+    
+    // Check for residential buildings first
+    if (this.isResidentialBuilding(typesToCheck, name)) {
+      return '🏢';
+    }
     
     // Check for specific types and return appropriate emoji
     if (typesToCheck.some(type => ['restaurant', 'meal_takeaway', 'meal_delivery'].includes(type))) {
@@ -818,9 +824,57 @@ export const checkInUtils = {
     if (typesToCheck.some(type => ['movie_theater', 'amusement_park'].includes(type))) {
       return '🎬';
     }
+    if (typesToCheck.some(type => ['real_estate_agency'].includes(type))) {
+      return '🏢'; // Real estate agencies are often condos/apartments
+    }
     
     // Default icon for other places
     return '📍';
+  },
+
+  /**
+   * Determine if a place is a residential building
+   */
+  isResidentialBuilding(types: string[], placeName: string): boolean {
+    // Check for explicit residential keywords in the name
+    const residentialKeywords = [
+      'room', 'condo', 'condominium', 'residence', 'residences',
+      'apartment', 'apartments', 'tower', 'towers', 'court',
+      'heights', 'villa', 'villas', 'manor', 'estate',
+      'place', 'gardens', 'park', 'square', 'suites',
+      'home', 'homes', 'living', 'loft', 'lofts'
+    ];
+    
+    const hasResidentialKeyword = residentialKeywords.some(keyword => 
+      placeName.includes(keyword)
+    );
+    
+    // Check for real estate agency type (often indicates residential)
+    const hasRealEstateType = types.includes('real_estate_agency');
+    
+    // Check if it has only generic types (common for residential buildings)
+    const onlyGenericTypes = types.length <= 2 && 
+      types.every(type => ['point_of_interest', 'establishment'].includes(type));
+    
+    // Common residential building name patterns
+    const commonResidentialPatterns = [
+      /\bthe\s+\w+/i, // "The Room", "The Diplomat"
+      /\w+\s+sukhumvit/i, // "Something Sukhumvit"
+      /\w+\s+by\s+\w+/i, // "Quattro by Sansiri"
+      /noble\s+\w+/i, // "Noble Ploenchit"
+      /ideo\s+\w+/i, // "Ideo Mobi"
+      /ashton\s+\w+/i, // "Ashton Asoke"
+      /rhythm\s+\w+/i, // "Rhythm Sukhumvit"
+      /circle\s+\w+/i, // "Circle Condominium"
+    ];
+    
+    const matchesResidentialPattern = commonResidentialPatterns.some(pattern => 
+      pattern.test(placeName)
+    );
+    
+    // Return true if any residential indicator is found
+    return hasResidentialKeyword || hasRealEstateType || 
+           (onlyGenericTypes && matchesResidentialPattern);
   },
 
   /**
