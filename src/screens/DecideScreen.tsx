@@ -601,31 +601,12 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
                           DarkTheme.typography.headline,
                           { 
                             color: DarkTheme.colors.semantic.label,
-                            marginRight: DarkTheme.spacing.xs,
                           }
                         ]}
                         numberOfLines={1}
                       >
                         {list.name}
                       </Text>
-                      
-                      <View style={{
-                        backgroundColor: `${DarkTheme.colors.bangkok.gold}20`,
-                        paddingHorizontal: DarkTheme.spacing.xs,
-                        paddingVertical: 2,
-                        borderRadius: DarkTheme.borderRadius.xs,
-                      }}>
-                        <Text style={[
-                          DarkTheme.typography.caption2,
-                          { 
-                            color: DarkTheme.colors.bangkok.gold,
-                            fontWeight: '600',
-                            fontSize: 10,
-                          }
-                        ]}>
-                          CURATED
-                        </Text>
-                      </View>
                     </View>
                     
                     <Text 
