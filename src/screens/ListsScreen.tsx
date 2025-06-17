@@ -28,6 +28,7 @@ import {
   ListError,
   PlaceError 
 } from '../services/listsService';
+import { ListsCache } from '../services/listsCache';
 import type { ListsStackScreenProps } from '../navigation/types';
 
 type ListsScreenProps = ListsStackScreenProps<'Lists'>;
@@ -62,17 +63,40 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       }
 
       if (user) {
-        console.log('ListsScreen focused, reloading lists...');
-        loadAllLists();
+        console.log('ListsScreen focused, checking cache...');
+        // Only reload if cache is invalid or missing
+        ListsCache.hasCache(user.id).then(hasValidCache => {
+          if (!hasValidCache) {
+            console.log('No valid cache, reloading lists...');
+            loadAllLists();
+          } else {
+            console.log('Valid cache exists, skipping reload');
+          }
+        });
       }
     }, [user])
   );
 
-  const loadAllLists = async () => {
+  const loadAllLists = async (forceRefresh = false) => {
     if (!user?.id) return;
     
     try {
       setLoading(true);
+      
+      // Try to load from cache first (unless forcing refresh)
+      if (!forceRefresh) {
+        const cachedData = await ListsCache.getCachedLists(user.id);
+        if (cachedData) {
+          console.log('Loading lists from cache...');
+          setUserLists(cachedData.userLists);
+          setSmartLists(cachedData.smartLists);
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // Load fresh data from API
+      console.log('Loading lists from API...');
       await Promise.all([
         loadUserLists(),
         loadSmartLists()
@@ -95,6 +119,9 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       // Load all user lists
       const lists = await enhancedListsService.getUserLists(user.id);
       setUserLists(lists);
+      
+      // Save to cache
+      await ListsCache.saveLists(lists, smartLists, user.id);
     } catch (error) {
       console.error('Error loading user lists:', error);
       if (error instanceof ListError) {
@@ -117,7 +144,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadAllLists();
+    await loadAllLists(true); // Force refresh from API
     setRefreshing(false);
   };
 
@@ -147,7 +174,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     if (!user?.id) return;
     
     try {
-      await enhancedListsService.createList({
+      const newList = await enhancedListsService.createList({
         user_id: user.id,
         name: listData.name,
         description: listData.description,
@@ -156,7 +183,9 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
         color: listData.color,
       });
 
+      // Reload lists to get the complete data with places
       await loadUserLists();
+      
       setShowCreateModal(false);
       Alert.alert('Success', `"${listData.name}" list created!`);
     } catch (error) {
@@ -181,6 +210,12 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
           onPress: async () => {
             try {
               await enhancedListsService.deleteList(listId);
+              
+              // Update cache optimistically
+              if (user?.id) {
+                await ListsCache.removeListFromCache(listId, user.id);
+              }
+              
               await loadUserLists();
               Alert.alert('Success', 'List deleted');
             } catch (error) {

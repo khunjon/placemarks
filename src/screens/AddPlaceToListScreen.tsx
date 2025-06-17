@@ -33,6 +33,7 @@ import {
   PlaceError,
   PlaceSearchResult,
 } from '../services/listsService';
+import { ListsCache } from '../services/listsCache';
 import { checkInUtils } from '../services/checkInsService';
 import Toast from '../components/ui/Toast';
 import type { ListsStackScreenProps } from '../navigation/types';
@@ -187,6 +188,12 @@ export default function AddPlaceToListScreen({
       );
 
       setAddedPlaces(prev => new Set([...prev, place.google_place_id]));
+      
+      // Invalidate cache since a place was added to a list
+      if (user?.id) {
+        await ListsCache.invalidateCache();
+      }
+      
       showToast(`"${place.name}" added to ${listName}!`, 'success');
 
     } catch (error) {

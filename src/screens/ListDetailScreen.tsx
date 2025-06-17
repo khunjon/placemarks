@@ -62,6 +62,7 @@ import {
   ListError,
   PlaceError 
 } from '../services/listsService';
+import { ListsCache } from '../services/listsCache';
 import { checkInUtils, ThumbsRating } from '../services/checkInsService';
 import { userRatingsService, UserRatingType, UserPlaceRating } from '../services/userRatingsService';
 import Toast from '../components/ui/Toast';
@@ -216,6 +217,11 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
         privacy_level: isPublic ? 'public' : 'private',
       });
       
+      // Invalidate cache since list was updated
+      if (user?.id) {
+        await ListsCache.invalidateCache();
+      }
+      
       setIsEditing(false);
       await loadListData();
       Alert.alert('Success', 'List updated successfully');
@@ -243,6 +249,12 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
           onPress: async () => {
             try {
               await enhancedListsService.deleteList(list.id);
+              
+              // Invalidate cache since list was deleted
+              if (user?.id) {
+                await ListsCache.invalidateCache();
+              }
+              
               Alert.alert('Success', 'List deleted');
               navigation.goBack();
             } catch (error) {
@@ -273,6 +285,12 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
           onPress: async () => {
             try {
               await enhancedListsService.removePlaceFromList(list.id, placeId);
+              
+              // Invalidate cache since a place was removed from a list
+              if (user?.id) {
+                await ListsCache.invalidateCache();
+              }
+              
               await loadListData();
               showToast(`"${placeName}" removed from list`, 'success');
             } catch (error) {

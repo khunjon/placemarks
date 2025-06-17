@@ -17,6 +17,7 @@ import Toast from '../components/ui/Toast';
 import { useAuth } from '../services/auth-context';
 import { checkInsService, ThumbsRating, checkInUtils, CheckInWithPlace } from '../services/checkInsService';
 import { enhancedListsService, ListWithPlaces } from '../services/listsService';
+import { ListsCache } from '../services/listsCache';
 import type { CheckInStackScreenProps } from '../navigation/types';
 
 type CheckInDetailScreenProps = CheckInStackScreenProps<'CheckInDetail'>;
@@ -185,6 +186,12 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
                 coordinates: checkIn.place.coordinates,
                 place_type: checkIn.place.place_type
               });
+              
+              // Invalidate cache since a place was added to a list
+              if (user?.id) {
+                await ListsCache.invalidateCache();
+              }
+              
               Alert.alert('Added', `Added ${checkIn.place.name} to ${selectedList.name}`);
             } catch (error) {
               console.error('Error adding to list:', error);
@@ -209,6 +216,12 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
                   coordinates: checkIn.place.coordinates,
                   place_type: checkIn.place.place_type
                 });
+                
+                // Invalidate cache since a place was added to a list
+                if (user?.id) {
+                  await ListsCache.invalidateCache();
+                }
+                
                 Alert.alert('Added', `Added ${checkIn.place.name} to ${list.name}`);
               } catch (error) {
                 console.error('Error adding to list:', error);
