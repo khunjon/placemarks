@@ -22,10 +22,10 @@ class LocationService {
   private listeners: Set<(location: LocationCoords, source: string) => void> = new Set();
   private retryInterval: NodeJS.Timeout | null = null;
   
-  // Configuration
-  private readonly RETRY_INTERVAL = 2 * 60 * 1000; // 2 minutes
-  private readonly MAX_RETRY_ATTEMPTS = 10; // Stop after 10 attempts
-  private readonly MIN_RETRY_DELAY = 30 * 1000; // Wait at least 30 seconds between retries
+  // Configuration - optimized for better responsiveness
+  private readonly RETRY_INTERVAL = 90 * 1000; // Reduced to 90 seconds for faster retries
+  private readonly MAX_RETRY_ATTEMPTS = 8; // Reduced to 8 attempts to avoid excessive retries
+  private readonly MIN_RETRY_DELAY = 15 * 1000; // Reduced to 15 seconds minimum delay
 
   // Bangkok fallback coordinates
   private readonly BANGKOK_CENTER: LocationCoords = {

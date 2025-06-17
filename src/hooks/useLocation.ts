@@ -23,6 +23,8 @@ export interface UseLocationOptions {
   enableCaching?: boolean;
   enableOfflineFallback?: boolean;
   disabled?: boolean; // For debugging - completely disable location operations
+  sessionMode?: boolean; // New: Only update once per session or after long periods
+  sessionUpdateInterval?: number; // How long before allowing session updates (default: 1 hour)
 }
 
 // Bangkok center coordinates as fallback
@@ -31,17 +33,19 @@ const BANGKOK_CENTER: LocationCoords = {
   longitude: 100.5018,
 };
 
-const BACKGROUND_UPDATE_INTERVAL = 10 * 60 * 1000; // 10 minutes
+const BACKGROUND_UPDATE_INTERVAL = 2 * 60 * 1000; // Reduced to 2 minutes for faster updates
 
 export function useLocation(options: UseLocationOptions = {}) {
   const {
-    enableHighAccuracy = true,
+    enableHighAccuracy = false, // Changed default to false for better performance
     fallbackToBangkok = true,
     autoRequest = true,
     enableBackgroundUpdates = true,
     enableCaching = true,
     enableOfflineFallback = true,
     disabled = false,
+    sessionMode = false,
+    sessionUpdateInterval = 1 * 60 * 60 * 1000, // 1 hour in milliseconds
   } = options;
 
   const [state, setState] = useState<LocationState>({
@@ -58,6 +62,9 @@ export function useLocation(options: UseLocationOptions = {}) {
   const isUpdatingRef = useRef(false);
   const isInitializedRef = useRef(false);
   const locationServiceUnsubscribeRef = useRef<(() => void) | null>(null);
+  const lastBackgroundUpdateRef = useRef<number>(0); // Track last update time
+  const sessionLocationLoadedRef = useRef(false); // Track if we've loaded location in this session
+  const sessionStartTimeRef = useRef<number>(Date.now()); // Track session start time
 
   // Check current permission status
   const checkPermissionStatus = useCallback(async () => {
@@ -152,10 +159,29 @@ export function useLocation(options: UseLocationOptions = {}) {
     }
   }, [fallbackToBangkok]);
 
-  // Get current location with caching
+  // Get current location with caching - optimized version
   const getCurrentLocation = useCallback(async (forceRefresh = false): Promise<LocationCoords | null> => {
     if (isUpdatingRef.current && !forceRefresh) {
       return state.location;
+    }
+
+    // Session mode logic: only update if forced, or if we haven't loaded in this session, 
+    // or if enough time has passed since session start
+    if (sessionMode && !forceRefresh) {
+      const timeSinceSessionStart = Date.now() - sessionStartTimeRef.current;
+      
+      // If we already have a location in this session and not enough time has passed, skip
+      if (sessionLocationLoadedRef.current && timeSinceSessionStart < sessionUpdateInterval) {
+        console.log('📍 Session mode: Skipping location update, using existing location');
+        return state.location;
+      }
+      
+      // If we have a cached location and haven't loaded in this session yet, use cache
+      if (!sessionLocationLoadedRef.current && state.location && enableCaching) {
+        console.log('📍 Session mode: Using cached location from previous session');
+        sessionLocationLoadedRef.current = true;
+        return state.location;
+      }
     }
 
     try {
@@ -165,14 +191,21 @@ export function useLocation(options: UseLocationOptions = {}) {
       // Check if we already have a recent cached location and don't need to refresh
       if (!forceRefresh && enableCaching && state.location && state.source === 'cache') {
         setState(prev => ({ ...prev, loading: false }));
+        
+        // Mark as loaded in session mode
+        if (sessionMode) {
+          sessionLocationLoadedRef.current = true;
+        }
+        
         return state.location;
       }
 
-      // Use the enhanced location service with caching
+      // Use the enhanced location service with optimized settings
       const locationResult = await locationUtils.getLocationWithCache({
         forceRefresh,
         useCache: enableCaching,
         enableOfflineFallback,
+        timeout: 8000, // Reduced timeout to 8 seconds
       });
 
       if (locationResult.location) {
@@ -187,6 +220,12 @@ export function useLocation(options: UseLocationOptions = {}) {
 
         // Update global location service
         locationService.updateLocation(locationResult.location, locationResult.source);
+
+        // Mark as loaded in session mode
+        if (sessionMode) {
+          sessionLocationLoadedRef.current = true;
+          console.log('📍 Session mode: Location loaded successfully');
+        }
 
         return locationResult.location;
       }
@@ -205,6 +244,12 @@ export function useLocation(options: UseLocationOptions = {}) {
 
         // Update global location service with fallback
         locationService.updateLocation(BANGKOK_CENTER, 'fallback');
+
+        // Mark as loaded in session mode
+        if (sessionMode) {
+          sessionLocationLoadedRef.current = true;
+          console.log('📍 Session mode: Using Bangkok fallback');
+        }
 
         return BANGKOK_CENTER;
       }
@@ -248,6 +293,12 @@ export function useLocation(options: UseLocationOptions = {}) {
               lastUpdated: Date.now() - lastKnown.age,
               error: `${errorMessage} Using last known location.`,
             }));
+            
+            // Mark as loaded in session mode
+            if (sessionMode) {
+              sessionLocationLoadedRef.current = true;
+            }
+            
             return lastKnown.location;
           }
         } catch (cacheError) {
@@ -270,6 +321,11 @@ export function useLocation(options: UseLocationOptions = {}) {
           // Update global location service with fallback
           locationService.updateLocation(BANGKOK_CENTER, 'fallback');
 
+          // Mark as loaded in session mode
+          if (sessionMode) {
+            sessionLocationLoadedRef.current = true;
+          }
+
           return BANGKOK_CENTER;
         } catch (fallbackError) {
           console.warn('Failed to save fallback location:', fallbackError);
@@ -280,11 +336,15 @@ export function useLocation(options: UseLocationOptions = {}) {
     } finally {
       isUpdatingRef.current = false;
     }
-  }, [enableCaching, enableOfflineFallback, fallbackToBangkok]);
+  }, [enableCaching, enableOfflineFallback, fallbackToBangkok, sessionMode, sessionUpdateInterval]);
 
-  // Background location update
+  // Optimized background location update
   const startBackgroundUpdates = useCallback(() => {
-    if (!enableBackgroundUpdates) return;
+    // Disable background updates in session mode
+    if (!enableBackgroundUpdates || sessionMode) {
+      console.log('📍 Background updates disabled (session mode or disabled option)');
+      return;
+    }
 
     // Clear existing interval
     if (backgroundUpdateRef.current) {
@@ -292,16 +352,35 @@ export function useLocation(options: UseLocationOptions = {}) {
     }
 
     backgroundUpdateRef.current = setInterval(async () => {
-      if (state.hasPermission && !isUpdatingRef.current) {
-        console.log('Background location update triggered');
-        try {
-          await getCurrentLocation(false);
-        } catch (error) {
+      // Only update if we have permission and aren't currently updating
+      if (!state.hasPermission || isUpdatingRef.current) {
+        return;
+      }
+
+      // Skip if we updated recently (less than 90 seconds ago)
+      const timeSinceLastUpdate = Date.now() - lastBackgroundUpdateRef.current;
+      if (timeSinceLastUpdate < 90 * 1000) {
+        return;
+      }
+
+      // Skip if we have a recent cache (less than 3 minutes old)
+      if (state.lastUpdated && (Date.now() - state.lastUpdated) < 3 * 60 * 1000) {
+        return;
+      }
+
+      console.log('🔄 Background location update triggered');
+      lastBackgroundUpdateRef.current = Date.now();
+      
+      try {
+        // Use non-blocking background update
+        getCurrentLocation(false).catch(error => {
           console.warn('Background location update failed:', error);
-        }
+        });
+      } catch (error) {
+        console.warn('Background location update error:', error);
       }
     }, BACKGROUND_UPDATE_INTERVAL);
-  }, [enableBackgroundUpdates, state.hasPermission, getCurrentLocation]);
+  }, [enableBackgroundUpdates, sessionMode, state.hasPermission, state.lastUpdated, getCurrentLocation]);
 
   // Stop background updates
   const stopBackgroundUpdates = useCallback(() => {
@@ -422,7 +501,7 @@ export function useLocation(options: UseLocationOptions = {}) {
 
   // Start/stop background updates based on permission
   useEffect(() => {
-    if (state.hasPermission && enableBackgroundUpdates) {
+    if (state.hasPermission && enableBackgroundUpdates && !sessionMode) {
       startBackgroundUpdates();
     } else {
       stopBackgroundUpdates();
@@ -431,7 +510,7 @@ export function useLocation(options: UseLocationOptions = {}) {
     return () => {
       stopBackgroundUpdates();
     };
-  }, [state.hasPermission, enableBackgroundUpdates, startBackgroundUpdates, stopBackgroundUpdates]);
+  }, [state.hasPermission, enableBackgroundUpdates, sessionMode, startBackgroundUpdates, stopBackgroundUpdates]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -468,6 +547,25 @@ export function useLocation(options: UseLocationOptions = {}) {
     return await locationService.forceRetry();
   }, []);
 
+  // Session-specific functions
+  const getSessionInfo = useCallback(() => {
+    return {
+      sessionMode,
+      sessionStartTime: sessionStartTimeRef.current,
+      sessionLocationLoaded: sessionLocationLoadedRef.current,
+      timeSinceSessionStart: Date.now() - sessionStartTimeRef.current,
+      allowsUpdate: sessionMode ? 
+        (!sessionLocationLoadedRef.current || (Date.now() - sessionStartTimeRef.current) >= sessionUpdateInterval) :
+        true,
+    };
+  }, [sessionMode, sessionUpdateInterval]);
+
+  const resetSession = useCallback(() => {
+    sessionStartTimeRef.current = Date.now();
+    sessionLocationLoadedRef.current = false;
+    console.log('📍 Session reset - will allow location update on next request');
+  }, []);
+
   return {
     ...state,
     requestPermission,
@@ -477,5 +575,7 @@ export function useLocation(options: UseLocationOptions = {}) {
     startBackgroundUpdates,
     stopBackgroundUpdates,
     forceLocationRetry,
+    getSessionInfo,
+    resetSession,
   };
 } 

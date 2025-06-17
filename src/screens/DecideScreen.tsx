@@ -58,7 +58,7 @@ const mockCuratedListsData = [
 ];
 
 export default function DecideScreen({ navigation }: DecideScreenProps) {
-  // Use the location hook
+  // Use the location hook with session-based settings for DecideScreen
   const {
     location,
     loading: locationLoading,
@@ -66,13 +66,16 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
     source,
     refreshLocation,
     forceLocationRetry,
+    getSessionInfo,
   } = useLocation({
-    enableHighAccuracy: false, // Use balanced accuracy for better performance
+    enableHighAccuracy: false, // Use balanced accuracy for better performance and battery life
     fallbackToBangkok: true,
     autoRequest: true,
     enableCaching: true,
     enableOfflineFallback: true,
-    enableBackgroundUpdates: true,
+    sessionMode: true, // Enable session mode - only update once per session or after 1 hour
+    sessionUpdateInterval: 1 * 60 * 60 * 1000, // 1 hour - only update if more than 1 hour since session start
+    enableBackgroundUpdates: false, // Disable background updates in session mode
     // disabled: true, // Uncomment for faster testing without location
   });
 
@@ -203,6 +206,23 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
     
     return locationUtils.getLocationContextString(location);
   };
+
+  // Debug session info (you can remove this later)
+  const sessionInfo = getSessionInfo();
+  
+  // Log session info for debugging (remove in production)
+  useEffect(() => {
+    if (__DEV__) {
+      console.log('📍 DecideScreen Session Info:', {
+        sessionMode: sessionInfo.sessionMode,
+        sessionLocationLoaded: sessionInfo.sessionLocationLoaded,
+        timeSinceSessionStart: Math.round(sessionInfo.timeSinceSessionStart / 1000 / 60), // minutes
+        allowsUpdate: sessionInfo.allowsUpdate,
+        currentLocation: location ? 'loaded' : 'none',
+        source: source,
+      });
+    }
+  }, [sessionInfo, location, source]);
 
   const formatDistance = (distanceKm: number) => {
     if (distanceKm < 1) {
@@ -559,8 +579,6 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
             </Text>
           </View>
 
-
-
           {mockCuratedLists.map((list) => (
             <TouchableOpacity
               key={list.id}
@@ -639,8 +657,6 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
                   strokeWidth={2}
                 />
               </View>
-
-
             </TouchableOpacity>
           ))}
         </View>
