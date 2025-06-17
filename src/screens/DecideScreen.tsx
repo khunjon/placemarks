@@ -65,6 +65,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
     error: locationError,
     source,
     refreshLocation,
+    forceLocationRetry,
   } = useLocation({
     enableHighAccuracy: false, // Use balanced accuracy for better performance
     fallbackToBangkok: true,
@@ -78,7 +79,9 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
   // Computed values for backward compatibility
   const isLocationAvailable = !!location;
   const isUsingFallback = source === 'fallback';
-  const retryLocation = refreshLocation;
+  
+  // Use force retry when using fallback, otherwise regular refresh
+  const retryLocation = isUsingFallback ? forceLocationRetry : refreshLocation;
 
   // State for recommendations and time context
   const [cityContext, setCityContext] = useState<CityContext | null>(null);
@@ -195,7 +198,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
     if (!location) return 'Getting your location...';
     
     if (isUsingFallback) {
-      return 'Using Bangkok (default)';
+      return 'Using Bangkok (trying to get real location...)';
     }
     
     return locationUtils.getLocationContextString(location);
@@ -277,13 +280,20 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
               }}>
                 <MapPin 
                   size={16} 
-                  color={DarkTheme.colors.semantic.secondaryLabel}
+                  color={isUsingFallback ? DarkTheme.colors.bangkok.gold : DarkTheme.colors.semantic.secondaryLabel}
                   strokeWidth={2}
                 />
+                {isUsingFallback && (
+                  <ActivityIndicator 
+                    size="small" 
+                    color={DarkTheme.colors.bangkok.gold}
+                    style={{ marginLeft: DarkTheme.spacing.xs }}
+                  />
+                )}
                 <Text style={[
                   DarkTheme.typography.caption1,
                   { 
-                    color: DarkTheme.colors.semantic.secondaryLabel,
+                    color: isUsingFallback ? DarkTheme.colors.bangkok.gold : DarkTheme.colors.semantic.secondaryLabel,
                     marginLeft: DarkTheme.spacing.xs,
                   }
                 ]}>

@@ -3,6 +3,7 @@ import * as Location from 'expo-location';
 import { LocationCoords } from '../types/navigation';
 import { locationUtils } from '../utils/location';
 import { LocationCache } from '../services/locationCache';
+import { locationService } from '../services/locationService';
 
 export interface LocationState {
   location: LocationCoords | null;
@@ -56,6 +57,7 @@ export function useLocation(options: UseLocationOptions = {}) {
   const backgroundUpdateRef = useRef<NodeJS.Timeout | null>(null);
   const isUpdatingRef = useRef(false);
   const isInitializedRef = useRef(false);
+  const locationServiceUnsubscribeRef = useRef<(() => void) | null>(null);
 
   // Check current permission status
   const checkPermissionStatus = useCallback(async () => {
@@ -108,6 +110,9 @@ export function useLocation(options: UseLocationOptions = {}) {
             lastUpdated: Date.now(),
             error: 'Using Bangkok as default location. Enable location access for personalized recommendations.',
           }));
+
+          // Update global location service with fallback
+          locationService.updateLocation(BANGKOK_CENTER, 'fallback');
         }
         
         return false;
@@ -180,6 +185,9 @@ export function useLocation(options: UseLocationOptions = {}) {
           error: locationResult.error?.userMessage || null,
         }));
 
+        // Update global location service
+        locationService.updateLocation(locationResult.location, locationResult.source);
+
         return locationResult.location;
       }
 
@@ -194,6 +202,10 @@ export function useLocation(options: UseLocationOptions = {}) {
           loading: false,
           error: 'Unable to get your location. Using Bangkok as default.',
         }));
+
+        // Update global location service with fallback
+        locationService.updateLocation(BANGKOK_CENTER, 'fallback');
+
         return BANGKOK_CENTER;
       }
 
@@ -254,6 +266,10 @@ export function useLocation(options: UseLocationOptions = {}) {
             lastUpdated: Date.now(),
             error: `${errorMessage} Using Bangkok as default location.`,
           }));
+
+          // Update global location service with fallback
+          locationService.updateLocation(BANGKOK_CENTER, 'fallback');
+
           return BANGKOK_CENTER;
         } catch (fallbackError) {
           console.warn('Failed to save fallback location:', fallbackError);
@@ -342,6 +358,9 @@ export function useLocation(options: UseLocationOptions = {}) {
         lastUpdated: Date.now(),
         error: 'Location disabled for testing',
       }));
+
+      // Update global location service with fallback
+      locationService.updateLocation(BANGKOK_CENTER, 'fallback');
       return;
     }
 
@@ -370,6 +389,9 @@ export function useLocation(options: UseLocationOptions = {}) {
               lastUpdated: Date.now(),
               error: 'Enable location access for personalized recommendations.',
             }));
+
+            // Update global location service with fallback
+            locationService.updateLocation(BANGKOK_CENTER, 'fallback');
           } catch (error) {
             console.warn('Failed to set fallback location:', error);
           }
@@ -381,6 +403,21 @@ export function useLocation(options: UseLocationOptions = {}) {
 
     // Run initialization without blocking
     initialize();
+
+    // Subscribe to global location service updates
+    locationServiceUnsubscribeRef.current = locationService.subscribe((location, source) => {
+      // Only update if this is a background update that got a real location
+      if (source === 'location' && state.source === 'fallback') {
+        console.log('🔄 useLocation: Global service got real location, updating from fallback');
+        setState(prev => ({
+          ...prev,
+          location,
+          source: 'gps' as const,
+          lastUpdated: Date.now(),
+          error: null,
+        }));
+      }
+    });
   }, []); // Empty dependency array - only run once
 
   // Start/stop background updates based on permission
@@ -400,6 +437,9 @@ export function useLocation(options: UseLocationOptions = {}) {
   useEffect(() => {
     return () => {
       stopBackgroundUpdates();
+      if (locationServiceUnsubscribeRef.current) {
+        locationServiceUnsubscribeRef.current();
+      }
     };
   }, [stopBackgroundUpdates]);
 
@@ -423,6 +463,11 @@ export function useLocation(options: UseLocationOptions = {}) {
     }
   }, []);
 
+  // Force retry through global location service
+  const forceLocationRetry = useCallback(async () => {
+    return await locationService.forceRetry();
+  }, []);
+
   return {
     ...state,
     requestPermission,
@@ -431,5 +476,6 @@ export function useLocation(options: UseLocationOptions = {}) {
     getCacheStatus,
     startBackgroundUpdates,
     stopBackgroundUpdates,
+    forceLocationRetry,
   };
 } 
