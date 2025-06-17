@@ -36,7 +36,18 @@ import {
   Route,
   TrendingUp,
   Calendar,
-  Target
+  Target,
+  Utensils,
+  Camera,
+  Music,
+  ShoppingBag,
+  Plane,
+  Home,
+  Users,
+  Book,
+  Gamepad2,
+  Dumbbell,
+  Sparkles
 } from 'lucide-react-native';
 import { Colors } from '../../constants/Colors';
 import { Spacing } from '../../constants/Spacing';
@@ -441,6 +452,20 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       case 'heart': return Heart;
       case 'coffee': return Coffee;
       case 'briefcase': return Briefcase;
+      case 'star': return Star;
+      case 'sparkles': return Sparkles;
+      case 'utensils': return Utensils;
+      case 'camera': return Camera;
+      case 'music': return Music;
+      case 'shopping-bag': return ShoppingBag;
+      case 'plane': return Plane;
+      case 'home': return Home;
+      case 'users': return Users;
+      case 'book': return Book;
+      case 'gamepad-2': return Gamepad2;
+      case 'dumbbell': return Dumbbell;
+      case 'clock': return Clock;
+      case 'trending-up': return TrendingUp;
       case 'map-pin': return MapPin;
       default: return MapPin;
     }
@@ -744,7 +769,6 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                       padding: Spacing.sm,
                       backgroundColor: 'transparent',
                       borderRadius: 8,
-                      marginRight: !isFavorites ? Spacing.sm : 0,
                     }}
                   >
                     <Edit3 
@@ -753,23 +777,6 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                       strokeWidth={2}
                     />
                   </TouchableOpacity>
-
-                  {!isFavorites && (
-                    <TouchableOpacity
-                      onPress={handleDeleteList}
-                      style={{
-                        padding: Spacing.sm,
-                        backgroundColor: 'transparent',
-                        borderRadius: 8,
-                      }}
-                    >
-                      <Trash2 
-                        size={Spacing.iconSize.md} 
-                        color={Colors.semantic.error}
-                        strokeWidth={2}
-                      />
-                    </TouchableOpacity>
-                  )}
                 </View>
               </View>
 
