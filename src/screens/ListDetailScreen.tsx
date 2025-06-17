@@ -1,501 +1,981 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, Alert } from 'react-native';
+import { 
+  View, 
+  ScrollView, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  Alert, 
+  RefreshControl,
+  Switch,
+  Modal
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { 
-  MapPin, 
+  ArrowLeft, 
   Edit3, 
+  Trash2, 
   Share, 
-  Plus,
-  Heart, 
-  Coffee, 
-  Briefcase, 
-  TrendingUp, 
+  Plus, 
+  SortAsc, 
+  MapPin, 
   Star, 
   Clock, 
-  Sparkles,
-  Utensils,
-  Camera,
-  Music,
-  ShoppingBag,
-  Plane,
-  Home,
-  Users,
-  Book,
-  Gamepad2,
-  Dumbbell
+  Eye, 
+  Navigation, 
+  CheckCircle,
+  Heart,
+  Coffee,
+  Briefcase,
+  Map,
+  MessageSquare,
+  MoreVertical,
+  Route,
+  TrendingUp,
+  Calendar,
+  Target
 } from 'lucide-react-native';
 import { Colors } from '../constants/Colors';
 import { Spacing } from '../constants/Spacing';
 import { 
   Typography, 
+  Title1,
   Title3, 
   Body, 
   SecondaryText,
   PrimaryButton,
-  OutlineButton,
-  ElevatedCard 
+  SecondaryButton,
+  Card,
+  ElevatedCard,
+  LoadingState,
+  EmptyState
 } from '../components/common';
-import type { ListsStackScreenProps, DecideStackScreenProps } from '../navigation/types';
-import { listService } from '../services/lists';
-import type { List } from '../types/database';
+import { useAuth } from '../services/auth-context';
+import { 
+  enhancedListsService, 
+  ListWithPlaces, 
+  EnrichedListPlace,
+  ListError,
+  PlaceError 
+} from '../services/listsService';
+import type { ListsStackScreenProps } from '../navigation/types';
 
-// This screen can be used from both Lists and Decide stacks
-type ListDetailScreenProps = 
-  | ListsStackScreenProps<'ListDetail'>
-  | DecideStackScreenProps<'ListDetail'>;
+type ListDetailScreenProps = ListsStackScreenProps<'ListDetail'>;
 
-// Icon mapping function (same as in ListItem.tsx)
-const getIconComponent = (iconKey: string) => {
-  switch (iconKey) {
-    case 'heart':
-      return Heart;
-    case 'coffee':
-      return Coffee;
-    case 'briefcase':
-      return Briefcase;
-    case 'star':
-      return Star;
-    case 'sparkles':
-      return Sparkles;
-    case 'utensils':
-      return Utensils;
-    case 'camera':
-      return Camera;
-    case 'music':
-      return Music;
-    case 'shopping-bag':
-      return ShoppingBag;
-    case 'plane':
-      return Plane;
-    case 'home':
-      return Home;
-    case 'users':
-      return Users;
-    case 'book':
-      return Book;
-    case 'gamepad-2':
-      return Gamepad2;
-    case 'dumbbell':
-      return Dumbbell;
-    case 'clock':
-      return Clock;
-    case 'trending-up':
-      return TrendingUp;
-    default:
-      return MapPin;
-  }
-};
+type SortOption = 'date_added' | 'rating' | 'distance' | 'visit_count' | 'name';
 
-// Mock places data for the list
-const mockListPlaces = [
-  {
-    id: '1',
-    name: 'Chatuchak Weekend Market',
-    type: 'shopping' as const,
-    description: 'Famous weekend market with thousands of stalls',
-    rating: 4.5,
-    distance: '2.3km',
-    btsStation: 'Mo Chit',
-  },
-  {
-    id: '2',
-    name: 'Wat Pho Temple',
-    type: 'temple' as const,
-    description: 'Historic Buddhist temple with reclining Buddha',
-    rating: 4.8,
-    distance: '5.1km',
-  },
-  {
-    id: '3',
-    name: 'Café Tartine',
-    type: 'cafe' as const,
-    description: 'Cozy French-style café with excellent coffee',
-    rating: 4.3,
-    distance: '1.8km',
-    btsStation: 'Nana',
-  },
+interface SortConfig {
+  key: SortOption;
+  label: string;
+  icon: any;
+}
+
+const sortOptions: SortConfig[] = [
+  { key: 'date_added', label: 'Date Added', icon: Calendar },
+  { key: 'rating', label: 'Your Rating', icon: Star },
+  { key: 'visit_count', label: 'Visit Count', icon: TrendingUp },
+  { key: 'name', label: 'Name', icon: SortAsc },
 ];
 
-export default function ListDetailScreen({ route, navigation }: ListDetailScreenProps) {
-  const { listId, listName, listType } = route.params;
-  const isEditable = 'isEditable' in route.params ? route.params.isEditable : false;
+export default function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
+  const { listId, listName: initialListName } = route.params;
+  const { user } = useAuth();
   
-  // State for list data
-  const [listData, setListData] = useState<List | null>(null);
+  // State
+  const [list, setList] = useState<ListWithPlaces | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
+  const [refreshing, setRefreshing] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedName, setEditedName] = useState(initialListName);
+  const [editedDescription, setEditedDescription] = useState('');
+  const [isPublic, setIsPublic] = useState(false);
+  const [sortBy, setSortBy] = useState<SortOption>('date_added');
+  const [showSortModal, setShowSortModal] = useState(false);
+  
   // Load list data
+  useEffect(() => {
+    if (user && listId) {
+      loadListData();
+    }
+  }, [user, listId]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user && listId) {
+        loadListData();
+      }
+    }, [user, listId])
+  );
+
   const loadListData = async () => {
+    if (!user?.id) return;
+    
     try {
       setLoading(true);
-      setError(null);
-      const data = await listService.getListWithPlaces(listId);
-      setListData(data);
-    } catch (err) {
-      console.error('Error loading list:', err);
-      setError('Failed to load list details');
+      const lists = await enhancedListsService.getUserLists(user.id);
+      const currentList = lists.find(l => l.id === listId);
+      
+      if (currentList) {
+        setList(currentList);
+        setEditedName(currentList.name);
+        setEditedDescription(currentList.description || '');
+        setIsPublic(currentList.privacy_level === 'public');
+      } else {
+        Alert.alert('Error', 'List not found');
+        navigation.goBack();
+      }
+    } catch (error) {
+      console.error('Error loading list:', error);
+      Alert.alert('Error', 'Failed to load list');
     } finally {
       setLoading(false);
     }
   };
 
-  // Load data on mount
-  useEffect(() => {
-    loadListData();
-  }, [listId]);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadListData();
+    setRefreshing(false);
+  };
 
-  // Refresh data when screen comes into focus (e.g., returning from EditListScreen)
-  useFocusEffect(
-    React.useCallback(() => {
-      loadListData();
-    }, [listId])
-  );
-
-  const handleEditList = () => {
-    // Check if we have the isEditable param - this indicates we're in the Lists stack
-    const isInListsStack = 'isEditable' in route.params;
+  const handleSaveEdit = async () => {
+    if (!list || !user?.id) return;
     
-    if (isInListsStack) {
-      // We're in the Lists stack, navigate directly to EditList
-      (navigation as any).navigate('EditList', {
-        listId,
-        listName: listData?.name || listName,
-        listDescription: listData?.description || '',
-        listIcon: listData?.icon || 'heart',
-        listColor: listData?.color || Colors.primary[500],
-        listType: listData?.list_type || 'general',
-        privacyLevel: listData?.privacy_level || 'private',
+    try {
+      await enhancedListsService.updateList(list.id, {
+        name: editedName.trim(),
+        description: editedDescription.trim(),
+        privacy_level: isPublic ? 'public' : 'private',
       });
-    } else {
-      // We're in the Decide stack, offer to navigate to Lists tab
-      Alert.alert(
-        'Edit List', 
-        'To edit this list, you need to go to the Lists tab.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Go to Lists', 
-            onPress: () => {
-              // Navigate to the root navigator and then to Lists tab
-              (navigation as any).getParent()?.navigate('ListsStack', {
-                screen: 'EditList',
-                params: {
-                  listId,
-                  listName: listData?.name || listName,
-                  listDescription: listData?.description || '',
-                  listIcon: listData?.icon || 'heart',
-                  listColor: listData?.color || Colors.primary[500],
-                  listType: listData?.list_type || 'general',
-                  privacyLevel: listData?.privacy_level || 'private',
-                }
-              });
-            }
-          }
-        ]
-      );
+      
+      setIsEditing(false);
+      await loadListData();
+      Alert.alert('Success', 'List updated successfully');
+    } catch (error) {
+      console.error('Error updating list:', error);
+      if (error instanceof ListError) {
+        Alert.alert('Error', error.message);
+      } else {
+        Alert.alert('Error', 'Failed to update list');
+      }
     }
   };
 
-  const handleShareList = () => {
-    Alert.alert('Share List', `Sharing "${listName}" list...`);
+  const handleDeleteList = async () => {
+    if (!list) return;
+    
+    Alert.alert(
+      'Delete List',
+      `Are you sure you want to delete "${list.name}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await enhancedListsService.deleteList(list.id);
+              Alert.alert('Success', 'List deleted');
+              navigation.goBack();
+            } catch (error) {
+              console.error('Error deleting list:', error);
+              if (error instanceof ListError) {
+                Alert.alert('Error', error.message);
+              } else {
+                Alert.alert('Error', 'Failed to delete list');
+              }
+            }
+          }
+        }
+      ]
+    );
   };
 
-  const handleAddPlace = () => {
-    Alert.alert('Add Place', 'Add place functionality coming soon!');
+  const handleRemovePlace = async (placeId: string, placeName: string) => {
+    if (!list) return;
+    
+    Alert.alert(
+      'Remove Place',
+      `Remove "${placeName}" from this list?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await enhancedListsService.removePlaceFromList(list.id, placeId);
+              await loadListData();
+              Alert.alert('Success', 'Place removed from list');
+            } catch (error) {
+              console.error('Error removing place:', error);
+              Alert.alert('Error', 'Failed to remove place');
+            }
+          }
+        }
+      ]
+    );
   };
 
-  const handlePlacePress = (placeId: string, placeName: string) => {
-    // Type assertion needed due to union type complexity
-    (navigation as any).navigate('PlaceDetails', {
-      placeId,
-      placeName,
-      source: 'list',
+  const handleUpdatePlaceRating = async (placeId: string, rating: number) => {
+    if (!list) return;
+    
+    try {
+      await enhancedListsService.updatePlaceInList(list.id, placeId, {
+        personal_rating: rating
+      });
+      await loadListData();
+    } catch (error) {
+      console.error('Error updating place rating:', error);
+      Alert.alert('Error', 'Failed to update rating');
+    }
+  };
+
+  const handleNavigateToPlace = (place: EnrichedListPlace) => {
+    navigation.navigate('PlaceDetails', {
+      placeId: place.place.id,
+      placeName: place.place.name,
+      source: 'list'
     });
   };
 
-  const getListTypeColor = () => {
-    switch (listType) {
-      case 'user':
-        return Colors.primary[500];
-      case 'auto':
-      case 'smart':
-        return Colors.accent.blue;
-      default:
-        return Colors.semantic.textSecondary;
+  const handleAddPlaces = () => {
+    // TODO: Navigate to search/add places screen
+    Alert.alert('Coming Soon', 'Add places functionality will be implemented next');
+  };
+
+  const handleShare = () => {
+    Alert.alert('Coming Soon', 'List sharing functionality will be implemented next');
+  };
+
+  const handleGetDirections = (place: EnrichedListPlace) => {
+    Alert.alert('Coming Soon', 'Directions functionality will be implemented next');
+  };
+
+  const handleCheckIn = (place: EnrichedListPlace) => {
+    // TODO: Navigate to check-in functionality
+    Alert.alert('Coming Soon', 'Check-in functionality will be implemented next');
+  };
+
+  const handleRoutePlanning = () => {
+    Alert.alert('Coming Soon', 'Route planning functionality will be implemented next');
+  };
+
+  const getSortedPlaces = (places: EnrichedListPlace[]): EnrichedListPlace[] => {
+    return [...places].sort((a, b) => {
+      switch (sortBy) {
+        case 'date_added':
+          return new Date(b.added_at).getTime() - new Date(a.added_at).getTime();
+        case 'rating':
+          return (b.personal_rating || 0) - (a.personal_rating || 0);
+        case 'visit_count':
+          return (b.visit_count || 0) - (a.visit_count || 0);
+        case 'name':
+          return a.place.name.localeCompare(b.place.name);
+        default:
+          return 0;
+      }
+    });
+  };
+
+  const getVisitedStats = () => {
+    if (!list) return { visited: 0, total: 0 };
+    
+    const visited = list.places.filter(p => (p.visit_count || 0) > 0).length;
+    return { visited, total: list.places.length };
+  };
+
+  const getListIcon = () => {
+    if (!list) return MapPin;
+    
+    switch (list.icon) {
+      case 'heart': return Heart;
+      case 'coffee': return Coffee;
+      case 'briefcase': return Briefcase;
+      case 'map-pin': return MapPin;
+      default: return MapPin;
     }
   };
 
-  const getListTypeBadge = () => {
-    switch (listType) {
-      case 'auto':
-        return 'AUTO';
-      case 'smart':
-        return 'SMART';
-      default:
-        return null;
-    }
-  };
-
-  // Show loading state
   if (loading) {
     return (
       <SafeAreaView style={{ 
         flex: 1, 
-        backgroundColor: Colors.semantic.backgroundPrimary,
-        justifyContent: 'center',
-        alignItems: 'center'
+        backgroundColor: Colors.semantic.backgroundPrimary 
       }}>
-        <Body>Loading list details...</Body>
+        <LoadingState message="Loading list..." />
       </SafeAreaView>
     );
   }
 
-  // Show error state
-  if (error) {
+  if (!list) {
     return (
       <SafeAreaView style={{ 
         flex: 1, 
-        backgroundColor: Colors.semantic.backgroundPrimary,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: Spacing.layout.screenPadding
+        backgroundColor: Colors.semantic.backgroundPrimary 
       }}>
-        <Body color="secondary" style={{ textAlign: 'center', marginBottom: Spacing.md }}>
-          {error}
-        </Body>
-        <PrimaryButton
-          title="Try Again"
-          onPress={loadListData}
-          size="sm"
+        <EmptyState 
+          title="List Not Found"
+          description="This list could not be loaded"
+          primaryAction={{
+            title: "Go Back",
+            onPress: () => navigation.goBack()
+          }}
         />
       </SafeAreaView>
     );
   }
 
+  const ListIcon = getListIcon();
+  const sortedPlaces = getSortedPlaces(list.places);
+  const { visited, total } = getVisitedStats();
+  const isFavorites = list.is_default;
+
   return (
-    <SafeAreaView style={{ 
-      flex: 1, 
-      backgroundColor: Colors.semantic.backgroundPrimary 
-    }}>
-      <ScrollView 
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: Spacing.xl }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* List Header */}
-        <View style={{
-          paddingHorizontal: Spacing.layout.screenPadding,
-          paddingTop: Spacing.lg,
-          paddingBottom: Spacing.md,
-        }}>
-          <ElevatedCard padding="lg">
+        <SafeAreaView 
+      style={{ 
+        flex: 1, 
+        backgroundColor: Colors.semantic.backgroundPrimary 
+      }}
+      edges={['bottom', 'left', 'right']}
+    >
+      {/* Sticky Header */}
+      <View style={{
+        backgroundColor: Colors.semantic.backgroundPrimary,
+        paddingHorizontal: Spacing.layout.screenPadding,
+        paddingTop: Spacing.sm,
+        paddingBottom: Spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.semantic.borderPrimary,
+      }}>
+        {isEditing ? (
+          // Edit Mode
+          <View>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              marginBottom: Spacing.md,
+            }}>
+              <ListIcon 
+                size={Spacing.iconSize.lg} 
+                color={list.color || Colors.primary[500]}
+                strokeWidth={2}
+              />
+              <TextInput
+                value={editedName}
+                onChangeText={setEditedName}
+                style={{
+                  flex: 1,
+                  marginLeft: Spacing.md,
+                  fontSize: 24,
+                  fontWeight: '700',
+                  color: Colors.semantic.textPrimary,
+                  backgroundColor: Colors.semantic.backgroundSecondary,
+                  paddingHorizontal: Spacing.sm,
+                  paddingVertical: Spacing.xs,
+                  borderRadius: 8,
+                }}
+                placeholder="List name"
+                placeholderTextColor={Colors.semantic.textTertiary}
+              />
+            </View>
+
+            <TextInput
+              value={editedDescription}
+              onChangeText={setEditedDescription}
+              style={{
+                backgroundColor: Colors.semantic.backgroundSecondary,
+                paddingHorizontal: Spacing.sm,
+                paddingVertical: Spacing.sm,
+                borderRadius: 8,
+                color: Colors.semantic.textSecondary,
+                marginBottom: Spacing.md,
+                minHeight: 60,
+              }}
+              placeholder="Add a description..."
+              placeholderTextColor={Colors.semantic.textTertiary}
+              multiline
+              textAlignVertical="top"
+            />
+
+            {!isFavorites && (
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: Spacing.md,
+              }}>
+                <Body>Make list public</Body>
+                <Switch
+                  value={isPublic}
+                  onValueChange={setIsPublic}
+                  trackColor={{ 
+                    false: Colors.neutral[600], 
+                    true: Colors.primary[500] 
+                  }}
+                  thumbColor={Colors.semantic.textPrimary}
+                />
+              </View>
+            )}
+
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+            }}>
+              <SecondaryButton
+                title="Cancel"
+                onPress={() => {
+                  setIsEditing(false);
+                  setEditedName(list.name);
+                  setEditedDescription(list.description || '');
+                  setIsPublic(list.privacy_level === 'public');
+                }}
+                size="sm"
+              />
+              <PrimaryButton
+                title="Save"
+                onPress={handleSaveEdit}
+                size="sm"
+              />
+            </View>
+          </View>
+        ) : (
+          // Display Mode
+          <View>
+            {/* Description */}
             <View style={{
               flexDirection: 'row',
               alignItems: 'center',
               marginBottom: Spacing.sm,
+              marginTop: 0,
+              paddingTop: 0,
             }}>
-              <View
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: `${listData?.color || getListTypeColor()}20`,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginRight: Spacing.md,
-                }}
-              >
-                {(() => {
-                  const IconComponent = listData?.icon ? getIconComponent(listData.icon) : MapPin;
-                  return (
-                    <IconComponent
-                      size={24}
-                      color={listData?.color || getListTypeColor()}
-                      strokeWidth={2}
-                    />
-                  );
-                })()}
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  marginBottom: Spacing.xs,
-                }}>
-                  <Title3 style={{ flex: 1 }}>{listData?.name || listName}</Title3>
-                  {getListTypeBadge() && (
-                    <View
-                      style={{
-                        backgroundColor: `${listData?.color || getListTypeColor()}20`,
-                        paddingHorizontal: Spacing.sm,
-                        paddingVertical: 2,
-                        borderRadius: 12,
-                      }}
-                    >
-                      <Typography
-                        variant="caption2"
-                        color="brand"
-                        style={{ fontWeight: '600', fontSize: 10 }}
-                      >
-                        {getListTypeBadge()}
-                      </Typography>
-                    </View>
-                  )}
-                </View>
-
-                <SecondaryText>
-                  {(listData as any)?.places?.length || 0} place{((listData as any)?.places?.length || 0) !== 1 ? 's' : ''}
-                </SecondaryText>
-                
-                {listData?.description && (
-                  <Body color="secondary" style={{ marginTop: Spacing.xs }}>
-                    {listData.description}
+              <ListIcon 
+                size={Spacing.iconSize.lg} 
+                color={list.color || Colors.primary[500]}
+                strokeWidth={2}
+              />
+              <View style={{ flex: 1, marginLeft: Spacing.md }}>
+                {list.description && (
+                  <Body color="secondary">
+                    {list.description}
                   </Body>
                 )}
               </View>
             </View>
 
-            {/* Action Buttons */}
+            {/* Progress Bar + Action Icons */}
             <View style={{
               flexDirection: 'row',
-              gap: Spacing.sm,
-              marginTop: Spacing.md,
+              alignItems: 'center',
+              marginBottom: Spacing.md,
             }}>
-              {isEditable && (
-                <PrimaryButton
-                  title="Edit List"
-                  onPress={handleEditList}
-                  icon={Edit3}
-                  size="sm"
-                  style={{ flex: 1 }}
-                />
-              )}
-              
-              <OutlineButton
-                title="Share"
-                onPress={handleShareList}
-                icon={Share}
-                size="sm"
-                style={{ flex: 1 }}
-              />
-
-              {isEditable && (
-                <OutlineButton
-                  title="Add Place"
-                  onPress={handleAddPlace}
-                  icon={Plus}
-                  size="sm"
-                  style={{ flex: 1 }}
-                />
-              )}
-            </View>
-          </ElevatedCard>
-        </View>
-
-        {/* Places in List */}
-        <View style={{
-          paddingHorizontal: Spacing.layout.screenPadding,
-        }}>
-          <Title3 style={{ marginBottom: Spacing.md }}>
-            Places in this list
-          </Title3>
-
-          {((listData as any)?.places?.length || 0) > 0 ? (
-            ((listData as any)?.places || []).map((place: any) => (
-              <ElevatedCard
-                key={place.id}
-                padding="md"
-                style={{ marginBottom: Spacing.layout.cardSpacing }}
-                onPress={() => handlePlacePress(place.id, place.name)}
-              >
+              <View style={{ flex: 1, marginRight: Spacing.md }}>
                 <View style={{
                   flexDirection: 'row',
                   alignItems: 'center',
+                  marginBottom: 4,
                 }}>
-                  <View
+                  <SecondaryText style={{ 
+                    fontSize: 12,
+                    color: Colors.neutral[600] 
+                  }}>
+                    {total > 0 ? `${visited} of ${total} visited` : 'No places yet'}
+                  </SecondaryText>
+                </View>
+                <View style={{
+                  height: 4,
+                  backgroundColor: Colors.neutral[200],
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                }}>
+                  <View style={{
+                    height: '100%',
+                    width: total > 0 ? `${(visited / total) * 100}%` : '0%',
+                    backgroundColor: Colors.accent.green,
+                    borderRadius: 2,
+                  }} />
+                </View>
+              </View>
+
+              {list.privacy_level === 'public' && (
+                <View style={{
+                  backgroundColor: Colors.neutral[100],
+                  paddingHorizontal: Spacing.sm,
+                  paddingVertical: Spacing.xs,
+                  borderRadius: 8,
+                  marginRight: Spacing.sm,
+                }}>
+                  <SecondaryText style={{ 
+                    color: Colors.neutral[600],
+                    fontSize: 12,
+                    fontWeight: '500' 
+                  }}>
+                    Public
+                  </SecondaryText>
+                </View>
+              )}
+
+              {/* Action Icons */}
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: Spacing.sm,
+              }}>
+                <TouchableOpacity
+                  onPress={handleShare}
+                  style={{
+                    padding: Spacing.sm,
+                    backgroundColor: 'transparent',
+                    borderRadius: 8,
+                  }}
+                >
+                  <Share 
+                    size={Spacing.iconSize.md} 
+                    color={Colors.accent.yellow}
+                    strokeWidth={2}
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setIsEditing(!isEditing)}
+                  style={{
+                    padding: Spacing.sm,
+                    backgroundColor: 'transparent',
+                    borderRadius: 8,
+                  }}
+                >
+                  <Edit3 
+                    size={Spacing.iconSize.md} 
+                    color={Colors.primary[500]}
+                    strokeWidth={2}
+                  />
+                </TouchableOpacity>
+
+                {!isFavorites && (
+                  <TouchableOpacity
+                    onPress={handleDeleteList}
                     style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 20,
-                      backgroundColor: `${Colors.accent.blue}20`,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: Spacing.md,
+                      padding: Spacing.sm,
+                      backgroundColor: 'transparent',
+                      borderRadius: 8,
                     }}
                   >
-                    <MapPin
-                      size={20}
-                      color={Colors.accent.blue}
+                    <Trash2 
+                      size={Spacing.iconSize.md} 
+                      color={Colors.semantic.error}
                       strokeWidth={2}
                     />
-                  </View>
-
-                  <View style={{ flex: 1 }}>
-                    <Typography variant="headline" style={{ marginBottom: 2 }}>
-                      {place.name}
-                    </Typography>
-                    
-                    <SecondaryText numberOfLines={1}>
-                      {place.address}
-                    </SecondaryText>
-
-                    <View style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      marginTop: Spacing.xs,
-                      gap: Spacing.sm,
-                    }}>
-                      <SecondaryText style={{ fontSize: 12 }}>
-                        📍 {place.place_type}
-                      </SecondaryText>
-                      
-                      {place.price_level && (
-                        <SecondaryText style={{ fontSize: 12 }}>
-                          💰 {'$'.repeat(place.price_level)}
-                        </SecondaryText>
-                      )}
-
-                      {place.bangkok_context?.bts_proximity === 'walking' && (
-                        <View
-                          style={{
-                            backgroundColor: Colors.accent.green + '20',
-                            paddingHorizontal: 6,
-                            paddingVertical: 2,
-                            borderRadius: 8,
-                          }}
-                        >
-                          <SecondaryText style={{ fontSize: 10, color: Colors.accent.green }}>
-                            BTS Nearby
-                          </SecondaryText>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                </View>
-              </ElevatedCard>
-            ))
-          ) : (
-            <ElevatedCard padding="lg">
-              <View style={{ alignItems: 'center', paddingVertical: Spacing.lg }}>
-                <Body color="secondary" style={{ textAlign: 'center', marginBottom: Spacing.sm }}>
-                  No places in this list yet
-                </Body>
-                {isEditable && (
-                  <PrimaryButton
-                    title="Add Your First Place"
-                    onPress={handleAddPlace}
-                    icon={Plus}
-                    size="sm"
-                  />
+                  </TouchableOpacity>
                 )}
               </View>
-            </ElevatedCard>
-          )}
-        </View>
+            </View>
+
+            {/* Places Section Header */}
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+            }}>
+              <TouchableOpacity
+                onPress={() => setShowSortModal(true)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: Spacing.sm,
+                  paddingVertical: Spacing.xs,
+                  backgroundColor: Colors.semantic.backgroundSecondary,
+                  borderRadius: 8,
+                  marginRight: Spacing.sm,
+                }}
+              >
+                <SortAsc 
+                  size={Spacing.iconSize.sm} 
+                  color={Colors.semantic.textSecondary}
+                  strokeWidth={2}
+                />
+                <SecondaryText style={{ marginLeft: Spacing.xs }}>
+                  Sort
+                </SecondaryText>
+              </TouchableOpacity>
+
+              <PrimaryButton
+                title="Add Places"
+                onPress={handleAddPlaces}
+                icon={Plus}
+                size="sm"
+              />
+            </View>
+          </View>
+        )}
+      </View>
+
+      {/* Scrollable Places List */}
+      <ScrollView 
+        style={{ flex: 1 }}
+        contentContainerStyle={{ 
+          paddingHorizontal: Spacing.layout.screenPadding,
+          paddingTop: Spacing.md,
+          paddingBottom: Spacing.xl 
+        }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
+      >
+        {/* Places List */}
+        {sortedPlaces.length > 0 ? (
+          <View>
+            {sortedPlaces.map((listPlace) => (
+              <PlaceCard
+                key={listPlace.place.id}
+                listPlace={listPlace}
+                onRemove={() => handleRemovePlace(listPlace.place.id, listPlace.place.name)}
+                onRatingChange={(rating) => handleUpdatePlaceRating(listPlace.place.id, rating)}
+                onViewDetails={() => handleNavigateToPlace(listPlace)}
+                onGetDirections={() => handleGetDirections(listPlace)}
+                onCheckIn={() => handleCheckIn(listPlace)}
+              />
+            ))}
+          </View>
+        ) : (
+          <EmptyState
+            title="No places yet"
+            description={`Start building your ${list.name} list by adding some places!`}
+            primaryAction={{
+              title: "Add Places",
+              onPress: handleAddPlaces
+            }}
+          />
+        )}
       </ScrollView>
+
+      {/* Sort Modal */}
+      <Modal
+        visible={showSortModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowSortModal(false)}
+      >
+        <SafeAreaView style={{ 
+          flex: 1, 
+          backgroundColor: Colors.semantic.backgroundPrimary 
+        }}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: Spacing.layout.screenPadding,
+            paddingVertical: Spacing.md,
+            borderBottomWidth: 1,
+            borderBottomColor: Colors.semantic.borderPrimary,
+          }}>
+            <Typography variant="headline" style={{ fontWeight: '600' }}>
+              Sort Places
+            </Typography>
+            <TouchableOpacity
+              onPress={() => setShowSortModal(false)}
+              style={{ padding: Spacing.xs }}
+            >
+              <Typography variant="body" style={{ color: Colors.primary[500] }}>
+                Done
+              </Typography>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ padding: Spacing.layout.screenPadding }}>
+            {sortOptions.map((option) => (
+              <TouchableOpacity
+                key={option.key}
+                onPress={() => {
+                  setSortBy(option.key);
+                  setShowSortModal(false);
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: Spacing.md,
+                  borderBottomWidth: 1,
+                  borderBottomColor: Colors.semantic.borderPrimary,
+                }}
+              >
+                <option.icon 
+                  size={Spacing.iconSize.md} 
+                  color={sortBy === option.key ? Colors.primary[500] : Colors.semantic.textSecondary}
+                  strokeWidth={2}
+                />
+                <Body style={{ 
+                  marginLeft: Spacing.md,
+                  color: sortBy === option.key ? Colors.primary[500] : Colors.semantic.textPrimary,
+                  fontWeight: sortBy === option.key ? '600' : '400'
+                }}>
+                  {option.label}
+                </Body>
+                {sortBy === option.key && (
+                  <CheckCircle 
+                    size={Spacing.iconSize.sm} 
+                    color={Colors.primary[500]}
+                    strokeWidth={2}
+                    style={{ marginLeft: 'auto' }}
+                  />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
+  );
+}
+
+// Place Card Component
+interface PlaceCardProps {
+  listPlace: EnrichedListPlace;
+  onRemove: () => void;
+  onRatingChange: (rating: number) => void;
+  onViewDetails: () => void;
+  onGetDirections: () => void;
+  onCheckIn: () => void;
+}
+
+function PlaceCard({ 
+  listPlace, 
+  onRemove, 
+  onRatingChange, 
+  onViewDetails, 
+  onGetDirections, 
+  onCheckIn 
+}: PlaceCardProps) {
+  const { place } = listPlace;
+  const hasVisited = (listPlace.visit_count || 0) > 0;
+  
+  const renderStars = (rating: number, onPress?: (rating: number) => void) => {
+    return (
+      <View style={{ flexDirection: 'row' }}>
+        {[1, 2, 3, 4, 5].map((star) => (
+          <TouchableOpacity
+            key={star}
+            onPress={() => onPress?.(star)}
+            disabled={!onPress}
+          >
+            <Star
+              size={16}
+              color={star <= rating ? Colors.accent.yellow : Colors.neutral[400]}
+              fill={star <= rating ? Colors.accent.yellow : 'transparent'}
+              strokeWidth={1.5}
+              style={{ marginRight: 2 }}
+            />
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
+
+  return (
+    <TouchableOpacity
+      onPress={onViewDetails}
+      activeOpacity={0.7}
+    >
+      <ElevatedCard 
+        padding="sm" 
+        style={{ 
+          marginBottom: Spacing.sm,
+          opacity: hasVisited ? 1 : 0.8,
+          borderLeftWidth: hasVisited ? 4 : 0,
+          borderLeftColor: hasVisited ? Colors.accent.green : 'transparent',
+        }}
+      >
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          marginBottom: Spacing.xs,
+        }}>
+          <View style={{ flex: 1 }}>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              marginBottom: Spacing.xs,
+            }}>
+              <Typography variant="headline" style={{ 
+                fontWeight: '600',
+                flex: 1,
+                fontSize: 16,
+              }}>
+                {place.name}
+              </Typography>
+              {hasVisited && (
+                <CheckCircle 
+                  size={Spacing.iconSize.sm} 
+                  color={Colors.accent.green}
+                  strokeWidth={2}
+                />
+              )}
+            </View>
+
+            {place.address && (
+              <Body color="secondary" style={{ 
+                marginBottom: Spacing.xs,
+                fontSize: 13,
+              }}>
+                {place.address}
+              </Body>
+            )}
+
+            {/* Ratings */}
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              marginBottom: Spacing.xs,
+            }}>
+              <SecondaryText style={{ 
+                marginRight: Spacing.sm,
+                fontSize: 12,
+              }}>
+                Your rating:
+              </SecondaryText>
+              {renderStars(listPlace.personal_rating || 0, onRatingChange)}
+            </View>
+
+            {place.google_rating && (
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginBottom: Spacing.xs,
+              }}>
+                <SecondaryText style={{ 
+                  marginRight: Spacing.sm,
+                  fontSize: 12,
+                }}>
+                  Google:
+                </SecondaryText>
+                {renderStars(Math.round(place.google_rating))}
+                <SecondaryText style={{ 
+                  marginLeft: Spacing.xs,
+                  fontSize: 12,
+                }}>
+                  ({place.google_rating.toFixed(1)})
+                </SecondaryText>
+              </View>
+            )}
+
+            {/* Stats */}
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              marginBottom: Spacing.xs,
+            }}>
+              {listPlace.visit_count && listPlace.visit_count > 0 && (
+                <View style={{
+                  backgroundColor: Colors.accent.green,
+                  paddingHorizontal: Spacing.xs,
+                  paddingVertical: 2,
+                  borderRadius: 6,
+                  marginRight: Spacing.xs,
+                }}>
+                  <SecondaryText style={{ 
+                    color: Colors.neutral[950],
+                    fontSize: 11,
+                    fontWeight: '600' 
+                  }}>
+                    {listPlace.visit_count} visits
+                  </SecondaryText>
+                </View>
+              )}
+
+              <View style={{
+                backgroundColor: Colors.neutral[700],
+                paddingHorizontal: Spacing.xs,
+                paddingVertical: 2,
+                borderRadius: 6,
+                marginRight: Spacing.xs,
+              }}>
+                <SecondaryText style={{ 
+                  color: Colors.semantic.textPrimary,
+                  fontSize: 11 
+                }}>
+                  Added {new Date(listPlace.added_at).toLocaleDateString()}
+                </SecondaryText>
+              </View>
+            </View>
+
+            {/* Notes */}
+            {listPlace.notes && (
+              <View style={{
+                backgroundColor: Colors.semantic.backgroundSecondary,
+                padding: Spacing.xs,
+                borderRadius: 6,
+                marginTop: Spacing.xs,
+              }}>
+                <Body color="secondary" style={{ fontSize: 13 }}>
+                  {listPlace.notes}
+                </Body>
+              </View>
+            )}
+          </View>
+
+          <TouchableOpacity
+            onPress={onRemove}
+            style={{
+              padding: Spacing.xs,
+              backgroundColor: Colors.semantic.error + '20',
+              borderRadius: 6,
+              marginLeft: Spacing.sm,
+            }}
+          >
+            <Trash2 
+              size={16} 
+              color={Colors.semantic.error}
+              strokeWidth={2}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Actions */}
+        <View style={{
+          flexDirection: 'row',
+          justifyContent: 'flex-end',
+          alignItems: 'center',
+          gap: Spacing.sm,
+        }}>
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              onGetDirections();
+            }}
+            style={{
+              padding: Spacing.xs,
+              backgroundColor: Colors.neutral[100],
+              borderRadius: 6,
+            }}
+          >
+            <Navigation 
+              size={16} 
+              color={Colors.neutral[700]}
+              strokeWidth={2}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              onCheckIn();
+            }}
+            style={{
+              padding: Spacing.xs,
+              backgroundColor: Colors.accent.yellow,
+              borderRadius: 6,
+            }}
+          >
+            <Target 
+              size={16} 
+              color={Colors.neutral[950]}
+              strokeWidth={2}
+            />
+          </TouchableOpacity>
+        </View>
+      </ElevatedCard>
+    </TouchableOpacity>
   );
 } 
