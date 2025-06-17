@@ -419,6 +419,7 @@ export class PlacesService {
       address: place.address,
       coordinates: place.coordinates,
       price_level: place.price_level,
+      types: place.place_type ? place.place_type.split(',') : [],
       bangkok_context: place.bangkok_context,
       // Additional details would be populated from Google Places Details API
     };

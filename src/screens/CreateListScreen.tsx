@@ -6,7 +6,7 @@ import {
   Check, 
   Heart, 
   Coffee, 
-  Sparkles, 
+  Trophy, 
   Briefcase, 
   Star, 
   MapPin,
@@ -14,8 +14,8 @@ import {
   ShoppingBag,
   Camera,
   Music,
-  Gamepad2,
-  Book
+  Trees,
+  Plane
 } from 'lucide-react-native';
 import { DarkTheme } from '../constants/theme';
 
@@ -27,15 +27,15 @@ interface CreateListScreenProps {
 const iconOptions = [
   { key: 'heart', icon: Heart, label: 'Favorites', color: DarkTheme.colors.status.error },
   { key: 'coffee', icon: Coffee, label: 'Coffee', color: DarkTheme.colors.bangkok.saffron },
-  { key: 'sparkles', icon: Sparkles, label: 'Special', color: DarkTheme.colors.accent.purple },
+  { key: 'trophy', icon: Trophy, label: 'Sports', color: DarkTheme.colors.accent.purple },
   { key: 'briefcase', icon: Briefcase, label: 'Work', color: DarkTheme.colors.accent.blue },
   { key: 'star', icon: Star, label: 'Wishlist', color: DarkTheme.colors.bangkok.gold },
   { key: 'utensils', icon: Utensils, label: 'Food', color: DarkTheme.colors.bangkok.market },
   { key: 'shopping-bag', icon: ShoppingBag, label: 'Shopping', color: DarkTheme.colors.accent.purple },
   { key: 'camera', icon: Camera, label: 'Photo Spots', color: DarkTheme.colors.accent.green },
   { key: 'music', icon: Music, label: 'Nightlife', color: DarkTheme.colors.accent.purple },
-  { key: 'gamepad', icon: Gamepad2, label: 'Entertainment', color: DarkTheme.colors.accent.blue },
-  { key: 'book', icon: Book, label: 'Culture', color: DarkTheme.colors.bangkok.temple },
+  { key: 'trees', icon: Trees, label: 'Outdoors', color: DarkTheme.colors.accent.green },
+  { key: 'plane', icon: Plane, label: 'Travel', color: DarkTheme.colors.accent.blue },
   { key: 'map-pin', icon: MapPin, label: 'General', color: DarkTheme.colors.semantic.secondaryLabel },
 ];
 

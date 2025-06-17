@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Sparkles, User, Zap, MapPin, Clock, Coffee, Utensils, Wine, ShoppingBag } from 'lucide-react-native';
+import { Sparkles, User, Zap, MapPin, Clock, Coffee, Utensils, Wine, ShoppingBag, ChevronRight } from 'lucide-react-native';
 import { DarkTheme } from '../constants/theme';
 import ListCard, { ListCardProps } from '../components/lists/ListCard';
 import type { DecideStackScreenProps } from '../navigation/types';
@@ -541,16 +541,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
             </Text>
           </View>
 
-          <Text style={[
-            DarkTheme.typography.caption1,
-            { 
-              color: DarkTheme.colors.semantic.tertiaryLabel,
-              marginBottom: DarkTheme.spacing.md,
-              fontStyle: 'italic',
-            }
-          ]}>
-            Handpicked by experts and local editors
-          </Text>
+
 
           {mockCuratedLists.map((list) => (
             <TouchableOpacity
@@ -567,12 +558,10 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
                 ...DarkTheme.shadows.small,
               }}
             >
-              {/* Header Row */}
               <View style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                marginBottom: DarkTheme.spacing.sm,
               }}>
                 <View style={{
                   flexDirection: 'row',
@@ -598,7 +587,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
                   </View>
                   
                   <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
                       <Text 
                         style={[
                           DarkTheme.typography.headline,
@@ -645,99 +634,14 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
                   </View>
                 </View>
                 
-                <User 
+                <ChevronRight 
                   size={20} 
                   color={DarkTheme.colors.semantic.tertiaryLabel}
                   strokeWidth={2}
                 />
               </View>
 
-              {/* Description */}
-              <Text 
-                style={[
-                  DarkTheme.typography.subhead,
-                  { 
-                    color: DarkTheme.colors.semantic.secondaryLabel,
-                    marginBottom: DarkTheme.spacing.sm,
-                  }
-                ]}
-              >
-                {list.description}
-              </Text>
 
-              {/* Preview Places */}
-              {list.previewPlaces.length > 0 && (
-                <View style={{
-                  backgroundColor: `${DarkTheme.colors.bangkok.gold}10`,
-                  borderRadius: DarkTheme.borderRadius.sm,
-                  padding: DarkTheme.spacing.sm,
-                }}>
-                  <Text 
-                    style={[
-                      DarkTheme.typography.caption1,
-                      { 
-                        color: DarkTheme.colors.semantic.tertiaryLabel,
-                        marginBottom: DarkTheme.spacing.xs,
-                        fontWeight: '600',
-                        textTransform: 'uppercase',
-                        fontSize: 10,
-                      }
-                    ]}
-                  >
-                    Featured Places
-                  </Text>
-                  
-                  <View style={{ flexDirection: 'column' }}>
-                    {list.previewPlaces.slice(0, 3).map((placeName, index) => (
-                      <View 
-                        key={index}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          marginBottom: index < Math.min(list.previewPlaces.length, 3) - 1 ? DarkTheme.spacing.xs : 0,
-                        }}
-                      >
-                        <View 
-                          style={{
-                            width: 4,
-                            height: 4,
-                            borderRadius: 2,
-                            backgroundColor: DarkTheme.colors.bangkok.gold,
-                            marginRight: DarkTheme.spacing.xs,
-                          }}
-                        />
-                        <Text 
-                          style={[
-                            DarkTheme.typography.subhead,
-                            { 
-                              color: DarkTheme.colors.semantic.secondaryLabel,
-                              flex: 1,
-                            }
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {placeName}
-                        </Text>
-                      </View>
-                    ))}
-                    
-                    {list.placeCount > 3 && (
-                      <Text 
-                        style={[
-                          DarkTheme.typography.caption1,
-                          { 
-                            color: DarkTheme.colors.semantic.tertiaryLabel,
-                            marginTop: DarkTheme.spacing.xs,
-                            fontStyle: 'italic',
-                          }
-                        ]}
-                      >
-                        +{list.placeCount - 3} more places
-                      </Text>
-                    )}
-                  </View>
-                </View>
-              )}
             </TouchableOpacity>
           ))}
         </View>

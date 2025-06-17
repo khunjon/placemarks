@@ -67,6 +67,8 @@ export interface Place {
   address: string;
   coordinates: [number, number]; // [longitude, latitude] format
   place_type: string;
+  google_types?: string[]; // Full array of Google Places API types
+  primary_type?: string; // Primary type (computed from google_types[0] or place_type)
   price_level?: number;
   bangkok_context: BangkokContext;
 }

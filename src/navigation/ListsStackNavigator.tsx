@@ -9,7 +9,9 @@ import ListsScreen from '../screens/ListsScreen';
 import ListDetailScreen from '../screens/ListDetailScreen';
 import EditListScreen from '../screens/EditListScreen';
 import CreateListScreen from '../screens/CreateListScreen';
+import AddPlaceToListScreen from '../screens/AddPlaceToListScreen';
 import PlaceDetailsScreen from '../screens/PlaceDetailsScreen';
+import PlaceInListDetailScreen from '../screens/PlaceInListDetailScreen';
 
 // Wrapper component for CreateList screen to avoid inline function
 function CreateListScreenWrapper({ navigation }: ListsStackScreenProps<'CreateList'>) {
@@ -87,12 +89,30 @@ export default function ListsStackNavigator() {
       />
       
       <Stack.Screen 
+        name="AddPlaceToList" 
+        component={AddPlaceToListScreen}
+        options={{
+          headerShown: false, // AddPlaceToListScreen has its own header
+          animation: 'slide_from_right',
+        }}
+      />
+      
+      <Stack.Screen 
         name="PlaceDetails" 
         component={PlaceDetailsScreen}
         options={({ route }) => ({
           title: route.params.placeName,
           headerShown: true,
         })}
+      />
+      
+      <Stack.Screen 
+        name="PlaceInListDetail" 
+        component={PlaceInListDetailScreen}
+        options={{
+          headerShown: false, // PlaceInListDetailScreen has its own header
+          animation: 'slide_from_right',
+        }}
       />
     </Stack.Navigator>
   );

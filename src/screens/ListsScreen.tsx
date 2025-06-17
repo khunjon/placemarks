@@ -5,6 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Plus, List, Zap, Heart, TrendingUp, Clock, MapPin, ChevronRight } from 'lucide-react-native';
 import { Colors } from '../constants/Colors';
 import { Spacing } from '../constants/Spacing';
+import { DarkTheme } from '../constants/theme';
 import { 
   Typography, 
   Title3, 
@@ -38,7 +39,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [isGeneratingSmartList, setIsGeneratingSmartList] = useState(false);
+
 
   // Load user's lists on component mount
   useEffect(() => {
@@ -198,34 +199,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     }
   };
 
-  const handleGenerateMostVisited = async () => {
-    if (!user?.id) return;
-    
-    try {
-      setIsGeneratingSmartList(true);
-      
-      const smartListConfig = {
-        name: "Most Visited",
-        description: "Places you visit most often",
-        icon: "trending-up",
-        color: "#10B981",
-        generator: (userId: string) => enhancedListsService.generateMostVisitedList(userId)
-      };
 
-      await enhancedListsService.createOrUpdateSmartList(user.id, smartListConfig);
-      await loadAllLists();
-      Alert.alert('Success', 'Most Visited list updated!');
-    } catch (error) {
-      console.error('Error generating Most Visited list:', error);
-      if (error instanceof ListError) {
-        Alert.alert('Error', error.message);
-      } else {
-        Alert.alert('Error', 'Failed to generate Most Visited list');
-      }
-    } finally {
-      setIsGeneratingSmartList(false);
-    }
-  };
 
   // Separate favorites from other user lists
   const favoritesList = userLists.find(list => list.is_default);
@@ -417,132 +391,177 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
             </Title3>
           </View>
 
-          <SecondaryText style={{ marginBottom: Spacing.md }}>
-            Automatically generated based on your activity
-          </SecondaryText>
 
-          {/* Most Visited Smart List */}
-          <Card padding="md" style={{ marginBottom: Spacing.md }}>
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}>
-              <View style={{ flex: 1 }}>
+
+                    {/* Most Visited Smart List */}
+          <TouchableOpacity
+            onPress={() => {
+              // TODO: Navigate to Most Visited list when implemented
+              Alert.alert('Coming Soon', 'Smart lists will be available soon!');
+            }}
+            activeOpacity={0.7}
+          >
+            <Card padding="md" style={{ marginBottom: Spacing.md }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
                 <View style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  marginBottom: Spacing.xs,
+                  flex: 1,
                 }}>
-                  <TrendingUp 
-                    size={Spacing.iconSize.sm} 
-                    color="#10B981"
-                    strokeWidth={2}
-                  />
-                  <Typography variant="headline" style={{ 
-                    marginLeft: Spacing.xs,
-                    fontWeight: '600',
+                  <View style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: Spacing.sm,
+                    backgroundColor: '#10B98120',
                   }}>
-                    Most Visited
-                  </Typography>
+                    <TrendingUp 
+                      size={20} 
+                      color="#10B981"
+                      strokeWidth={2}
+                    />
+                  </View>
+                  
+                  <View style={{ flex: 1 }}>
+                    <Typography variant="headline" style={{ 
+                      fontWeight: '600',
+                      marginBottom: 2,
+                    }}>
+                      Most Visited
+                    </Typography>
+                    <Body color="secondary">
+                      Places you visit most
+                    </Body>
+                  </View>
                 </View>
-                                 <Body color="secondary">
-                   Places you visit most
-                 </Body>
+                
+                <ChevronRight 
+                  size={20} 
+                  color={DarkTheme.colors.semantic.tertiaryLabel}
+                  strokeWidth={2}
+                />
               </View>
-                             <SecondaryButton
-                 title={isGeneratingSmartList ? "Generating..." : "Generate"}
-                 onPress={handleGenerateMostVisited}
-                 size="sm"
-                 disabled={isGeneratingSmartList}
-               />
-            </View>
-          </Card>
+            </Card>
+          </TouchableOpacity>
 
-          {/* Placeholder Smart Lists */}
-          <Card padding="md" style={{ marginBottom: Spacing.md, opacity: 0.6 }}>
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}>
-              <View style={{ flex: 1 }}>
+                    {/* Placeholder Smart Lists */}
+          <TouchableOpacity
+            onPress={() => {
+              Alert.alert('Coming Soon', 'This smart list will be available soon!');
+            }}
+            activeOpacity={0.7}
+          >
+            <Card padding="md" style={{ marginBottom: Spacing.md, opacity: 0.6 }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
                 <View style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  marginBottom: Spacing.xs,
+                  flex: 1,
                 }}>
-                                     <Clock 
-                     size={Spacing.iconSize.sm} 
-                     color={Colors.neutral[500]}
-                     strokeWidth={2}
-                   />
-                   <Typography variant="headline" style={{ 
-                     marginLeft: Spacing.xs,
-                     fontWeight: '600',
-                     color: Colors.neutral[500]
-                   }}>
-                     Try Next
-                   </Typography>
-                 </View>
-                 <Body color="secondary">
-                   Places saved but never visited
-                 </Body>
-               </View>
-               <View style={{
-                 backgroundColor: Colors.neutral[100],
-                 paddingHorizontal: Spacing.sm,
-                 paddingVertical: Spacing.xs,
-                 borderRadius: 12,
-               }}>
-                 <SecondaryText style={{ fontSize: 12 }}>
-                   Coming Soon
-                 </SecondaryText>
-               </View>
-            </View>
-          </Card>
+                  <View style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: Spacing.sm,
+                    backgroundColor: `${Colors.neutral[500]}20`,
+                  }}>
+                    <Clock 
+                      size={20} 
+                      color={Colors.neutral[500]}
+                      strokeWidth={2}
+                    />
+                  </View>
+                  
+                  <View style={{ flex: 1 }}>
+                    <Typography variant="headline" style={{ 
+                      fontWeight: '600',
+                      color: Colors.neutral[500],
+                      marginBottom: 2,
+                    }}>
+                      Try Next
+                    </Typography>
+                    <Body color="secondary">
+                      Places saved but never visited
+                    </Body>
+                  </View>
+                </View>
+                
+                <ChevronRight 
+                  size={20} 
+                  color={DarkTheme.colors.semantic.tertiaryLabel}
+                  strokeWidth={2}
+                />
+              </View>
+            </Card>
+          </TouchableOpacity>
 
-          <Card padding="md" style={{ opacity: 0.6 }}>
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}>
-              <View style={{ flex: 1 }}>
+                    <TouchableOpacity
+            onPress={() => {
+              Alert.alert('Coming Soon', 'This smart list will be available soon!');
+            }}
+            activeOpacity={0.7}
+          >
+            <Card padding="md" style={{ opacity: 0.6 }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
                 <View style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  marginBottom: Spacing.xs,
+                  flex: 1,
                 }}>
-                                     <MapPin 
-                     size={Spacing.iconSize.sm} 
-                     color={Colors.neutral[500]}
-                     strokeWidth={2}
-                   />
-                   <Typography variant="headline" style={{ 
-                     marginLeft: Spacing.xs,
-                     fontWeight: '600',
-                     color: Colors.neutral[500]
-                   }}>
-                     Weekend Spots
-                   </Typography>
-                 </View>
-                 <Body color="secondary">
-                   Your favorite weekend destinations
-                 </Body>
-               </View>
-               <View style={{
-                 backgroundColor: Colors.neutral[100],
-                 paddingHorizontal: Spacing.sm,
-                 paddingVertical: Spacing.xs,
-                 borderRadius: 12,
-               }}>
-                 <SecondaryText style={{ fontSize: 12 }}>
-                   Coming Soon
-                 </SecondaryText>
-               </View>
-            </View>
-          </Card>
+                  <View style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: Spacing.sm,
+                    backgroundColor: `${Colors.neutral[500]}20`,
+                  }}>
+                    <MapPin 
+                      size={20} 
+                      color={Colors.neutral[500]}
+                      strokeWidth={2}
+                    />
+                  </View>
+                  
+                  <View style={{ flex: 1 }}>
+                    <Typography variant="headline" style={{ 
+                      fontWeight: '600',
+                      color: Colors.neutral[500],
+                      marginBottom: 2,
+                    }}>
+                      Weekend Spots
+                    </Typography>
+                    <Body color="secondary">
+                      Your favorite weekend destinations
+                    </Body>
+                  </View>
+                </View>
+                
+                <ChevronRight 
+                  size={20} 
+                  color={DarkTheme.colors.semantic.tertiaryLabel}
+                  strokeWidth={2}
+                />
+              </View>
+            </Card>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 

@@ -23,6 +23,7 @@ export interface PlaceDetails {
   rating?: number;
   photos?: string[];
   reviews?: PlaceReview[];
+  types?: string[];
   bangkok_context?: BangkokContext;
 }
 

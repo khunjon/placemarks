@@ -56,9 +56,13 @@ import {
   enhancedListsService, 
   ListWithPlaces, 
   EnrichedListPlace,
+  EnhancedPlace,
   ListError,
   PlaceError 
 } from '../services/listsService';
+import { checkInUtils, ThumbsRating } from '../services/checkInsService';
+import { userRatingsService, UserRatingType, UserPlaceRating } from '../services/userRatingsService';
+import Toast from '../components/ui/Toast';
 import type { ListsStackScreenProps } from '../navigation/types';
 
 type ListDetailScreenProps = ListsStackScreenProps<'ListDetail'>;
@@ -92,6 +96,23 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
   const [isPublic, setIsPublic] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('date_added');
   const [showSortModal, setShowSortModal] = useState(false);
+  const [userRatings, setUserRatings] = useState<Record<string, UserPlaceRating>>({});
+  
+  // Toast state
+  const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' }>({
+    visible: false,
+    message: '',
+    type: 'success'
+  });
+
+  // Toast helper functions
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ visible: true, message, type });
+  };
+
+  const hideToast = () => {
+    setToast(prev => ({ ...prev, visible: false }));
+  };
   
   // Load list data
   useEffect(() => {
@@ -113,21 +134,50 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
     
     try {
       setLoading(true);
-      const lists = await enhancedListsService.getUserLists(user.id);
-      const currentList = lists.find(l => l.id === listId);
+      
+      // Add timeout for slow connections
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 15000)
+      );
+      
+      const dataPromise = enhancedListsService.getUserLists(user.id);
+      
+      const lists = await Promise.race([dataPromise, timeoutPromise]) as any;
+      const currentList = lists.find((l: any) => l.id === listId);
       
       if (currentList) {
         setList(currentList);
         setEditedName(currentList.name);
         setEditedDescription(currentList.description || '');
         setIsPublic(currentList.privacy_level === 'public');
+        
+        // Load user ratings for places in this list
+        const ratingsMap: Record<string, UserPlaceRating> = {};
+        for (const listPlace of currentList.places) {
+          const rating = await userRatingsService.getUserRating(user.id, listPlace.place.id);
+          if (rating) {
+            ratingsMap[listPlace.place.id] = rating;
+          }
+        }
+        setUserRatings(ratingsMap);
       } else {
         Alert.alert('Error', 'List not found');
         navigation.goBack();
       }
     } catch (error) {
       console.error('Error loading list:', error);
-      Alert.alert('Error', 'Failed to load list');
+      if (error instanceof Error && error.message === 'Request timeout') {
+        Alert.alert(
+          'Slow Connection', 
+          'Loading is taking longer than usual. Please check your internet connection and try again.',
+          [
+            { text: 'Retry', onPress: () => loadListData() },
+            { text: 'Go Back', onPress: () => navigation.goBack() }
+          ]
+        );
+      } else {
+        Alert.alert('Error', 'Failed to load list');
+      }
     } finally {
       setLoading(false);
     }
@@ -207,10 +257,10 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
             try {
               await enhancedListsService.removePlaceFromList(list.id, placeId);
               await loadListData();
-              Alert.alert('Success', 'Place removed from list');
+              showToast(`"${placeName}" removed from list`, 'success');
             } catch (error) {
               console.error('Error removing place:', error);
-              Alert.alert('Error', 'Failed to remove place');
+              showToast('Failed to remove place', 'error');
             }
           }
         }
@@ -218,14 +268,34 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
     );
   };
 
-  const handleUpdatePlaceRating = async (placeId: string, rating: number) => {
-    if (!list) return;
+  const handleUpdatePlaceRating = async (placeId: string, rating: UserRatingType | null) => {
+    if (!user?.id) return;
     
     try {
-      await enhancedListsService.updatePlaceInList(list.id, placeId, {
-        personal_rating: rating
-      });
-      await loadListData();
+      if (rating) {
+        // Set the rating
+        await userRatingsService.setUserRating(user.id, placeId, rating);
+      } else {
+        // Remove the rating
+        await userRatingsService.removeUserRating(user.id, placeId);
+      }
+      
+      // Update local state
+      const newRatings = { ...userRatings };
+      if (rating) {
+        const newRating: UserPlaceRating = {
+          id: '', // Will be set by the service
+          user_id: user.id,
+          place_id: placeId,
+          rating_type: rating,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        newRatings[placeId] = newRating;
+      } else {
+        delete newRatings[placeId];
+      }
+      setUserRatings(newRatings);
     } catch (error) {
       console.error('Error updating place rating:', error);
       Alert.alert('Error', 'Failed to update rating');
@@ -233,16 +303,18 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
   };
 
   const handleNavigateToPlace = (place: EnrichedListPlace) => {
-    navigation.navigate('PlaceDetails', {
+    navigation.navigate('PlaceInListDetail', {
       placeId: place.place.id,
-      placeName: place.place.name,
-      source: 'list'
+      listId: listId,
+      listName: list?.name || initialListName
     });
   };
 
   const handleAddPlaces = () => {
-    // TODO: Navigate to search/add places screen
-    Alert.alert('Coming Soon', 'Add places functionality will be implemented next');
+    navigation.navigate('AddPlaceToList', {
+      listId: listId,
+      listName: list?.name || initialListName,
+    });
   };
 
   const handleShare = () => {
@@ -296,6 +368,34 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       case 'map-pin': return MapPin;
       default: return MapPin;
     }
+  };
+
+  // Utility function to abbreviate Bangkok addresses
+  const abbreviateAddress = (address: string): string => {
+    if (!address) return '';
+    
+    // Common Bangkok abbreviations
+    let abbreviated = address
+      .replace(/Bangkok \d{5}, Thailand$/, 'Bangkok') // Remove postal code and Thailand
+      .replace(/, Bangkok Metropolis,.*$/, ', Bangkok') // Remove "Bangkok Metropolis" suffix
+      .replace(/, Krung Thep Maha Nakhon.*$/, ', Bangkok') // Replace Thai name with Bangkok
+      .replace(/\bRoad\b/g, 'Rd') // Abbreviate Road
+      .replace(/\bStreet\b/g, 'St') // Abbreviate Street
+      .replace(/\bSubdistrict\b/g, '') // Remove Subdistrict
+      .replace(/\bDistrict\b/g, '') // Remove District
+      .replace(/\bBangkok \d{5}\b/g, 'Bangkok') // Remove postal codes
+      .replace(/,\s*,/g, ',') // Remove double commas
+      .replace(/^,\s*|,\s*$/g, ''); // Remove leading/trailing commas
+    
+    // If still too long, take first part + last part
+    if (abbreviated.length > 50) {
+      const parts = abbreviated.split(',').map(p => p.trim());
+      if (parts.length > 2) {
+        abbreviated = `${parts[0]}, ${parts[parts.length - 1]}`;
+      }
+    }
+    
+    return abbreviated;
   };
 
   if (loading) {
@@ -521,7 +621,6 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
               <View style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: Spacing.sm,
               }}>
                 <TouchableOpacity
                   onPress={handleShare}
@@ -529,6 +628,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                     padding: Spacing.sm,
                     backgroundColor: 'transparent',
                     borderRadius: 8,
+                    marginRight: Spacing.sm,
                   }}
                 >
                   <Share 
@@ -544,6 +644,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                     padding: Spacing.sm,
                     backgroundColor: 'transparent',
                     borderRadius: 8,
+                    marginRight: !isFavorites ? Spacing.sm : 0,
                   }}
                 >
                   <Edit3 
@@ -631,6 +732,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
               <PlaceCard
                 key={listPlace.place.id}
                 listPlace={listPlace}
+                userRatings={userRatings}
                 onRemove={() => handleRemovePlace(listPlace.place.id, listPlace.place.name)}
                 onRatingChange={(rating) => handleUpdatePlaceRating(listPlace.place.id, rating)}
                 onViewDetails={() => handleNavigateToPlace(listPlace)}
@@ -725,6 +827,14 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
           </View>
         </SafeAreaView>
       </Modal>
+
+      {/* Toast Notification */}
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={hideToast}
+      />
     </SafeAreaView>
   );
 }
@@ -732,8 +842,9 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
 // Place Card Component
 interface PlaceCardProps {
   listPlace: EnrichedListPlace;
+  userRatings: Record<string, UserPlaceRating>;
   onRemove: () => void;
-  onRatingChange: (rating: number) => void;
+  onRatingChange: (rating: UserRatingType | null) => void;
   onViewDetails: () => void;
   onGetDirections: () => void;
   onCheckIn: () => void;
@@ -741,6 +852,7 @@ interface PlaceCardProps {
 
 function PlaceCard({ 
   listPlace, 
+  userRatings,
   onRemove, 
   onRatingChange, 
   onViewDetails, 
@@ -750,24 +862,150 @@ function PlaceCard({
   const { place } = listPlace;
   const hasVisited = (listPlace.visit_count || 0) > 0;
   
-  const renderStars = (rating: number, onPress?: (rating: number) => void) => {
+  // Get user rating from the ratings map
+  const userRating = userRatings[place.id];
+  const currentRating = userRating?.rating_type;
+
+  // Enhanced category icon function that works with stored place data
+  const getCategoryIconForPlace = (place: EnhancedPlace): string => {
+    // First, try to use the full google_types array if available (best option)
+    if (place.google_types && place.google_types.length > 0) {
+      return checkInUtils.getCategoryIcon(undefined, place.google_types) || '📍';
+    }
+    
+    // Fallback to primary_type if available
+    if (place.primary_type) {
+      return checkInUtils.getCategoryIcon(place.primary_type) || '📍';
+    }
+    
+    // Legacy fallback: map place_type to appropriate categories
+    const placeType = place.place_type?.toLowerCase();
+    
+    if (!placeType) {
+      return '📍'; // Default pin for unknown types
+    }
+    
+    // Map common place types to appropriate categories
+    if (placeType.includes('restaurant') || placeType.includes('food') || placeType.includes('meal_takeaway')) {
+      return checkInUtils.getCategoryIcon(undefined, ['restaurant']);
+    }
+    if (placeType.includes('cafe') || placeType.includes('coffee')) {
+      return checkInUtils.getCategoryIcon(undefined, ['cafe']);
+    }
+    if (placeType.includes('shopping') || placeType.includes('store') || placeType.includes('clothing_store') || placeType.includes('department_store')) {
+      return checkInUtils.getCategoryIcon(undefined, ['shopping_mall']);
+    }
+    if (placeType.includes('hotel') || placeType.includes('lodging')) {
+      return checkInUtils.getCategoryIcon(undefined, ['lodging']);
+    }
+    if (placeType.includes('hospital') || placeType.includes('pharmacy') || placeType.includes('doctor')) {
+      return checkInUtils.getCategoryIcon(undefined, ['hospital']);
+    }
+    if (placeType.includes('gas_station')) {
+      return checkInUtils.getCategoryIcon(undefined, ['gas_station']);
+    }
+    if (placeType.includes('bank') || placeType.includes('atm') || placeType.includes('finance')) {
+      return checkInUtils.getCategoryIcon(undefined, ['bank']);
+    }
+    if (placeType.includes('gym') || placeType.includes('spa') || placeType.includes('beauty_salon')) {
+      return checkInUtils.getCategoryIcon(undefined, ['gym']);
+    }
+    if (placeType.includes('tourist_attraction') || placeType.includes('museum') || placeType.includes('art_gallery')) {
+      return checkInUtils.getCategoryIcon(undefined, ['tourist_attraction']);
+    }
+    if (placeType.includes('park') || placeType.includes('campground')) {
+      return checkInUtils.getCategoryIcon(undefined, ['park']);
+    }
+    if (placeType.includes('school') || placeType.includes('university') || placeType.includes('library')) {
+      return checkInUtils.getCategoryIcon(undefined, ['school']);
+    }
+    if (placeType.includes('church') || placeType.includes('temple') || placeType.includes('hindu_temple') || placeType.includes('mosque')) {
+      return checkInUtils.getCategoryIcon(undefined, ['church']);
+    }
+    if (placeType.includes('night_club') || placeType.includes('bar') || placeType.includes('liquor_store')) {
+      return checkInUtils.getCategoryIcon(undefined, ['night_club']);
+    }
+    if (placeType.includes('movie_theater') || placeType.includes('amusement_park')) {
+      return checkInUtils.getCategoryIcon(undefined, ['movie_theater']);
+    }
+    if (placeType.includes('subway_station') || placeType.includes('train_station') || placeType.includes('transit_station')) {
+      return checkInUtils.getCategoryIcon(undefined, ['subway_station']);
+    }
+    if (placeType.includes('car_repair') || placeType.includes('car_wash')) {
+      return checkInUtils.getCategoryIcon(undefined, ['car_repair']);
+    }
+    if (placeType.includes('supermarket') || placeType.includes('grocery')) {
+      return checkInUtils.getCategoryIcon(undefined, ['supermarket']);
+    }
+    if (placeType.includes('establishment') || placeType.includes('point_of_interest')) {
+      return '📍'; // Generic pin for broad categories
+    }
+    
+    // Final fallback to the original function with place_type
+    return checkInUtils.getCategoryIcon(place.place_type) || '📍';
+  };
+
+  // Utility function to abbreviate Bangkok addresses
+  const abbreviateAddress = (address: string): string => {
+    if (!address) return '';
+    
+    // Common Bangkok abbreviations
+    let abbreviated = address
+      .replace(/Bangkok \d{5}, Thailand$/, 'Bangkok') // Remove postal code and Thailand
+      .replace(/, Bangkok Metropolis,.*$/, ', Bangkok') // Remove "Bangkok Metropolis" suffix
+      .replace(/, Krung Thep Maha Nakhon.*$/, ', Bangkok') // Replace Thai name with Bangkok
+      .replace(/\bRoad\b/g, 'Rd') // Abbreviate Road
+      .replace(/\bStreet\b/g, 'St') // Abbreviate Street
+      .replace(/\bSubdistrict\b/g, '') // Remove Subdistrict
+      .replace(/\bDistrict\b/g, '') // Remove District
+      .replace(/\bBangkok \d{5}\b/g, 'Bangkok') // Remove postal codes
+      .replace(/,\s*,/g, ',') // Remove double commas
+      .replace(/^,\s*|,\s*$/g, ''); // Remove leading/trailing commas
+    
+    // If still too long, take first part + last part
+    if (abbreviated.length > 50) {
+      const parts = abbreviated.split(',').map(p => p.trim());
+      if (parts.length > 2) {
+        abbreviated = `${parts[0]}, ${parts[parts.length - 1]}`;
+      }
+    }
+    
+    return abbreviated;
+  };
+
+  const renderThumbsRating = (currentRating: UserRatingType | null, onPress: (rating: UserRatingType | null) => void) => {
+    const ratings: { rating: UserRatingType; emoji: string }[] = [
+      { rating: 'thumbs_down', emoji: '👎' },
+      { rating: 'neutral', emoji: '😐' },
+      { rating: 'thumbs_up', emoji: '👍' },
+    ];
+
     return (
-      <View style={{ flexDirection: 'row' }}>
-        {[1, 2, 3, 4, 5].map((star) => (
-          <TouchableOpacity
-            key={star}
-            onPress={() => onPress?.(star)}
-            disabled={!onPress}
-          >
-            <Star
-              size={16}
-              color={star <= rating ? Colors.accent.yellow : Colors.neutral[400]}
-              fill={star <= rating ? Colors.accent.yellow : 'transparent'}
-              strokeWidth={1.5}
-              style={{ marginRight: 2 }}
-            />
-          </TouchableOpacity>
-        ))}
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        {ratings.map(({ rating, emoji }) => {
+          const isSelected = currentRating === rating;
+          return (
+            <TouchableOpacity
+              key={rating}
+              onPress={() => onPress(isSelected ? null : rating)}
+              style={{
+                paddingHorizontal: Spacing.xs,
+                paddingVertical: 4,
+                marginRight: Spacing.xs,
+                borderRadius: 4,
+                backgroundColor: isSelected 
+                  ? checkInUtils.getRatingColor(rating) + '20' 
+                  : 'transparent',
+                borderWidth: isSelected ? 1 : 0,
+                borderColor: isSelected ? checkInUtils.getRatingColor(rating) : 'transparent',
+              }}
+            >
+              <Typography style={{ fontSize: 14 }}>
+                {emoji}
+              </Typography>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     );
   };
@@ -789,9 +1027,25 @@ function PlaceCard({
         <View style={{
           flexDirection: 'row',
           alignItems: 'flex-start',
-          marginBottom: Spacing.xs,
         }}>
+          {/* Category Icon */}
+          <View style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: Colors.semantic.backgroundTertiary,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: Spacing.md,
+            marginTop: 2, // Slight offset to align with text
+          }}>
+            <Typography variant="body" style={{ fontSize: 20 }}>
+              {getCategoryIconForPlace(place) || '📍'}
+            </Typography>
+          </View>
+
           <View style={{ flex: 1 }}>
+            {/* Place name and visited indicator */}
             <View style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -802,7 +1056,7 @@ function PlaceCard({
                 flex: 1,
                 fontSize: 16,
               }}>
-                {place.name}
+                {place.name || 'Unknown Place'}
               </Typography>
               {hasVisited && (
                 <CheckCircle 
@@ -813,30 +1067,45 @@ function PlaceCard({
               )}
             </View>
 
+            {/* Address with abbreviation */}
             {place.address && (
               <Body color="secondary" style={{ 
                 marginBottom: Spacing.xs,
                 fontSize: 13,
               }}>
-                {place.address}
+                {abbreviateAddress(place.address)}
               </Body>
             )}
 
-            {/* Ratings */}
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              marginBottom: Spacing.xs,
-            }}>
-              <SecondaryText style={{ 
-                marginRight: Spacing.sm,
-                fontSize: 12,
+            {/* Your rating - only show if user has rated */}
+            {currentRating && (
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginBottom: Spacing.xs,
               }}>
-                Your rating:
-              </SecondaryText>
-              {renderStars(listPlace.personal_rating || 0, onRatingChange)}
-            </View>
+                <SecondaryText style={{ 
+                  marginRight: Spacing.sm,
+                  fontSize: 12,
+                }}>
+                  Your rating:
+                </SecondaryText>
+                <View style={{
+                  paddingHorizontal: Spacing.xs,
+                  paddingVertical: 4,
+                  borderRadius: 4,
+                  backgroundColor: checkInUtils.getRatingColor(currentRating) + '20',
+                  borderWidth: 1,
+                  borderColor: checkInUtils.getRatingColor(currentRating),
+                }}>
+                  <Typography style={{ fontSize: 14 }}>
+                    {currentRating === 'thumbs_up' ? '👍' : currentRating === 'thumbs_down' ? '👎' : '😐'}
+                  </Typography>
+                </View>
+              </View>
+            )}
 
+            {/* Google rating - simplified display */}
             {place.google_rating && (
               <View style={{
                 flexDirection: 'row',
@@ -847,58 +1116,31 @@ function PlaceCard({
                   marginRight: Spacing.sm,
                   fontSize: 12,
                 }}>
-                  Google:
+                  Google: {place.google_rating.toFixed(1)}
                 </SecondaryText>
-                {renderStars(Math.round(place.google_rating))}
-                <SecondaryText style={{ 
-                  marginLeft: Spacing.xs,
-                  fontSize: 12,
-                }}>
-                  ({place.google_rating.toFixed(1)})
-                </SecondaryText>
+                <Typography style={{ fontSize: 12 }}>⭐</Typography>
               </View>
             )}
 
-            {/* Stats */}
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              marginBottom: Spacing.xs,
-            }}>
-              {listPlace.visit_count && listPlace.visit_count > 0 && (
-                <View style={{
-                  backgroundColor: Colors.accent.green,
-                  paddingHorizontal: Spacing.xs,
-                  paddingVertical: 2,
-                  borderRadius: 6,
-                  marginRight: Spacing.xs,
-                }}>
-                  <SecondaryText style={{ 
-                    color: Colors.neutral[950],
-                    fontSize: 11,
-                    fontWeight: '600' 
-                  }}>
-                    {listPlace.visit_count} visits
-                  </SecondaryText>
-                </View>
-              )}
-
+            {/* Visit count badge */}
+            {(listPlace.visit_count || 0) > 0 && (
               <View style={{
-                backgroundColor: Colors.neutral[700],
+                alignSelf: 'flex-start',
+                backgroundColor: Colors.accent.green,
                 paddingHorizontal: Spacing.xs,
                 paddingVertical: 2,
                 borderRadius: 6,
-                marginRight: Spacing.xs,
+                marginBottom: Spacing.xs,
               }}>
-                <SecondaryText style={{ 
-                  color: Colors.semantic.textPrimary,
-                  fontSize: 11 
+                <Typography style={{ 
+                  color: Colors.neutral[950],
+                  fontSize: 11,
+                  fontWeight: '600' 
                 }}>
-                  Added {new Date(listPlace.added_at).toLocaleDateString()}
-                </SecondaryText>
+                  {listPlace.visit_count} visits
+                </Typography>
               </View>
-            </View>
+            )}
 
             {/* Notes */}
             {listPlace.notes && (
@@ -906,7 +1148,7 @@ function PlaceCard({
                 backgroundColor: Colors.semantic.backgroundSecondary,
                 padding: Spacing.xs,
                 borderRadius: 6,
-                marginTop: Spacing.xs,
+                marginBottom: Spacing.xs,
               }}>
                 <Body color="secondary" style={{ fontSize: 13 }}>
                   {listPlace.notes}
@@ -932,48 +1174,66 @@ function PlaceCard({
           </TouchableOpacity>
         </View>
 
-        {/* Actions */}
+        {/* Bottom row: Added date + Actions */}
         <View style={{
           flexDirection: 'row',
-          justifyContent: 'flex-end',
+          justifyContent: 'space-between',
           alignItems: 'center',
-          gap: Spacing.sm,
+          marginTop: Spacing.xs,
+          paddingTop: Spacing.xs,
+          borderTopWidth: 1,
+          borderTopColor: Colors.semantic.borderPrimary + '30',
         }}>
-          <TouchableOpacity
-            onPress={(e) => {
-              e.stopPropagation();
-              onGetDirections();
-            }}
-            style={{
-              padding: Spacing.xs,
-              backgroundColor: Colors.neutral[100],
-              borderRadius: 6,
-            }}
-          >
-            <Navigation 
-              size={16} 
-              color={Colors.neutral[700]}
-              strokeWidth={2}
-            />
-          </TouchableOpacity>
+          {/* De-emphasized added date */}
+          <Typography style={{ 
+            fontSize: 11,
+            color: Colors.semantic.textTertiary,
+          }}>
+            Added {new Date(listPlace.added_at).toLocaleDateString()}
+          </Typography>
 
-          <TouchableOpacity
-            onPress={(e) => {
-              e.stopPropagation();
-              onCheckIn();
-            }}
-            style={{
-              padding: Spacing.xs,
-              backgroundColor: Colors.accent.yellow,
-              borderRadius: 6,
-            }}
-          >
-            <Target 
-              size={16} 
-              color={Colors.neutral[950]}
-              strokeWidth={2}
-            />
-          </TouchableOpacity>
+          {/* Action buttons */}
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}>
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation();
+                onGetDirections();
+              }}
+              style={{
+                padding: Spacing.xs,
+                backgroundColor: Colors.neutral[100],
+                borderRadius: 6,
+                marginRight: Spacing.sm,
+              }}
+            >
+              <Navigation 
+                size={16} 
+                color={Colors.neutral[700]}
+                strokeWidth={2}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation();
+                onCheckIn();
+              }}
+              style={{
+                padding: Spacing.xs,
+                backgroundColor: Colors.accent.yellow,
+                borderRadius: 6,
+              }}
+            >
+              <Target 
+                size={16} 
+                color={Colors.neutral[950]}
+                strokeWidth={2}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
       </ElevatedCard>
     </TouchableOpacity>

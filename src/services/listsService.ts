@@ -56,6 +56,7 @@ export interface PlaceSearchResult {
   rating?: number;
   price_level?: number;
   photos?: string[];
+  types?: string[];
   formatted_for_list: boolean;
 }
 
@@ -174,6 +175,8 @@ export class EnhancedListsService {
               address: p.address,
               coordinates: [0, 0], // Will be parsed from geometry if needed
               place_type: p.place_type,
+              google_types: p.google_types,
+              primary_type: p.primary_type,
               price_level: p.price_level,
               bangkok_context: p.bangkok_context,
               google_rating: p.google_rating,
@@ -325,6 +328,7 @@ export class EnhancedListsService {
       address?: string;
       coordinates?: [number, number];
       place_type?: string;
+      google_types?: string[]; // Full Google Places API types array
       price_level?: number;
       google_rating?: number;
       phone?: string;
@@ -347,6 +351,7 @@ export class EnhancedListsService {
         p_coordinates: googlePlaceData.coordinates ? 
           `POINT(${googlePlaceData.coordinates[0]} ${googlePlaceData.coordinates[1]})` : null,
         p_place_type: googlePlaceData.place_type,
+        p_google_types: googlePlaceData.google_types || [],
         p_price_level: googlePlaceData.price_level,
         p_hours_open: googlePlaceData.hours_open || {},
         p_phone: googlePlaceData.phone,
@@ -654,6 +659,7 @@ export class EnhancedListsService {
             rating: details.rating,
             price_level: details.price_level,
             photos: details.photos?.slice(0, 3), // Limit to 3 photos
+            types: details.types,
             formatted_for_list: true
           });
         } catch (error) {
@@ -663,6 +669,7 @@ export class EnhancedListsService {
             google_place_id: suggestion.place_id,
             name: suggestion.main_text,
             address: suggestion.secondary_text,
+            types: [], // No types available from suggestion
             formatted_for_list: true
           });
         }
@@ -689,6 +696,7 @@ export class EnhancedListsService {
         rating: details.rating,
         price_level: details.price_level,
         photos: details.photos?.slice(0, 5),
+        types: details.types,
         formatted_for_list: true
       };
     } catch (error) {
