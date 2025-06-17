@@ -12,6 +12,7 @@ import {
   PrimaryButton,
   LoadingState,
 } from '../components/common';
+import Toast from '../components/ui/Toast';
 import { useAuth } from '../services/auth-context';
 import { checkInsService, ThumbsRating, checkInUtils } from '../services/checkInsService';
 import type { CheckInStackScreenProps } from '../navigation/types';
@@ -28,6 +29,11 @@ export default function CheckInFormScreen({ navigation, route }: CheckInFormScre
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' }>({
+    visible: false,
+    message: '',
+    type: 'success'
+  });
 
   // Keyboard listeners for precise height tracking
   useEffect(() => {
@@ -77,10 +83,19 @@ export default function CheckInFormScreen({ navigation, route }: CheckInFormScre
     }, 150);
   };
 
+  // Toast helper functions
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ visible: true, message, type });
+  };
+
+  const hideToast = () => {
+    setToast(prev => ({ ...prev, visible: false }));
+  };
+
   // Handle check-in submission
   const handleCheckIn = async () => {
     if (!user) {
-      Alert.alert('Error', 'You must be logged in to check in.');
+      showToast('You must be logged in to check in.', 'error');
       return;
     }
 
@@ -95,30 +110,17 @@ export default function CheckInFormScreen({ navigation, route }: CheckInFormScre
         comment: comment.trim() || undefined,
       });
 
-      // Show success feedback briefly
-      Alert.alert(
-        'Check-in Successful! 🎉',
-        `You've checked in at ${placeName}`,
-        [
-          {
-            text: 'Great!',
-            onPress: () => {
-              // Navigate back to main CheckIn tab
-              navigation.navigate('CheckIn');
-            },
-          },
-        ]
-      );
+      // Show success toast and navigate back
+      showToast(`Check-in successful at ${placeName}! 🎉`);
+      
+      // Navigate back to the main CheckIn screen after a short delay to let user see the toast
+      setTimeout(() => {
+        navigation.popToTop();
+      }, 1500);
 
     } catch (error) {
       console.error('Error creating check-in:', error);
-      Alert.alert(
-        'Check-in Failed',
-        'Something went wrong. Please try again.',
-        [
-          { text: 'OK' }
-        ]
-      );
+      showToast('Check-in failed. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -194,6 +196,13 @@ export default function CheckInFormScreen({ navigation, route }: CheckInFormScre
       flex: 1, 
       backgroundColor: Colors.semantic.backgroundPrimary 
     }}>
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={hideToast}
+      />
+      
       {/* Header */}
       <View style={{
         paddingHorizontal: Spacing.layout.screenPadding,
