@@ -5,7 +5,6 @@
 export {
   User,
   Place,
-  CheckIn,
   List,
   UserPreferences,
   BangkokContext,
@@ -37,7 +36,8 @@ export {
 
 // CheckIn-specific types
 export {
-  AspectRatings,
+  ThumbsRating,
+  CheckIn,
   WeatherContext,
   CompanionType,
   MealType,

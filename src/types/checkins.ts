@@ -1,16 +1,19 @@
 // Check-in related types for Bangkok-specific context
 
+// Thumbs rating system type
+export type ThumbsRating = 'thumbs_down' | 'neutral' | 'thumbs_up';
+
 export interface CheckIn {
   id: string;
   user_id: string;
   place_id: string;
   timestamp: string;
-  rating: number; // Overall rating 1-5
-  aspect_ratings: AspectRatings;
+  rating?: ThumbsRating; // Optional thumbs rating
   tags: string[];
   context: CheckInContext;
   photos: string[];
   notes?: string;
+  comment?: string; // Alias for notes
   weather_context: WeatherContext;
   companion_type?: CompanionType;
   meal_type?: MealType;
@@ -33,14 +36,7 @@ export interface CheckIn {
   };
 }
 
-export interface AspectRatings {
-  food_quality?: number; // 1-5
-  service?: number; // 1-5
-  atmosphere?: number; // 1-5
-  value_for_money?: number; // 1-5
-  cleanliness?: number; // 1-5
-  location_convenience?: number; // 1-5
-}
+
 
 export interface CheckInContext {
   environment: 'indoor' | 'outdoor' | 'mixed';
@@ -66,12 +62,12 @@ export type TransportationMethod = 'walking' | 'bts' | 'mrt' | 'bus' | 'taxi' | 
 
 export interface CheckInCreate {
   place_id: string;
-  rating: number;
-  aspect_ratings?: AspectRatings;
+  rating?: ThumbsRating; // Optional thumbs rating
   tags?: string[];
   context: CheckInContext;
   photos?: string[];
   notes?: string;
+  comment?: string; // Alias for notes
   weather_context: WeatherContext;
   companion_type?: CompanionType;
   meal_type?: MealType;
@@ -81,12 +77,12 @@ export interface CheckInCreate {
 }
 
 export interface CheckInUpdate {
-  rating?: number;
-  aspect_ratings?: AspectRatings;
+  rating?: ThumbsRating; // Optional thumbs rating
   tags?: string[];
   context?: CheckInContext;
   photos?: string[];
   notes?: string;
+  comment?: string; // Alias for notes
   weather_context?: WeatherContext;
   companion_type?: CompanionType;
   meal_type?: MealType;

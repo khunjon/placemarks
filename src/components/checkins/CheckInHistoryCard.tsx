@@ -3,13 +3,14 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { MapPin, Clock, Star, MessageCircle, Camera } from 'lucide-react-native';
 import { DarkTheme } from '../../constants/theme';
 import { LocationBadge } from '../ui';
+import { checkInUtils, ThumbsRating } from '../../services/checkInsService';
 
 export interface CheckInHistoryCardProps {
   id: string;
   placeName: string;
   placeType: 'restaurant' | 'cafe' | 'shopping' | 'temple' | 'park' | 'hotel' | 'attraction';
   checkInTime: string;
-  rating?: number;
+  rating?: ThumbsRating;
   note?: string;
   photoCount?: number;
   btsStation?: string;
@@ -37,20 +38,30 @@ const getTypeColor = (type: CheckInHistoryCardProps['placeType']) => {
   }
 };
 
-const renderStars = (rating: number) => {
-  const stars = [];
-  for (let i = 1; i <= 5; i++) {
-    stars.push(
-      <Star
-        key={i}
-        size={14}
-        color={i <= rating ? DarkTheme.colors.accent.yellow : DarkTheme.colors.semantic.quaternaryLabel}
-        fill={i <= rating ? DarkTheme.colors.accent.yellow : 'transparent'}
-        strokeWidth={1.5}
-      />
-    );
-  }
-  return stars;
+const renderThumbsRating = (rating: ThumbsRating) => {
+  return (
+    <View style={{ 
+      flexDirection: 'row', 
+      alignItems: 'center',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+      backgroundColor: checkInUtils.getRatingColor(rating) + '20',
+      borderWidth: 1,
+      borderColor: checkInUtils.getRatingColor(rating),
+    }}>
+      <Text style={{ fontSize: 14, marginRight: 4 }}>
+        {checkInUtils.formatRating(rating)}
+      </Text>
+      <Text style={{
+        fontSize: 12,
+        color: checkInUtils.getRatingColor(rating),
+        fontWeight: '600',
+      }}>
+        {rating === 'thumbs_up' ? 'Great' : rating === 'neutral' ? 'Okay' : 'Not Great'}
+      </Text>
+    </View>
+  );
 };
 
 export default function CheckInHistoryCard({
@@ -188,24 +199,7 @@ export default function CheckInHistoryCard({
           alignItems: 'center',
           marginBottom: DarkTheme.spacing.sm,
         }}>
-          <View style={{ 
-            flexDirection: 'row', 
-            alignItems: 'center',
-            marginRight: DarkTheme.spacing.sm,
-          }}>
-            {renderStars(rating)}
-          </View>
-          <Text 
-            style={[
-              DarkTheme.typography.caption1,
-              { 
-                color: DarkTheme.colors.semantic.secondaryLabel,
-                fontWeight: '600' 
-              }
-            ]}
-          >
-            {rating}/5
-          </Text>
+          {renderThumbsRating(rating)}
         </View>
       )}
 
