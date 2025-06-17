@@ -4,11 +4,13 @@ import { Colors } from '../constants/Colors';
 import { CheckInStackParamList } from './types';
 
 // Import screens
-import CheckInScreen from '../screens/CheckInScreen';
-import CheckInSearchScreen from '../screens/CheckInSearchScreen';
-import CheckInDetailScreen from '../screens/CheckInDetailScreen';
-import PlaceDetailsScreen from '../screens/PlaceDetailsScreen';
-import CheckInFormScreen from '../screens/CheckInFormScreen';
+import {
+  CheckInScreen,
+  CheckInSearchScreen,
+  CheckInDetailScreen,
+  CheckInFormScreen
+} from '../screens/checkins';
+import { PlaceDetailsScreen } from '../screens/places';
 
 const Stack = createNativeStackNavigator<CheckInStackParamList>();
 

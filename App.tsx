@@ -5,7 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AuthProvider, useAuth } from './src/services/auth-context';
 import { Colors } from './src/constants/Colors';
 import BottomTabNavigator from './src/navigation/BottomTabNavigator';
-import LoginScreen from './src/screens/LoginScreen';
+import { LoginScreen } from './src/screens/auth';
 import type { RootStackParamList } from './src/navigation/types';
 import './global.css';
 

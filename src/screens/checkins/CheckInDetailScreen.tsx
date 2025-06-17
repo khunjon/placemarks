@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, ScrollView, TouchableOpacity, TextInput, Alert, ActionSheetIOS, Platform, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '../constants/Colors';
-import { Spacing } from '../constants/Spacing';
+import { Colors } from '../../constants/Colors';
+import { Spacing } from '../../constants/Spacing';
 import { 
   Typography, 
   Title2,
@@ -12,14 +12,14 @@ import {
   PrimaryButton,
   OutlineButton,
   LoadingState,
-} from '../components/common';
-import Toast from '../components/ui/Toast';
-import { useAuth } from '../services/auth-context';
-import { checkInsService, ThumbsRating, checkInUtils, CheckInWithPlace } from '../services/checkInsService';
-import { enhancedListsService, ListWithPlaces } from '../services/listsService';
-import { ListsCache } from '../services/listsCache';
-import { ListDetailsCache } from '../services/listDetailsCache';
-import type { CheckInStackScreenProps } from '../navigation/types';
+} from '../../components/common';
+import Toast from '../../components/ui/Toast';
+import { useAuth } from '../../services/auth-context';
+import { checkInsService, ThumbsRating, checkInUtils, CheckInWithPlace } from '../../services/checkInsService';
+import { enhancedListsService, ListWithPlaces } from '../../services/listsService';
+import { ListsCache } from '../../services/listsCache';
+import { ListDetailsCache } from '../../services/listDetailsCache';
+import type { CheckInStackScreenProps } from '../../navigation/types';
 
 type CheckInDetailScreenProps = CheckInStackScreenProps<'CheckInDetail'>;
 

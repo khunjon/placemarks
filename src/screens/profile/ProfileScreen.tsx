@@ -14,12 +14,12 @@ import {
   Navigation,
   TreePine
 } from 'lucide-react-native';
-import { DarkTheme } from '../constants/theme';
-import { UserProfileHeader, SettingItem, AchievementSection } from '../components/profile';
-import { useAuth } from '../services/auth-context';
-import { checkInsService, CheckInWithPlace } from '../services/checkInsService';
-import { enhancedListsService } from '../services/listsService';
-import type { ProfileStackScreenProps } from '../navigation/types';
+import { DarkTheme } from '../../constants/theme';
+import { UserProfileHeader, SettingItem, AchievementSection } from '../../components/profile';
+import { useAuth } from '../../services/auth-context';
+import { checkInsService, CheckInWithPlace } from '../../services/checkInsService';
+import { enhancedListsService } from '../../services/listsService';
+import type { ProfileStackScreenProps } from '../../navigation/types';
 
 type ProfileScreenProps = ProfileStackScreenProps<'Profile'>;
 

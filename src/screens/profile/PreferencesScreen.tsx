@@ -2,17 +2,17 @@ import React from 'react';
 import { View, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Settings, Bell, MapPin, Shield, Database } from 'lucide-react-native';
-import { Colors } from '../constants/Colors';
-import { Spacing } from '../constants/Spacing';
+import { Colors } from '../../constants/Colors';
+import { Spacing } from '../../constants/Spacing';
 import { 
   Typography, 
   Title2, 
   Title3,
   Body,
   ElevatedCard 
-} from '../components/common';
-import SettingItem from '../components/profile/SettingItem';
-import type { ProfileStackScreenProps } from '../navigation/types';
+} from '../../components/common';
+import SettingItem from '../../components/profile/SettingItem';
+import type { ProfileStackScreenProps } from '../../navigation/types';
 
 type PreferencesScreenProps = ProfileStackScreenProps<'Preferences'>;
 

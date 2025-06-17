@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, ScrollView, TouchableOpacity, TextInput, Alert, Keyboard, Platform, KeyboardAvoidingView, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '../constants/Colors';
-import { Spacing } from '../constants/Spacing';
+import { Colors } from '../../constants/Colors';
+import { Spacing } from '../../constants/Spacing';
 import { 
   Typography, 
   Title3,
@@ -11,11 +11,11 @@ import {
   ElevatedCard,
   PrimaryButton,
   LoadingState,
-} from '../components/common';
-import Toast from '../components/ui/Toast';
-import { useAuth } from '../services/auth-context';
-import { checkInsService, ThumbsRating, checkInUtils } from '../services/checkInsService';
-import type { CheckInStackScreenProps } from '../navigation/types';
+} from '../../components/common';
+import Toast from '../../components/ui/Toast';
+import { useAuth } from '../../services/auth-context';
+import { checkInsService, ThumbsRating, checkInUtils } from '../../services/checkInsService';
+import type { CheckInStackScreenProps } from '../../navigation/types';
 
 type CheckInFormScreenProps = CheckInStackScreenProps<'CheckInForm'>;
 

@@ -5,13 +5,17 @@ import { ListsStackParamList } from './types';
 import type { ListsStackScreenProps } from './types';
 
 // Import screens
-import ListsScreen from '../screens/ListsScreen';
-import ListDetailScreen from '../screens/ListDetailScreen';
-import EditListScreen from '../screens/EditListScreen';
-import CreateListScreen from '../screens/CreateListScreen';
-import AddPlaceToListScreen from '../screens/AddPlaceToListScreen';
-import PlaceDetailsScreen from '../screens/PlaceDetailsScreen';
-import PlaceInListDetailScreen from '../screens/PlaceInListDetailScreen';
+import {
+  ListsScreen,
+  ListDetailScreen,
+  EditListScreen,
+  CreateListScreen,
+  AddPlaceToListScreen
+} from '../screens/lists';
+import {
+  PlaceDetailsScreen,
+  PlaceInListDetailScreen
+} from '../screens/places';
 
 // Wrapper component for CreateList screen to avoid inline function
 function CreateListScreenWrapper({ navigation }: ListsStackScreenProps<'CreateList'>) {

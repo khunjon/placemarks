@@ -15,14 +15,17 @@ import {
   Camera,
   Music,
   Trees,
-  Plane
+  Plane,
+  Plus
 } from 'lucide-react-native';
-import { DarkTheme } from '../constants/theme';
+import { DarkTheme } from '../../constants/theme';
+import { enhancedListsService } from '../../services/listsService';
+import { ListsCache } from '../../services/listsCache';
+import { useAuth } from '../../services/auth-context';
+import type { ListsStackScreenProps } from '../../navigation/types';
+import { Toast } from '../../components/common';
 
-interface CreateListScreenProps {
-  onClose: () => void;
-  onSave: (listData: { name: string; description: string; icon: string; color: string }) => void;
-}
+type EditListScreenProps = ListsStackScreenProps<'EditList'>;
 
 const iconOptions = [
   { key: 'heart', icon: Heart, label: 'Favorites', color: DarkTheme.colors.status.error },
@@ -39,26 +42,246 @@ const iconOptions = [
   { key: 'map-pin', icon: MapPin, label: 'General', color: DarkTheme.colors.semantic.secondaryLabel },
 ];
 
-export default function CreateListScreen({ onClose, onSave }: CreateListScreenProps) {
-  const [listName, setListName] = useState('');
-  const [description, setDescription] = useState('');
-  const [selectedIcon, setSelectedIcon] = useState(iconOptions[0]);
+export default function EditListScreen({ route, navigation }: EditListScreenProps) {
+  const { listId, listName, listDescription = '', listIcon = 'heart', listType = 'general' } = route.params;
+  const { user } = useAuth();
+  
+  // Check if this is the Favorites list
+  const isFavoritesList = listType === 'favorites';
+  
+  const [name, setName] = useState(listName);
+  const [description, setDescription] = useState(listDescription);
+  
+  // Find the selected icon from the options, fallback to first option if not found
+  const initialIcon = iconOptions.find(option => option.key === listIcon) || iconOptions[0];
+  const [selectedIcon, setSelectedIcon] = useState(initialIcon);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Toast state
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
-  const handleSave = () => {
-    if (!listName.trim()) {
-      Alert.alert('Error', 'Please enter a list name');
+  const showToastMessage = (message: string, type: 'success' | 'error' = 'success') => {
+    setToastMessage(message);
+    setToastType(type);
+    setShowToast(true);
+  };
+
+  const handleSave = async () => {
+    if (!name.trim()) {
+      showToastMessage('Please enter a list name', 'error');
       return;
     }
 
-    const listData = {
-      name: listName.trim(),
-      description: description.trim(),
-      icon: selectedIcon.key,
-      color: selectedIcon.color,
-    };
+    if (!user?.id) {
+      showToastMessage('You must be logged in to edit lists', 'error');
+      return;
+    }
 
-    onSave(listData);
+    try {
+      setIsLoading(true);
+      
+      const updateData = {
+        name: name.trim(),
+        description: description.trim(),
+        icon: selectedIcon.key,
+        color: selectedIcon.color,
+        list_type: listType, // Preserve the original list type
+        type: 'user' as const,
+      };
+
+      console.log('Updating list with data:', JSON.stringify(updateData, null, 2));
+      
+      await enhancedListsService.updateList(listId, updateData);
+      
+      // Invalidate cache since list was updated
+      if (user?.id) {
+        await ListsCache.invalidateCache();
+      }
+      
+      showToastMessage(`"${name}" updated successfully!`, 'success');
+      
+      // Navigate back after a short delay to let user see the toast
+      setTimeout(() => {
+        navigation.goBack();
+      }, 1500);
+    } catch (error) {
+      console.error('Error updating list:', error);
+      showToastMessage('Failed to update list. Please try again.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  // If this is the Favorites list, show a simplified interface
+  if (isFavoritesList) {
+    return (
+      <SafeAreaView style={{ 
+        flex: 1, 
+        backgroundColor: DarkTheme.colors.semantic.systemBackground 
+      }}>
+        {/* Header */}
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: DarkTheme.spacing.lg,
+          paddingVertical: DarkTheme.spacing.md,
+          borderBottomWidth: 1,
+          borderBottomColor: DarkTheme.colors.semantic.separator,
+        }}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={{
+              padding: DarkTheme.spacing.xs,
+            }}
+            activeOpacity={0.7}
+          >
+            <X 
+              size={24} 
+              color={DarkTheme.colors.semantic.label}
+              strokeWidth={2}
+            />
+          </TouchableOpacity>
+
+          <Text style={[
+            DarkTheme.typography.headline,
+            { 
+              color: DarkTheme.colors.semantic.label,
+              fontWeight: '600' 
+            }
+          ]}>
+            Favorites
+          </Text>
+
+          <View style={{ width: 24 }} />
+        </View>
+
+        <ScrollView 
+          style={{ flex: 1 }}
+          contentContainerStyle={{ 
+            paddingHorizontal: DarkTheme.spacing.lg,
+            paddingVertical: DarkTheme.spacing.lg,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Favorites Info */}
+          <View style={{
+            backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
+            borderColor: DarkTheme.colors.semantic.separator,
+            borderWidth: 1,
+            borderRadius: DarkTheme.borderRadius.md,
+            padding: DarkTheme.spacing.lg,
+            marginBottom: DarkTheme.spacing.xl,
+            alignItems: 'center',
+          }}>
+            <Heart 
+              size={48} 
+              color={DarkTheme.colors.status.error}
+              strokeWidth={2}
+              style={{ marginBottom: DarkTheme.spacing.md }}
+            />
+            
+            <Text style={[
+              DarkTheme.typography.title3,
+              { 
+                color: DarkTheme.colors.semantic.label,
+                marginBottom: DarkTheme.spacing.sm,
+                fontWeight: '600',
+                textAlign: 'center',
+              }
+            ]}>
+              Your Favorites List
+            </Text>
+            
+            <Text style={[
+              DarkTheme.typography.body,
+              { 
+                color: DarkTheme.colors.semantic.secondaryLabel,
+                textAlign: 'center',
+                lineHeight: 22,
+              }
+            ]}>
+              This is your special Favorites list. The name and icon cannot be changed, but you can add all your favorite places here.
+            </Text>
+          </View>
+
+          {/* Add Places Section */}
+          <View style={{
+            backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
+            borderColor: DarkTheme.colors.semantic.separator,
+            borderWidth: 1,
+            borderRadius: DarkTheme.borderRadius.md,
+            padding: DarkTheme.spacing.lg,
+          }}>
+            <Text style={[
+              DarkTheme.typography.headline,
+              { 
+                color: DarkTheme.colors.semantic.label,
+                marginBottom: DarkTheme.spacing.md,
+                fontWeight: '600',
+              }
+            ]}>
+              Manage Places
+            </Text>
+            
+            <TouchableOpacity
+              style={{
+                backgroundColor: DarkTheme.colors.bangkok.gold,
+                borderRadius: DarkTheme.borderRadius.md,
+                paddingVertical: DarkTheme.spacing.md,
+                paddingHorizontal: DarkTheme.spacing.lg,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: DarkTheme.spacing.md,
+              }}
+              activeOpacity={0.8}
+              onPress={() => {
+                // TODO: Navigate to place search/add screen
+                console.log('Add place to favorites');
+              }}
+            >
+              <Plus 
+                size={20} 
+                color={DarkTheme.colors.system.black}
+                strokeWidth={2}
+                style={{ marginRight: DarkTheme.spacing.sm }}
+              />
+              <Text style={[
+                DarkTheme.typography.headline,
+                { 
+                  color: DarkTheme.colors.system.black,
+                  fontWeight: '600',
+                }
+              ]}>
+                Add Places to Favorites
+              </Text>
+            </TouchableOpacity>
+            
+            <Text style={[
+              DarkTheme.typography.caption1,
+              { 
+                color: DarkTheme.colors.semantic.secondaryLabel,
+                textAlign: 'center',
+              }
+            ]}>
+              Search for places and add them to your favorites list
+            </Text>
+          </View>
+        </ScrollView>
+        
+        {/* Toast Notification */}
+        <Toast
+          visible={showToast}
+          message={toastMessage}
+          type={toastType}
+          onHide={() => setShowToast(false)}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ 
@@ -76,7 +299,7 @@ export default function CreateListScreen({ onClose, onSave }: CreateListScreenPr
         borderBottomColor: DarkTheme.colors.semantic.separator,
       }}>
         <TouchableOpacity
-          onPress={onClose}
+          onPress={() => navigation.goBack()}
           style={{
             padding: DarkTheme.spacing.xs,
           }}
@@ -96,18 +319,22 @@ export default function CreateListScreen({ onClose, onSave }: CreateListScreenPr
             fontWeight: '600' 
           }
         ]}>
-          Create New List
+          Edit List
         </Text>
 
         <TouchableOpacity
           onPress={handleSave}
+          disabled={!name.trim() || isLoading}
           style={{
-            backgroundColor: DarkTheme.colors.bangkok.gold,
+            backgroundColor: (!name.trim() || isLoading) 
+              ? DarkTheme.colors.semantic.tertiaryLabel 
+              : DarkTheme.colors.bangkok.gold,
             paddingHorizontal: DarkTheme.spacing.sm,
             paddingVertical: DarkTheme.spacing.xs,
             borderRadius: DarkTheme.borderRadius.sm,
             flexDirection: 'row',
             alignItems: 'center',
+            opacity: (!name.trim() || isLoading) ? 0.5 : 1,
           }}
           activeOpacity={0.8}
         >
@@ -124,7 +351,7 @@ export default function CreateListScreen({ onClose, onSave }: CreateListScreenPr
               marginLeft: DarkTheme.spacing.xs,
             }
           ]}>
-            Save
+            {isLoading ? 'Saving...' : 'Save'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -199,7 +426,7 @@ export default function CreateListScreen({ onClose, onSave }: CreateListScreenPr
                   ]}
                   numberOfLines={1}
                 >
-                  {listName || 'My New List'}
+                  {name || 'My List'}
                 </Text>
                 
                 <Text 
@@ -250,24 +477,42 @@ export default function CreateListScreen({ onClose, onSave }: CreateListScreenPr
             List Name
           </Text>
           
+          {isFavoritesList && (
+            <Text style={[
+              DarkTheme.typography.caption1,
+              { 
+                color: DarkTheme.colors.semantic.secondaryLabel,
+                marginBottom: DarkTheme.spacing.sm,
+                fontStyle: 'italic',
+              }
+            ]}>
+              The Favorites list name cannot be changed
+            </Text>
+          )}
+          
           <TextInput
             style={[
               DarkTheme.typography.body,
               {
-                backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
+                backgroundColor: isFavoritesList 
+                  ? DarkTheme.colors.semantic.tertiarySystemBackground 
+                  : DarkTheme.colors.semantic.secondarySystemBackground,
                 borderColor: DarkTheme.colors.semantic.separator,
                 borderWidth: 1,
                 borderRadius: DarkTheme.borderRadius.md,
                 padding: DarkTheme.spacing.md,
-                color: DarkTheme.colors.semantic.label,
+                color: isFavoritesList 
+                  ? DarkTheme.colors.semantic.secondaryLabel 
+                  : DarkTheme.colors.semantic.label,
               }
             ]}
             placeholder="Enter list name..."
             placeholderTextColor={DarkTheme.colors.semantic.tertiaryLabel}
-            value={listName}
-            onChangeText={setListName}
+            value={name}
+            onChangeText={isFavoritesList ? undefined : setName}
             maxLength={50}
             returnKeyType="next"
+            editable={!isFavoritesList}
           />
         </View>
 
@@ -371,6 +616,14 @@ export default function CreateListScreen({ onClose, onSave }: CreateListScreenPr
           </View>
         </View>
       </ScrollView>
+      
+      {/* Toast Notification */}
+      <Toast
+        visible={showToast}
+        message={toastMessage}
+        type={toastType}
+        onHide={() => setShowToast(false)}
+      />
     </SafeAreaView>
   );
 } 

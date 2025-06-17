@@ -12,9 +12,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { X, Check, Camera, User } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { DarkTheme } from '../constants/theme';
-import { useAuth } from '../services/auth-context';
-import { authService } from '../services/auth';
+import { DarkTheme } from '../../constants/theme';
+import { useAuth } from '../../services/auth-context';
+import { authService } from '../../services/auth';
 
 interface EditProfileScreenProps {
   navigation: any;

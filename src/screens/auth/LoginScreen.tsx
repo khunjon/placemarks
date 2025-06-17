@@ -12,8 +12,8 @@ import {
 import { Button, Input } from 'react-native-elements';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { useAuth } from '../services/auth-context';
-import { DarkTheme } from '../constants/theme';
+import { useAuth } from '../../services/auth-context';
+import { DarkTheme } from '../../constants/theme';
 
 export default function LoginScreen() {
   const navigation = useNavigation();

@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, ScrollView, Alert, TextInput, TouchableOpacity, Keyboard, Platform, KeyboardAvoidingView, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MapPin, Star, Clock, DollarSign, Navigation, Camera, Heart, Share, Edit3 } from 'lucide-react-native';
-import { Colors } from '../constants/Colors';
-import { Spacing } from '../constants/Spacing';
+import { Colors } from '../../constants/Colors';
+import { Spacing } from '../../constants/Spacing';
 import { 
   Typography, 
   Title2, 
@@ -15,8 +15,8 @@ import {
   SecondaryButton,
   GhostButton,
   ElevatedCard 
-} from '../components/common';
-import Toast from '../components/ui/Toast';
+} from '../../components/common';
+import Toast from '../../components/ui/Toast';
 
 // This screen can be used from multiple stacks
 interface PlaceDetailsScreenProps {

@@ -38,8 +38,8 @@ import {
   Calendar,
   Target
 } from 'lucide-react-native';
-import { Colors } from '../constants/Colors';
-import { Spacing } from '../constants/Spacing';
+import { Colors } from '../../constants/Colors';
+import { Spacing } from '../../constants/Spacing';
 import { 
   Typography, 
   Title1,
@@ -52,8 +52,8 @@ import {
   ElevatedCard,
   LoadingState,
   EmptyState
-} from '../components/common';
-import { useAuth } from '../services/auth-context';
+} from '../../components/common';
+import { useAuth } from '../../services/auth-context';
 import { 
   enhancedListsService, 
   ListWithPlaces, 
@@ -61,13 +61,13 @@ import {
   EnhancedPlace,
   ListError,
   PlaceError 
-} from '../services/listsService';
-import { ListsCache } from '../services/listsCache';
-import { ListDetailsCache } from '../services/listDetailsCache';
-import { checkInUtils, ThumbsRating } from '../services/checkInsService';
-import { userRatingsService, UserRatingType, UserPlaceRating } from '../services/userRatingsService';
-import Toast from '../components/ui/Toast';
-import type { ListsStackScreenProps } from '../navigation/types';
+} from '../../services/listsService';
+import { ListsCache } from '../../services/listsCache';
+import { ListDetailsCache } from '../../services/listDetailsCache';
+import { checkInUtils, ThumbsRating } from '../../services/checkInsService';
+import { userRatingsService, UserRatingType, UserPlaceRating } from '../../services/userRatingsService';
+import Toast from '../../components/ui/Toast';
+import type { ListsStackScreenProps } from '../../navigation/types';
 import { 
   Swipeable,
   GestureHandlerRootView 

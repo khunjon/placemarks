@@ -3,9 +3,9 @@ import { View, ScrollView, Modal, Alert, RefreshControl, TouchableOpacity } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Plus, List, Zap, Heart, TrendingUp, Clock, MapPin, ChevronRight } from 'lucide-react-native';
-import { Colors } from '../constants/Colors';
-import { Spacing } from '../constants/Spacing';
-import { DarkTheme } from '../constants/theme';
+import { Colors } from '../../constants/Colors';
+import { Spacing } from '../../constants/Spacing';
+import { DarkTheme } from '../../constants/theme';
 import { 
   Typography, 
   Title3, 
@@ -17,19 +17,19 @@ import {
   ElevatedCard,
   LoadingState,
   EmptyState
-} from '../components/common';
-import ListItem, { ListItemProps } from '../components/lists/ListItem';
+} from '../../components/common';
+import ListItem, { ListItemProps } from '../../components/lists/ListItem';
 import CreateListScreen from './CreateListScreen';
-import { useAuth } from '../services/auth-context';
+import { useAuth } from '../../services/auth-context';
 import { 
   enhancedListsService, 
   ListWithPlaces, 
   EnhancedList,
   ListError,
   PlaceError 
-} from '../services/listsService';
-import { ListsCache } from '../services/listsCache';
-import type { ListsStackScreenProps } from '../navigation/types';
+} from '../../services/listsService';
+import { ListsCache } from '../../services/listsCache';
+import type { ListsStackScreenProps } from '../../navigation/types';
 
 type ListsScreenProps = ListsStackScreenProps<'Lists'>;
 

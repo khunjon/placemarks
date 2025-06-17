@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, ScrollView, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import { Colors } from '../constants/Colors';
-import { Spacing } from '../constants/Spacing';
+import { Colors } from '../../constants/Colors';
+import { Spacing } from '../../constants/Spacing';
 import { 
   Typography, 
   Body, 
@@ -11,12 +11,12 @@ import {
   ElevatedCard,
   EmptyState,
   LoadingState,
-} from '../components/common';
-import { MapsService } from '../services/maps';
-import { placesService } from '../services/places';
-import { checkInUtils } from '../services/checkInsService';
-import { checkInSearchCache } from '../services/checkInSearchCache';
-import type { CheckInStackScreenProps } from '../navigation/types';
+} from '../../components/common';
+import { MapsService } from '../../services/maps';
+import { placesService } from '../../services/places';
+import { checkInUtils } from '../../services/checkInsService';
+import { checkInSearchCache } from '../../services/checkInSearchCache';
+import type { CheckInStackScreenProps } from '../../navigation/types';
 
 type CheckInSearchScreenProps = CheckInStackScreenProps<'CheckInSearch'>;
 

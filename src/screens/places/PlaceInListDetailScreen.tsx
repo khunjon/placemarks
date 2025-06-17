@@ -33,8 +33,8 @@ import {
   TrendingUp,
   ChevronRight
 } from 'lucide-react-native';
-import { DarkTheme } from '../constants/theme';
-import { Spacing } from '../constants/Spacing';
+import { DarkTheme } from '../../constants/theme';
+import { Spacing } from '../../constants/Spacing';
 import { 
   Typography, 
   Title1,
@@ -49,16 +49,16 @@ import {
   Card,
   ElevatedCard,
   LoadingState
-} from '../components/common';
-import Toast from '../components/ui/Toast';
+} from '../../components/common';
+import Toast from '../../components/ui/Toast';
 
-import { enhancedListsService, ListPlace, EnhancedList } from '../services/listsService';
-import { ListDetailsCache } from '../services/listDetailsCache';
-import { checkInUtils, CheckIn } from '../services/checkInsService';
-import { userRatingsService, UserPlaceRating } from '../services/userRatingsService';
-import { useAuth } from '../services/auth-context';
-import { supabase } from '../services/supabase';
-import type { ListsStackScreenProps } from '../navigation/types';
+import { enhancedListsService, ListPlace, EnhancedList } from '../../services/listsService';
+import { ListDetailsCache } from '../../services/listDetailsCache';
+import { checkInUtils, CheckIn } from '../../services/checkInsService';
+import { userRatingsService, UserPlaceRating } from '../../services/userRatingsService';
+import { useAuth } from '../../services/auth-context';
+import { supabase } from '../../services/supabase';
+import type { ListsStackScreenProps } from '../../navigation/types';
 
 const { width: screenWidth } = Dimensions.get('window');
 

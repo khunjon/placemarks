@@ -2,8 +2,8 @@ import React from 'react';
 import { View, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Trophy, Star, MapPin, Users, Calendar, Target } from 'lucide-react-native';
-import { Colors } from '../constants/Colors';
-import { Spacing } from '../constants/Spacing';
+import { Colors } from '../../constants/Colors';
+import { Spacing } from '../../constants/Spacing';
 import { 
   Typography, 
   Title2, 
@@ -11,8 +11,8 @@ import {
   Body,
   SecondaryText,
   ElevatedCard 
-} from '../components/common';
-import type { ProfileStackScreenProps } from '../navigation/types';
+} from '../../components/common';
+import type { ProfileStackScreenProps } from '../../navigation/types';
 
 type AchievementDetailScreenProps = ProfileStackScreenProps<'AchievementDetail'>;
 

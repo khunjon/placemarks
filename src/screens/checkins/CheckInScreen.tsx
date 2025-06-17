@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { Colors } from '../constants/Colors';
-import { Spacing } from '../constants/Spacing';
+import { Colors } from '../../constants/Colors';
+import { Spacing } from '../../constants/Spacing';
 import { 
   Typography, 
   Title3, 
@@ -13,10 +13,10 @@ import {
   EmptyState,
   LoadingState,
   PrimaryButton,
-} from '../components/common';
-import { useAuth } from '../services/auth-context';
-import { checkInsService, CheckInsByDate, checkInUtils, ThumbsRating } from '../services/checkInsService';
-import type { CheckInStackScreenProps } from '../navigation/types';
+} from '../../components/common';
+import { useAuth } from '../../services/auth-context';
+import { checkInsService, CheckInsByDate, checkInUtils, ThumbsRating } from '../../services/checkInsService';
+import type { CheckInStackScreenProps } from '../../navigation/types';
 
 type CheckInScreenProps = CheckInStackScreenProps<'CheckIn'>;
 

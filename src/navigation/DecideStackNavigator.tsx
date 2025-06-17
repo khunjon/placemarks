@@ -5,8 +5,8 @@ import { DecideStackParamList, DecideStackScreenProps } from './types';
 
 // Import screens
 import DecideScreen from '../screens/DecideScreen';
-import ListDetailScreen from '../screens/ListDetailScreen';
-import PlaceDetailsScreen from '../screens/PlaceDetailsScreen';
+import { ListDetailScreen } from '../screens/lists';
+import { PlaceDetailsScreen } from '../screens/places';
 
 const Stack = createNativeStackNavigator<DecideStackParamList>();
 

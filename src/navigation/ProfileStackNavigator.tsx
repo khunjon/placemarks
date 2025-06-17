@@ -6,10 +6,12 @@ import { ProfileStackParamList } from './types';
 import type { ProfileStackScreenProps } from './types';
 
 // Import screens
-import ProfileScreen from '../screens/ProfileScreen';
-import PreferencesScreen from '../screens/PreferencesScreen';
-import AchievementDetailScreen from '../screens/AchievementDetailScreen';
-import EditProfileScreen from '../screens/EditProfileScreen';
+import {
+  ProfileScreen,
+  PreferencesScreen,
+  AchievementDetailScreen,
+  EditProfileScreen
+} from '../screens/profile';
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
 
