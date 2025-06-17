@@ -18,6 +18,7 @@ import { useAuth } from '../services/auth-context';
 import { checkInsService, ThumbsRating, checkInUtils, CheckInWithPlace } from '../services/checkInsService';
 import { enhancedListsService, ListWithPlaces } from '../services/listsService';
 import { ListsCache } from '../services/listsCache';
+import { ListDetailsCache } from '../services/listDetailsCache';
 import type { CheckInStackScreenProps } from '../navigation/types';
 
 type CheckInDetailScreenProps = CheckInStackScreenProps<'CheckInDetail'>;
@@ -187,9 +188,10 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
                 place_type: checkIn.place.place_type
               });
               
-              // Invalidate cache since a place was added to a list
+              // Invalidate caches since a place was added to a list
               if (user?.id) {
                 await ListsCache.invalidateCache();
+                await ListDetailsCache.invalidateListCache(selectedList.id);
               }
               
               Alert.alert('Added', `Added ${checkIn.place.name} to ${selectedList.name}`);
@@ -217,9 +219,10 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
                   place_type: checkIn.place.place_type
                 });
                 
-                // Invalidate cache since a place was added to a list
+                // Invalidate caches since a place was added to a list
                 if (user?.id) {
                   await ListsCache.invalidateCache();
+                  await ListDetailsCache.invalidateListCache(list.id);
                 }
                 
                 Alert.alert('Added', `Added ${checkIn.place.name} to ${list.name}`);

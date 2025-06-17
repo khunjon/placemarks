@@ -63,6 +63,7 @@ import {
   PlaceError 
 } from '../services/listsService';
 import { ListsCache } from '../services/listsCache';
+import { ListDetailsCache } from '../services/listDetailsCache';
 import { checkInUtils, ThumbsRating } from '../services/checkInsService';
 import { userRatingsService, UserRatingType, UserPlaceRating } from '../services/userRatingsService';
 import Toast from '../components/ui/Toast';
@@ -141,17 +142,43 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       }
 
       if (user && listId) {
-        console.log('ListDetailScreen focused, reloading list data...');
-        loadListData();
+        console.log(`ListDetailScreen focused for list ${listId}, checking cache...`);
+        // Only reload if cache is invalid or missing
+        ListDetailsCache.hasCache(listId, user.id).then(hasValidCache => {
+          if (!hasValidCache) {
+            console.log(`No valid cache for list ${listId}, reloading...`);
+            loadListData();
+          } else {
+            console.log(`Valid cache exists for list ${listId}, skipping reload`);
+          }
+        });
       }
     }, [user, listId])
   );
 
-  const loadListData = async () => {
+  const loadListData = async (forceRefresh = false) => {
     if (!user?.id) return;
     
     try {
       setLoading(true);
+      
+      // Try to load from cache first (unless forcing refresh)
+      if (!forceRefresh) {
+        const cachedData = await ListDetailsCache.getCachedListDetails(listId, user.id);
+        if (cachedData) {
+          console.log(`Loading list details from cache for list ${listId}...`);
+          setList(cachedData.list);
+          setEditedName(cachedData.list.name);
+          setEditedDescription(cachedData.list.description || '');
+          setIsPublic(cachedData.list.privacy_level === 'public');
+          setUserRatings(cachedData.userRatings);
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // Load fresh data from API
+      console.log(`Loading list details from API for list ${listId}...`);
       
       // Add timeout for slow connections
       const timeoutPromise = new Promise((_, reject) => 
@@ -178,6 +205,9 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
           }
         }
         setUserRatings(ratingsMap);
+        
+        // Save to cache
+        await ListDetailsCache.saveListDetails(listId, currentList, ratingsMap, user.id);
       } else {
         Alert.alert('Error', 'List not found');
         navigation.goBack();
@@ -203,7 +233,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadListData();
+    await loadListData(true); // Force refresh from API
     setRefreshing(false);
   };
 
@@ -217,9 +247,10 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
         privacy_level: isPublic ? 'public' : 'private',
       });
       
-      // Invalidate cache since list was updated
+      // Invalidate caches since list was updated
       if (user?.id) {
         await ListsCache.invalidateCache();
+        await ListDetailsCache.invalidateListCache(list.id);
       }
       
       setIsEditing(false);
@@ -250,9 +281,10 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
             try {
               await enhancedListsService.deleteList(list.id);
               
-              // Invalidate cache since list was deleted
+              // Invalidate caches since list was deleted
               if (user?.id) {
                 await ListsCache.invalidateCache();
+                await ListDetailsCache.invalidateListCache(list.id);
               }
               
               Alert.alert('Success', 'List deleted');
@@ -286,9 +318,10 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
             try {
               await enhancedListsService.removePlaceFromList(list.id, placeId);
               
-              // Invalidate cache since a place was removed from a list
+              // Update caches optimistically since a place was removed
               if (user?.id) {
                 await ListsCache.invalidateCache();
+                await ListDetailsCache.removePlaceFromCache(list.id, placeId, user.id);
               }
               
               await loadListData();
@@ -315,10 +348,12 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
         await userRatingsService.removeUserRating(user.id, placeId);
       }
       
-      // Update local state
+      // Update local state and cache optimistically
       const newRatings = { ...userRatings };
+      let newRating: UserPlaceRating | null = null;
+      
       if (rating) {
-        const newRating: UserPlaceRating = {
+        newRating = {
           id: '', // Will be set by the service
           user_id: user.id,
           place_id: placeId,
@@ -330,7 +365,13 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       } else {
         delete newRatings[placeId];
       }
+      
       setUserRatings(newRatings);
+      
+      // Update cache optimistically
+      if (list?.id) {
+        await ListDetailsCache.updateRatingInCache(list.id, placeId, newRating, user.id);
+      }
     } catch (error) {
       console.error('Error updating place rating:', error);
       Alert.alert('Error', 'Failed to update rating');

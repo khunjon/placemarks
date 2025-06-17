@@ -53,6 +53,7 @@ import {
 import Toast from '../components/ui/Toast';
 
 import { enhancedListsService, ListPlace, EnhancedList } from '../services/listsService';
+import { ListDetailsCache } from '../services/listDetailsCache';
 import { checkInUtils, CheckIn } from '../services/checkInsService';
 import { userRatingsService, UserPlaceRating } from '../services/userRatingsService';
 import { useAuth } from '../services/auth-context';
@@ -566,6 +567,12 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
       if (error) throw error;
       
       setListPlace(prev => prev ? { ...prev, notes: tempNotes } : null);
+      
+      // Update cache optimistically
+      if (user?.id) {
+        await ListDetailsCache.updatePlaceNotesInCache(listId, placeId, tempNotes, user.id);
+      }
+      
       setEditingNotes(false);
       showToast('Notes updated');
     } catch (error) {
