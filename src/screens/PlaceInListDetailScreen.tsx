@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   ScrollView, 
@@ -7,7 +7,10 @@ import {
   Image, 
   Linking, 
   Dimensions,
-  TextInput
+  TextInput,
+  Keyboard,
+  Platform,
+  KeyboardAvoidingView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
@@ -42,6 +45,7 @@ import {
   SecondaryText,
   PrimaryButton,
   SecondaryButton,
+  GhostButton,
   Card,
   ElevatedCard,
   LoadingState
@@ -89,6 +93,10 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
   const { placeId, listId, listName } = route.params;
   const { user } = useAuth();
   
+  // Refs for keyboard handling
+  const scrollViewRef = useRef<ScrollView>(null);
+  const textInputRef = useRef<TextInput>(null);
+  
   // State
   const [loading, setLoading] = useState(true);
   const [place, setPlace] = useState<PlaceDetails | null>(null);
@@ -98,6 +106,7 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
   const [otherLists, setOtherLists] = useState<EnhancedList[]>([]);
   const [editingNotes, setEditingNotes] = useState(false);
   const [tempNotes, setTempNotes] = useState('');
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   
   // Toast state
@@ -119,6 +128,65 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
   useEffect(() => {
     loadPlaceDetails();
   }, [placeId, listId]);
+
+  // Add navigation listener to refresh data when coming back to this screen
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (user?.id) {
+        console.log('Screen focused, reloading place details...');
+        loadPlaceDetails();
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, user?.id]);
+
+  // Keyboard listeners for precise height tracking
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, []);
+
+  // Handle text input focus for keyboard-aware scrolling
+  const handleTextInputFocus = () => {
+    // Small delay to ensure keyboard animation starts
+    setTimeout(() => {
+      textInputRef.current?.measureInWindow((x, y, width, height) => {
+        // Use actual keyboard height if available, otherwise estimate
+        const actualKeyboardHeight = keyboardHeight || (Platform.OS === 'ios' ? 300 : 250);
+        const screenHeight = Dimensions.get('window').height;
+        const availableHeight = screenHeight - actualKeyboardHeight;
+        
+        // Add extra space for the buttons below the TextInput (approximately 60px for buttons + spacing)
+        const buttonHeight = 60;
+        const extraPadding = 20; // Additional padding for comfort
+        
+        // Position the input higher to ensure buttons are visible
+        const targetY = y - (availableHeight * 0.2) - buttonHeight - extraPadding;
+        
+        scrollViewRef.current?.scrollTo({
+          y: Math.max(0, targetY),
+          animated: true,
+        });
+      });
+    }, 150);
+  };
 
   // Generate Google Places photo URL from photo reference
   // This converts a Google Places API photo reference to an actual image URL
@@ -390,6 +458,8 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
 
   // Fetch list-specific place details
   const fetchListPlaceDetails = async (listId: string, placeId: string): Promise<ListPlace> => {
+    console.log('Fetching list place details:', { listId, placeId });
+    
     const { data, error } = await supabase
       .from('list_places')
       .select('*')
@@ -399,6 +469,8 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
 
     if (error) throw error;
     if (!data) throw new Error('Place not found in list');
+
+    console.log('Fetched list place data:', data);
 
     return {
       list_id: data.list_id,
@@ -490,7 +562,7 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
       showToast('Notes updated');
     } catch (error) {
       console.error('Error updating notes:', error);
-      showToast('Failed to update notes', 'error');
+      showToast('Failed to update notes');
     }
   };
 
@@ -629,299 +701,313 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Place Photos - Google Places API Integration */}
-        {/* Photos are fetched from Google Places API using photo references stored in the database.
-            If no valid photo references exist, we fall back to stored URLs.
-            Fresh photos are automatically fetched when viewing a place for the first time. */}
-        {(() => {
-          const photoUrls = getPhotoUrls();
-          return photoUrls.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              pagingEnabled
-              style={{ height: 200 }}
-            >
-              {photoUrls.map((photo, index) => (
-                <Image
-                  key={index}
-                  source={{ uri: photo }}
-                  style={{
-                    width: screenWidth,
-                    height: 200,
-                    backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground
-                  }}
-                  resizeMode="cover"
-                />
-              ))}
-            </ScrollView>
-          );
-        })()}
-
-        <View style={{ padding: Spacing.lg }}>
-          {/* Place Header */}
-          <View style={{ marginBottom: Spacing.lg }}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-              <View style={{ flex: 1 }}>
-                <Title1 style={{ marginBottom: Spacing.xs }}>{place.name}</Title1>
-                
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}>
-                  <MapPin size={16} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
-                  <Body color="secondary" style={{ marginLeft: Spacing.xs, flex: 1 }}>
-                    {place.address}
-                  </Body>
-                </View>
-
-                {/* Ratings Row */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.lg }}>
-                  {place.google_rating && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <View style={{ marginRight: Spacing.xs }}>
-                        {renderStars(place.google_rating)}
-                      </View>
-                      <Body style={{ fontWeight: '600' }}>{place.google_rating}</Body>
-                      <SecondaryText style={{ marginLeft: Spacing.xs }}>Google</SecondaryText>
-                    </View>
-                  )}
-                  
-                  {listPlace.personal_rating && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Body style={{ fontSize: 16, marginRight: Spacing.xs }}>
-                        {listPlace.personal_rating >= 4 ? '👍' : listPlace.personal_rating <= 2 ? '👎' : '😐'}
-                      </Body>
-                      <SecondaryText>Your rating</SecondaryText>
-                    </View>
-                  )}
-                </View>
-              </View>
-              
-              {place.price_level && (
-                <View style={{
-                  backgroundColor: DarkTheme.colors.accent.green + '20',
-                  paddingHorizontal: Spacing.sm,
-                  paddingVertical: Spacing.xs,
-                  borderRadius: DarkTheme.borderRadius.sm,
-                  marginLeft: Spacing.sm,
-                }}>
-                  <Body style={{ color: DarkTheme.colors.accent.green, fontWeight: '600' }}>
-                    {getPriceLevel(place.price_level)}
-                  </Body>
-                </View>
-              )}
-            </View>
-          </View>
-
-          {/* Quick Info */}
-          <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
-            <Title3 style={{ marginBottom: Spacing.md }}>Quick Info</Title3>
-            
-            {/* Hours */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}>
-              <Clock size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
-              <Body style={{ marginLeft: Spacing.sm }}>{formatHours(place.hours_open)}</Body>
-            </View>
-
-            {/* Phone */}
-            {place.phone && (
-              <TouchableOpacity
-                onPress={() => Linking.openURL(`tel:${place.phone}`)}
-                style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <ScrollView 
+          ref={scrollViewRef}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
+          {/* Place Photos - Google Places API Integration */}
+          {/* Photos are fetched from Google Places API using photo references stored in the database.
+              If no valid photo references exist, we fall back to stored URLs.
+              Fresh photos are automatically fetched when viewing a place for the first time. */}
+          {(() => {
+            const photoUrls = getPhotoUrls();
+            return photoUrls.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                pagingEnabled
+                style={{ height: 200 }}
               >
-                <Phone size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
-                <Body style={{ marginLeft: Spacing.sm, color: DarkTheme.colors.accent.blue }}>
-                  {place.phone}
-                </Body>
-              </TouchableOpacity>
-            )}
-
-            {/* Website */}
-            {place.website && (
-              <TouchableOpacity
-                onPress={() => Linking.openURL(place.website!)}
-                style={{ flexDirection: 'row', alignItems: 'center' }}
-              >
-                <Globe size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
-                <Body style={{ marginLeft: Spacing.sm, color: DarkTheme.colors.accent.blue }}>
-                  Visit website
-                </Body>
-                <ExternalLink size={14} color={DarkTheme.colors.accent.blue} strokeWidth={2} style={{ marginLeft: Spacing.xs }} />
-              </TouchableOpacity>
-            )}
-          </ElevatedCard>
-
-          {/* Your Notes */}
-          <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md }}>
-              <Title3>Your Notes</Title3>
-              <TouchableOpacity onPress={() => setEditingNotes(!editingNotes)}>
-                <Edit3 size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
-              </TouchableOpacity>
-            </View>
-            
-            {editingNotes ? (
-              <View>
-                <TextInput
-                  style={{
-                    backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
-                    borderRadius: DarkTheme.borderRadius.sm,
-                    padding: Spacing.sm,
-                    marginBottom: Spacing.sm,
-                    minHeight: 80,
-                    color: DarkTheme.colors.semantic.label,
-                    fontSize: 16,
-                    textAlignVertical: 'top',
-                  }}
-                  multiline
-                  placeholder="Add your notes about this place..."
-                  placeholderTextColor={DarkTheme.colors.semantic.tertiaryLabel}
-                  value={tempNotes}
-                  onChangeText={setTempNotes}
-                />
-                <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-                  <SecondaryButton
-                    title="Cancel"
-                    onPress={() => {
-                      setTempNotes(listPlace.notes || '');
-                      setEditingNotes(false);
+                {photoUrls.map((photo, index) => (
+                  <Image
+                    key={index}
+                    source={{ uri: photo }}
+                    style={{
+                      width: screenWidth,
+                      height: 200,
+                      backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground
                     }}
-                    size="sm"
-                    style={{ flex: 1 }}
+                    resizeMode="cover"
                   />
-                  <PrimaryButton
-                    title="Save"
-                    onPress={handleUpdateNotes}
-                    size="sm"
-                    style={{ flex: 1 }}
-                  />
-                </View>
-              </View>
-            ) : (
-              <TouchableOpacity
-                onPress={() => setEditingNotes(true)}
-                style={{
-                  backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
-                  borderRadius: DarkTheme.borderRadius.sm,
-                  padding: Spacing.sm,
-                  minHeight: 60,
-                  justifyContent: 'center',
-                }}
-              >
-                <Body color={listPlace.notes ? 'primary' : 'secondary'}>
-                  {listPlace.notes || 'Tap to add notes about this place...'}
-                </Body>
-              </TouchableOpacity>
-            )}
-          </ElevatedCard>
+                ))}
+              </ScrollView>
+            );
+          })()}
 
-          {/* Check-in History */}
-          {checkIns.length > 0 && (
-            <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md }}>
-                <Title3>Recent Check-ins</Title3>
-                {(listPlace.visit_count || 0) > 0 && (
-                  <View style={{ 
-                    marginLeft: Spacing.sm,
+          <View style={{ padding: Spacing.lg }}>
+            {/* Place Header */}
+            <View style={{ marginBottom: Spacing.lg }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                <View style={{ flex: 1 }}>
+                  <Title1 style={{ marginBottom: Spacing.xs }}>{place.name}</Title1>
+                  
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}>
+                    <MapPin size={16} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                    <Body color="secondary" style={{ marginLeft: Spacing.xs, flex: 1 }}>
+                      {place.address}
+                    </Body>
+                  </View>
+
+                  {/* Ratings Row */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.lg }}>
+                    {place.google_rating && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={{ marginRight: Spacing.xs }}>
+                          {renderStars(place.google_rating)}
+                        </View>
+                        <Body style={{ fontWeight: '600' }}>{place.google_rating}</Body>
+                        <SecondaryText style={{ marginLeft: Spacing.xs }}>Google</SecondaryText>
+                      </View>
+                    )}
+                    
+                    {listPlace.personal_rating && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Body style={{ fontSize: 16, marginRight: Spacing.xs }}>
+                          {listPlace.personal_rating >= 4 ? '👍' : listPlace.personal_rating <= 2 ? '👎' : '😐'}
+                        </Body>
+                        <SecondaryText>Your rating</SecondaryText>
+                      </View>
+                    )}
+                  </View>
+                </View>
+                
+                {place.price_level && (
+                  <View style={{
                     backgroundColor: DarkTheme.colors.accent.green + '20',
                     paddingHorizontal: Spacing.sm,
                     paddingVertical: Spacing.xs,
                     borderRadius: DarkTheme.borderRadius.sm,
+                    marginLeft: Spacing.sm,
                   }}>
-                    <Body style={{ 
-                      color: DarkTheme.colors.accent.green, 
-                      fontWeight: '600',
-                      fontSize: 12
-                    }}>
-                      {listPlace.visit_count} {listPlace.visit_count === 1 ? 'visit' : 'visits'}
+                    <Body style={{ color: DarkTheme.colors.accent.green, fontWeight: '600' }}>
+                      {getPriceLevel(place.price_level)}
                     </Body>
                   </View>
                 )}
               </View>
-              {checkIns.slice(0, 3).map((checkIn, index) => (
-                <View
-                  key={checkIn.id}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingVertical: Spacing.sm,
-                    borderBottomWidth: index < Math.min(checkIns.length, 3) - 1 ? 1 : 0,
-                    borderBottomColor: DarkTheme.colors.semantic.separator,
-                  }}
+            </View>
+
+            {/* Quick Info */}
+            <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
+              <Title3 style={{ marginBottom: Spacing.md }}>Quick Info</Title3>
+              
+              {/* Hours */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}>
+                <Clock size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                <Body style={{ marginLeft: Spacing.sm }}>{formatHours(place.hours_open)}</Body>
+              </View>
+
+              {/* Phone */}
+              {place.phone && (
+                <TouchableOpacity
+                  onPress={() => Linking.openURL(`tel:${place.phone}`)}
+                  style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}
                 >
-                  <CheckSquare size={18} color={DarkTheme.colors.accent.green} strokeWidth={2} />
-                  <View style={{ marginLeft: Spacing.sm, flex: 1 }}>
-                    <Body>{new Date(checkIn.created_at).toLocaleDateString()}</Body>
-                    {checkIn.comment && (
-                      <SecondaryText style={{ marginTop: 2 }}>{checkIn.comment}</SecondaryText>
-                    )}
+                  <Phone size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                  <Body style={{ marginLeft: Spacing.sm, color: DarkTheme.colors.accent.blue }}>
+                    {place.phone}
+                  </Body>
+                </TouchableOpacity>
+              )}
+
+              {/* Website */}
+              {place.website && (
+                <TouchableOpacity
+                  onPress={() => Linking.openURL(place.website!)}
+                  style={{ flexDirection: 'row', alignItems: 'center' }}
+                >
+                  <Globe size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                  <Body style={{ marginLeft: Spacing.sm, color: DarkTheme.colors.accent.blue }}>
+                    Visit website
+                  </Body>
+                  <ExternalLink size={14} color={DarkTheme.colors.accent.blue} strokeWidth={2} style={{ marginLeft: Spacing.xs }} />
+                </TouchableOpacity>
+              )}
+            </ElevatedCard>
+
+            {/* Your Notes */}
+            <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md }}>
+                <Title3>Your Notes</Title3>
+                <TouchableOpacity onPress={() => setEditingNotes(!editingNotes)}>
+                  <Edit3 size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                </TouchableOpacity>
+              </View>
+              
+              {editingNotes ? (
+                <View>
+                  <TextInput
+                    style={{
+                      backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+                      borderRadius: DarkTheme.borderRadius.sm,
+                      padding: Spacing.sm,
+                      marginBottom: Spacing.sm,
+                      minHeight: 80,
+                      color: DarkTheme.colors.semantic.label,
+                      fontSize: 16,
+                      textAlignVertical: 'top',
+                    }}
+                    multiline
+                    autoFocus
+                    placeholder="Add your notes about this place..."
+                    placeholderTextColor={DarkTheme.colors.semantic.tertiaryLabel}
+                    value={tempNotes}
+                    onChangeText={setTempNotes}
+                    onFocus={handleTextInputFocus}
+                    ref={textInputRef}
+                  />
+                  <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+                    <GhostButton
+                      title="Cancel"
+                      onPress={() => {
+                        setTempNotes(listPlace.notes || '');
+                        setEditingNotes(false);
+                      }}
+                      size="sm"
+                      style={{ flex: 1 }}
+                    />
+                    <PrimaryButton
+                      title="Save"
+                      onPress={handleUpdateNotes}
+                      size="sm"
+                      style={{ flex: 1 }}
+                    />
                   </View>
                 </View>
-              ))}
-              {checkIns.length > 3 && (
-                <TouchableOpacity style={{ marginTop: Spacing.sm }}>
-                  <Body color="secondary" style={{ textAlign: 'center' }}>
-                    View all {checkIns.length} check-ins
+              ) : (
+                <TouchableOpacity
+                  onPress={() => setEditingNotes(true)}
+                  style={{
+                    backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+                    borderRadius: DarkTheme.borderRadius.sm,
+                    padding: Spacing.sm,
+                    minHeight: 60,
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Body color={listPlace.notes ? 'primary' : 'secondary'}>
+                    {listPlace.notes || 'Tap to add notes about this place...'}
                   </Body>
                 </TouchableOpacity>
               )}
             </ElevatedCard>
-          )}
 
-          {/* Other Lists */}
-          {otherLists.length > 0 && (
-            <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
-              <Title3 style={{ marginBottom: Spacing.md }}>Also in Other Lists</Title3>
-              {otherLists.map((list, index) => (
-                <TouchableOpacity
-                  key={list.id}
-                  onPress={() => navigation.navigate('ListDetail', {
-                    listId: list.id,
-                    listName: list.name,
-                    listType: 'user',
-                    isEditable: true,
-                  })}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingVertical: Spacing.sm,
-                    borderBottomWidth: index < otherLists.length - 1 ? 1 : 0,
-                    borderBottomColor: DarkTheme.colors.semantic.separator,
-                  }}
-                >
-                  <View style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: list.color ? `${list.color}20` : DarkTheme.colors.semantic.tertiarySystemBackground,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: Spacing.sm,
-                  }}>
-                    <Heart size={16} color={list.color || DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+            {/* Check-in History */}
+            {checkIns.length > 0 && (
+              <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md }}>
+                  <Title3>Recent Check-ins</Title3>
+                  {(listPlace.visit_count || 0) > 0 && (
+                    <View style={{ 
+                      marginLeft: Spacing.sm,
+                      backgroundColor: DarkTheme.colors.accent.green + '20',
+                      paddingHorizontal: Spacing.sm,
+                      paddingVertical: Spacing.xs,
+                      borderRadius: DarkTheme.borderRadius.sm,
+                    }}>
+                      <Body style={{ 
+                        color: DarkTheme.colors.accent.green, 
+                        fontWeight: '600',
+                        fontSize: 12
+                      }}>
+                        {listPlace.visit_count} {listPlace.visit_count === 1 ? 'visit' : 'visits'}
+                      </Body>
+                    </View>
+                  )}
+                </View>
+                {checkIns.slice(0, 3).map((checkIn, index) => (
+                  <View
+                    key={checkIn.id}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: Spacing.sm,
+                      borderBottomWidth: index < Math.min(checkIns.length, 3) - 1 ? 1 : 0,
+                      borderBottomColor: DarkTheme.colors.semantic.separator,
+                    }}
+                  >
+                    <CheckSquare size={18} color={DarkTheme.colors.accent.green} strokeWidth={2} />
+                    <View style={{ marginLeft: Spacing.sm, flex: 1 }}>
+                      <Body>{new Date(checkIn.created_at).toLocaleDateString()}</Body>
+                      {checkIn.comment && (
+                        <SecondaryText style={{ marginTop: 2 }}>{checkIn.comment}</SecondaryText>
+                      )}
+                    </View>
                   </View>
-                  <Body style={{ flex: 1 }}>{list.name}</Body>
-                  <ChevronRight size={16} color={DarkTheme.colors.semantic.tertiaryLabel} strokeWidth={2} />
-                </TouchableOpacity>
-              ))}
-            </ElevatedCard>
-          )}
+                ))}
+                {checkIns.length > 3 && (
+                  <TouchableOpacity style={{ marginTop: Spacing.sm }}>
+                    <Body color="secondary" style={{ textAlign: 'center' }}>
+                      View all {checkIns.length} check-ins
+                    </Body>
+                  </TouchableOpacity>
+                )}
+              </ElevatedCard>
+            )}
 
-          {/* Action Buttons */}
-          <View style={{ gap: Spacing.md, marginBottom: Spacing.xl }}>
-            <PrimaryButton
-              title="Get Directions"
-              icon={Navigation}
-              onPress={handleGetDirections}
-            />
-            
-            <SecondaryButton
-              title="Check In Here"
-              icon={Camera}
-              onPress={handleCheckIn}
-            />
+            {/* Other Lists */}
+            {otherLists.length > 0 && (
+              <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
+                <Title3 style={{ marginBottom: Spacing.md }}>Also in Other Lists</Title3>
+                {otherLists.map((list, index) => (
+                  <TouchableOpacity
+                    key={list.id}
+                    onPress={() => navigation.navigate('ListDetail', {
+                      listId: list.id,
+                      listName: list.name,
+                      listType: 'user',
+                      isEditable: true,
+                    })}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: Spacing.sm,
+                      borderBottomWidth: index < otherLists.length - 1 ? 1 : 0,
+                      borderBottomColor: DarkTheme.colors.semantic.separator,
+                    }}
+                  >
+                    <View style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: list.color ? `${list.color}20` : DarkTheme.colors.semantic.tertiarySystemBackground,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: Spacing.sm,
+                    }}>
+                      <Heart size={16} color={list.color || DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                    </View>
+                    <Body style={{ flex: 1 }}>{list.name}</Body>
+                    <ChevronRight size={16} color={DarkTheme.colors.semantic.tertiaryLabel} strokeWidth={2} />
+                  </TouchableOpacity>
+                ))}
+              </ElevatedCard>
+            )}
+
+            {/* Action Buttons */}
+            <View style={{ gap: Spacing.md, marginBottom: Spacing.xl }}>
+              <PrimaryButton
+                title="Get Directions"
+                icon={Navigation}
+                onPress={handleGetDirections}
+              />
+              
+              <SecondaryButton
+                title="Check In Here"
+                icon={Camera}
+                onPress={handleCheckIn}
+              />
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Toast Notification */}
       <Toast

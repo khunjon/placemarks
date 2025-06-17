@@ -8,7 +8,9 @@ import {
   Alert, 
   RefreshControl,
   Switch,
-  Modal
+  Modal,
+  Animated,
+  PanResponder
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -64,6 +66,10 @@ import { checkInUtils, ThumbsRating } from '../services/checkInsService';
 import { userRatingsService, UserRatingType, UserPlaceRating } from '../services/userRatingsService';
 import Toast from '../components/ui/Toast';
 import type { ListsStackScreenProps } from '../navigation/types';
+import { 
+  Swipeable,
+  GestureHandlerRootView 
+} from 'react-native-gesture-handler';
 
 type ListDetailScreenProps = ListsStackScreenProps<'ListDetail'>;
 
@@ -374,7 +380,30 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
   const abbreviateAddress = (address: string): string => {
     if (!address) return '';
     
-    // Common Bangkok abbreviations
+    // Special handling for building/mall addresses with floor information
+    // Pattern: "BuildingName Floor/Market Floor [street number] Soi/Road..."
+    const buildingFloorPattern = /^([^,]+(?:Market Floor|Floor|Mall|Plaza|Center))\s+(\d+\s+(?:Soi|Thanon|Road)[^,]*)/i;
+    const buildingFloorMatch = address.match(buildingFloorPattern);
+    
+    if (buildingFloorMatch) {
+      const buildingInfo = buildingFloorMatch[1].trim();
+      const streetInfo = buildingFloorMatch[2].trim();
+      
+      // Clean up the building info
+      const cleanBuildingInfo = buildingInfo
+        .replace(/\bMarket Floor\b/g, 'Market Floor')
+        .replace(/\bFloor\b/g, 'Floor');
+        
+      // Clean up the street info and add Bangkok
+      const cleanStreetInfo = streetInfo
+        .replace(/\bSoi\b/g, 'Soi')
+        .replace(/\bThanon\b/g, 'Rd')
+        .replace(/\bRoad\b/g, 'Rd');
+      
+      return `${cleanBuildingInfo}\n${cleanStreetInfo}, Bangkok`;
+    }
+    
+    // Common Bangkok abbreviations for regular addresses
     let abbreviated = address
       .replace(/Bangkok \d{5}, Thailand$/, 'Bangkok') // Remove postal code and Thailand
       .replace(/, Bangkok Metropolis,.*$/, ', Bangkok') // Remove "Bangkok Metropolis" suffix
@@ -433,409 +462,411 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
   const isFavorites = list.is_default;
 
   return (
-        <SafeAreaView 
-      style={{ 
-        flex: 1, 
-        backgroundColor: Colors.semantic.backgroundPrimary 
-      }}
-      edges={['bottom', 'left', 'right']}
-    >
-      {/* Sticky Header */}
-      <View style={{
-        backgroundColor: Colors.semantic.backgroundPrimary,
-        paddingHorizontal: Spacing.layout.screenPadding,
-        paddingTop: Spacing.sm,
-        paddingBottom: Spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.semantic.borderPrimary,
-      }}>
-        {isEditing ? (
-          // Edit Mode
-          <View>
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              marginBottom: Spacing.md,
-            }}>
-              <ListIcon 
-                size={Spacing.iconSize.lg} 
-                color={list.color || Colors.primary[500]}
-                strokeWidth={2}
-              />
-              <TextInput
-                value={editedName}
-                onChangeText={setEditedName}
-                style={{
-                  flex: 1,
-                  marginLeft: Spacing.md,
-                  fontSize: 24,
-                  fontWeight: '700',
-                  color: Colors.semantic.textPrimary,
-                  backgroundColor: Colors.semantic.backgroundSecondary,
-                  paddingHorizontal: Spacing.sm,
-                  paddingVertical: Spacing.xs,
-                  borderRadius: 8,
-                }}
-                placeholder="List name"
-                placeholderTextColor={Colors.semantic.textTertiary}
-              />
-            </View>
-
-            <TextInput
-              value={editedDescription}
-              onChangeText={setEditedDescription}
-              style={{
-                backgroundColor: Colors.semantic.backgroundSecondary,
-                paddingHorizontal: Spacing.sm,
-                paddingVertical: Spacing.sm,
-                borderRadius: 8,
-                color: Colors.semantic.textSecondary,
-                marginBottom: Spacing.md,
-                minHeight: 60,
-              }}
-              placeholder="Add a description..."
-              placeholderTextColor={Colors.semantic.textTertiary}
-              multiline
-              textAlignVertical="top"
-            />
-
-            {!isFavorites && (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaView 
+        style={{ 
+          flex: 1, 
+          backgroundColor: Colors.semantic.backgroundPrimary 
+        }}
+        edges={['bottom', 'left', 'right']}
+      >
+        {/* Sticky Header */}
+        <View style={{
+          backgroundColor: Colors.semantic.backgroundPrimary,
+          paddingHorizontal: Spacing.layout.screenPadding,
+          paddingTop: Spacing.sm,
+          paddingBottom: Spacing.md,
+          borderBottomWidth: 1,
+          borderBottomColor: Colors.semantic.borderPrimary,
+        }}>
+          {isEditing ? (
+            // Edit Mode
+            <View>
               <View style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                justifyContent: 'space-between',
                 marginBottom: Spacing.md,
               }}>
-                <Body>Make list public</Body>
-                <Switch
-                  value={isPublic}
-                  onValueChange={setIsPublic}
-                  trackColor={{ 
-                    false: Colors.neutral[600], 
-                    true: Colors.primary[500] 
+                <ListIcon 
+                  size={Spacing.iconSize.lg} 
+                  color={list.color || Colors.primary[500]}
+                  strokeWidth={2}
+                />
+                <TextInput
+                  value={editedName}
+                  onChangeText={setEditedName}
+                  style={{
+                    flex: 1,
+                    marginLeft: Spacing.md,
+                    fontSize: 24,
+                    fontWeight: '700',
+                    color: Colors.semantic.textPrimary,
+                    backgroundColor: Colors.semantic.backgroundSecondary,
+                    paddingHorizontal: Spacing.sm,
+                    paddingVertical: Spacing.xs,
+                    borderRadius: 8,
                   }}
-                  thumbColor={Colors.semantic.textPrimary}
+                  placeholder="List name"
+                  placeholderTextColor={Colors.semantic.textTertiary}
                 />
               </View>
-            )}
 
-            <View style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-            }}>
-              <SecondaryButton
-                title="Cancel"
-                onPress={() => {
-                  setIsEditing(false);
-                  setEditedName(list.name);
-                  setEditedDescription(list.description || '');
-                  setIsPublic(list.privacy_level === 'public');
+              <TextInput
+                value={editedDescription}
+                onChangeText={setEditedDescription}
+                style={{
+                  backgroundColor: Colors.semantic.backgroundSecondary,
+                  paddingHorizontal: Spacing.sm,
+                  paddingVertical: Spacing.sm,
+                  borderRadius: 8,
+                  color: Colors.semantic.textSecondary,
+                  marginBottom: Spacing.md,
+                  minHeight: 60,
                 }}
-                size="sm"
+                placeholder="Add a description..."
+                placeholderTextColor={Colors.semantic.textTertiary}
+                multiline
+                textAlignVertical="top"
               />
-              <PrimaryButton
-                title="Save"
-                onPress={handleSaveEdit}
-                size="sm"
-              />
-            </View>
-          </View>
-        ) : (
-          // Display Mode
-          <View>
-            {/* Description */}
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              marginBottom: Spacing.sm,
-              marginTop: 0,
-              paddingTop: 0,
-            }}>
-              <ListIcon 
-                size={Spacing.iconSize.lg} 
-                color={list.color || Colors.primary[500]}
-                strokeWidth={2}
-              />
-              <View style={{ flex: 1, marginLeft: Spacing.md }}>
-                {list.description && (
-                  <Body color="secondary">
-                    {list.description}
-                  </Body>
-                )}
-              </View>
-            </View>
 
-            {/* Progress Bar + Action Icons */}
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              marginBottom: Spacing.md,
-            }}>
-              <View style={{ flex: 1, marginRight: Spacing.md }}>
+              {!isFavorites && (
                 <View style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  marginBottom: 4,
+                  justifyContent: 'space-between',
+                  marginBottom: Spacing.md,
                 }}>
-                  <SecondaryText style={{ 
-                    fontSize: 12,
-                    color: Colors.neutral[600] 
-                  }}>
-                    {total > 0 ? `${visited} of ${total} visited` : 'No places yet'}
-                  </SecondaryText>
-                </View>
-                <View style={{
-                  height: 4,
-                  backgroundColor: Colors.neutral[200],
-                  borderRadius: 2,
-                  overflow: 'hidden',
-                }}>
-                  <View style={{
-                    height: '100%',
-                    width: total > 0 ? `${(visited / total) * 100}%` : '0%',
-                    backgroundColor: Colors.accent.green,
-                    borderRadius: 2,
-                  }} />
-                </View>
-              </View>
-
-              {list.privacy_level === 'public' && (
-                <View style={{
-                  backgroundColor: Colors.neutral[100],
-                  paddingHorizontal: Spacing.sm,
-                  paddingVertical: Spacing.xs,
-                  borderRadius: 8,
-                  marginRight: Spacing.sm,
-                }}>
-                  <SecondaryText style={{ 
-                    color: Colors.neutral[600],
-                    fontSize: 12,
-                    fontWeight: '500' 
-                  }}>
-                    Public
-                  </SecondaryText>
+                  <Body>Make list public</Body>
+                  <Switch
+                    value={isPublic}
+                    onValueChange={setIsPublic}
+                    trackColor={{ 
+                      false: Colors.neutral[600], 
+                      true: Colors.primary[500] 
+                    }}
+                    thumbColor={Colors.semantic.textPrimary}
+                  />
                 </View>
               )}
 
-              {/* Action Icons */}
+              <View style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+              }}>
+                <SecondaryButton
+                  title="Cancel"
+                  onPress={() => {
+                    setIsEditing(false);
+                    setEditedName(list.name);
+                    setEditedDescription(list.description || '');
+                    setIsPublic(list.privacy_level === 'public');
+                  }}
+                  size="sm"
+                />
+                <PrimaryButton
+                  title="Save"
+                  onPress={handleSaveEdit}
+                  size="sm"
+                />
+              </View>
+            </View>
+          ) : (
+            // Display Mode
+            <View>
+              {/* Description */}
               <View style={{
                 flexDirection: 'row',
                 alignItems: 'center',
+                marginBottom: Spacing.sm,
+                marginTop: 0,
+                paddingTop: 0,
               }}>
-                <TouchableOpacity
-                  onPress={handleShare}
-                  style={{
-                    padding: Spacing.sm,
-                    backgroundColor: 'transparent',
+                <ListIcon 
+                  size={Spacing.iconSize.lg} 
+                  color={list.color || Colors.primary[500]}
+                  strokeWidth={2}
+                />
+                <View style={{ flex: 1, marginLeft: Spacing.md }}>
+                  {list.description && (
+                    <Body color="secondary">
+                      {list.description}
+                    </Body>
+                  )}
+                </View>
+              </View>
+
+              {/* Progress Bar + Action Icons */}
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginBottom: Spacing.md,
+              }}>
+                <View style={{ flex: 1, marginRight: Spacing.md }}>
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    marginBottom: 4,
+                  }}>
+                    <SecondaryText style={{ 
+                      fontSize: 12,
+                      color: Colors.neutral[600] 
+                    }}>
+                      {total > 0 ? `${visited} of ${total} visited` : 'No places yet'}
+                    </SecondaryText>
+                  </View>
+                  <View style={{
+                    height: 4,
+                    backgroundColor: Colors.neutral[200],
+                    borderRadius: 2,
+                    overflow: 'hidden',
+                  }}>
+                    <View style={{
+                      height: '100%',
+                      width: total > 0 ? `${(visited / total) * 100}%` : '0%',
+                      backgroundColor: Colors.accent.green,
+                      borderRadius: 2,
+                    }} />
+                  </View>
+                </View>
+
+                {list.privacy_level === 'public' && (
+                  <View style={{
+                    backgroundColor: Colors.neutral[100],
+                    paddingHorizontal: Spacing.sm,
+                    paddingVertical: Spacing.xs,
                     borderRadius: 8,
                     marginRight: Spacing.sm,
-                  }}
-                >
-                  <Share 
-                    size={Spacing.iconSize.md} 
-                    color={Colors.accent.yellow}
-                    strokeWidth={2}
-                  />
-                </TouchableOpacity>
+                  }}>
+                    <SecondaryText style={{ 
+                      color: Colors.neutral[600],
+                      fontSize: 12,
+                      fontWeight: '500' 
+                    }}>
+                      Public
+                    </SecondaryText>
+                  </View>
+                )}
 
-                <TouchableOpacity
-                  onPress={() => setIsEditing(!isEditing)}
-                  style={{
-                    padding: Spacing.sm,
-                    backgroundColor: 'transparent',
-                    borderRadius: 8,
-                    marginRight: !isFavorites ? Spacing.sm : 0,
-                  }}
-                >
-                  <Edit3 
-                    size={Spacing.iconSize.md} 
-                    color={Colors.primary[500]}
-                    strokeWidth={2}
-                  />
-                </TouchableOpacity>
-
-                {!isFavorites && (
+                {/* Action Icons */}
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                }}>
                   <TouchableOpacity
-                    onPress={handleDeleteList}
+                    onPress={handleShare}
                     style={{
                       padding: Spacing.sm,
                       backgroundColor: 'transparent',
                       borderRadius: 8,
+                      marginRight: Spacing.sm,
                     }}
                   >
-                    <Trash2 
+                    <Share 
                       size={Spacing.iconSize.md} 
-                      color={Colors.semantic.error}
+                      color={Colors.accent.yellow}
                       strokeWidth={2}
                     />
                   </TouchableOpacity>
-                )}
+
+                  <TouchableOpacity
+                    onPress={() => setIsEditing(!isEditing)}
+                    style={{
+                      padding: Spacing.sm,
+                      backgroundColor: 'transparent',
+                      borderRadius: 8,
+                      marginRight: !isFavorites ? Spacing.sm : 0,
+                    }}
+                  >
+                    <Edit3 
+                      size={Spacing.iconSize.md} 
+                      color={Colors.primary[500]}
+                      strokeWidth={2}
+                    />
+                  </TouchableOpacity>
+
+                  {!isFavorites && (
+                    <TouchableOpacity
+                      onPress={handleDeleteList}
+                      style={{
+                        padding: Spacing.sm,
+                        backgroundColor: 'transparent',
+                        borderRadius: 8,
+                      }}
+                    >
+                      <Trash2 
+                        size={Spacing.iconSize.md} 
+                        color={Colors.semantic.error}
+                        strokeWidth={2}
+                      />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
+              {/* Places Section Header */}
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+              }}>
+                <TouchableOpacity
+                  onPress={() => setShowSortModal(true)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: Spacing.sm,
+                    paddingVertical: Spacing.xs,
+                    backgroundColor: Colors.semantic.backgroundSecondary,
+                    borderRadius: 8,
+                    marginRight: Spacing.sm,
+                  }}
+                >
+                  <SortAsc 
+                    size={Spacing.iconSize.sm} 
+                    color={Colors.semantic.textSecondary}
+                    strokeWidth={2}
+                  />
+                  <SecondaryText style={{ marginLeft: Spacing.xs }}>
+                    Sort
+                  </SecondaryText>
+                </TouchableOpacity>
+
+                <PrimaryButton
+                  title="Add Places"
+                  onPress={handleAddPlaces}
+                  icon={Plus}
+                  size="sm"
+                />
               </View>
             </View>
+          )}
+        </View>
 
-            {/* Places Section Header */}
+        {/* Scrollable Places List */}
+        <ScrollView 
+          style={{ flex: 1 }}
+          contentContainerStyle={{ 
+            paddingHorizontal: Spacing.layout.screenPadding,
+            paddingTop: Spacing.md,
+            paddingBottom: Spacing.xl 
+          }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
+        >
+          {/* Places List */}
+          {sortedPlaces.length > 0 ? (
+            <View>
+              {sortedPlaces.map((listPlace) => (
+                <PlaceCard
+                  key={listPlace.place.id}
+                  listPlace={listPlace}
+                  userRatings={userRatings}
+                  onRemove={() => handleRemovePlace(listPlace.place.id, listPlace.place.name)}
+                  onRatingChange={(rating) => handleUpdatePlaceRating(listPlace.place.id, rating)}
+                  onViewDetails={() => handleNavigateToPlace(listPlace)}
+                  onGetDirections={() => handleGetDirections(listPlace)}
+                  onCheckIn={() => handleCheckIn(listPlace)}
+                />
+              ))}
+            </View>
+          ) : (
+            <EmptyState
+              title="No places yet"
+              description={`Start building your ${list.name} list by adding some places!`}
+              primaryAction={{
+                title: "Add Places",
+                onPress: handleAddPlaces
+              }}
+            />
+          )}
+        </ScrollView>
+
+        {/* Sort Modal */}
+        <Modal
+          visible={showSortModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowSortModal(false)}
+        >
+          <SafeAreaView style={{ 
+            flex: 1, 
+            backgroundColor: Colors.semantic.backgroundPrimary 
+          }}>
             <View style={{
               flexDirection: 'row',
               alignItems: 'center',
-              justifyContent: 'flex-end',
+              justifyContent: 'space-between',
+              paddingHorizontal: Spacing.layout.screenPadding,
+              paddingVertical: Spacing.md,
+              borderBottomWidth: 1,
+              borderBottomColor: Colors.semantic.borderPrimary,
             }}>
-              <TouchableOpacity
-                onPress={() => setShowSortModal(true)}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: Spacing.sm,
-                  paddingVertical: Spacing.xs,
-                  backgroundColor: Colors.semantic.backgroundSecondary,
-                  borderRadius: 8,
-                  marginRight: Spacing.sm,
-                }}
-              >
-                <SortAsc 
-                  size={Spacing.iconSize.sm} 
-                  color={Colors.semantic.textSecondary}
-                  strokeWidth={2}
-                />
-                <SecondaryText style={{ marginLeft: Spacing.xs }}>
-                  Sort
-                </SecondaryText>
-              </TouchableOpacity>
-
-              <PrimaryButton
-                title="Add Places"
-                onPress={handleAddPlaces}
-                icon={Plus}
-                size="sm"
-              />
-            </View>
-          </View>
-        )}
-      </View>
-
-      {/* Scrollable Places List */}
-      <ScrollView 
-        style={{ flex: 1 }}
-        contentContainerStyle={{ 
-          paddingHorizontal: Spacing.layout.screenPadding,
-          paddingTop: Spacing.md,
-          paddingBottom: Spacing.xl 
-        }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
-      >
-        {/* Places List */}
-        {sortedPlaces.length > 0 ? (
-          <View>
-            {sortedPlaces.map((listPlace) => (
-              <PlaceCard
-                key={listPlace.place.id}
-                listPlace={listPlace}
-                userRatings={userRatings}
-                onRemove={() => handleRemovePlace(listPlace.place.id, listPlace.place.name)}
-                onRatingChange={(rating) => handleUpdatePlaceRating(listPlace.place.id, rating)}
-                onViewDetails={() => handleNavigateToPlace(listPlace)}
-                onGetDirections={() => handleGetDirections(listPlace)}
-                onCheckIn={() => handleCheckIn(listPlace)}
-              />
-            ))}
-          </View>
-        ) : (
-          <EmptyState
-            title="No places yet"
-            description={`Start building your ${list.name} list by adding some places!`}
-            primaryAction={{
-              title: "Add Places",
-              onPress: handleAddPlaces
-            }}
-          />
-        )}
-      </ScrollView>
-
-      {/* Sort Modal */}
-      <Modal
-        visible={showSortModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowSortModal(false)}
-      >
-        <SafeAreaView style={{ 
-          flex: 1, 
-          backgroundColor: Colors.semantic.backgroundPrimary 
-        }}>
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingHorizontal: Spacing.layout.screenPadding,
-            paddingVertical: Spacing.md,
-            borderBottomWidth: 1,
-            borderBottomColor: Colors.semantic.borderPrimary,
-          }}>
-            <Typography variant="headline" style={{ fontWeight: '600' }}>
-              Sort Places
-            </Typography>
-            <TouchableOpacity
-              onPress={() => setShowSortModal(false)}
-              style={{ padding: Spacing.xs }}
-            >
-              <Typography variant="body" style={{ color: Colors.primary[500] }}>
-                Done
+              <Typography variant="headline" style={{ fontWeight: '600' }}>
+                Sort Places
               </Typography>
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ padding: Spacing.layout.screenPadding }}>
-            {sortOptions.map((option) => (
               <TouchableOpacity
-                key={option.key}
-                onPress={() => {
-                  setSortBy(option.key);
-                  setShowSortModal(false);
-                }}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingVertical: Spacing.md,
-                  borderBottomWidth: 1,
-                  borderBottomColor: Colors.semantic.borderPrimary,
-                }}
+                onPress={() => setShowSortModal(false)}
+                style={{ padding: Spacing.xs }}
               >
-                <option.icon 
-                  size={Spacing.iconSize.md} 
-                  color={sortBy === option.key ? Colors.primary[500] : Colors.semantic.textSecondary}
-                  strokeWidth={2}
-                />
-                <Body style={{ 
-                  marginLeft: Spacing.md,
-                  color: sortBy === option.key ? Colors.primary[500] : Colors.semantic.textPrimary,
-                  fontWeight: sortBy === option.key ? '600' : '400'
-                }}>
-                  {option.label}
-                </Body>
-                {sortBy === option.key && (
-                  <CheckCircle 
-                    size={Spacing.iconSize.sm} 
-                    color={Colors.primary[500]}
-                    strokeWidth={2}
-                    style={{ marginLeft: 'auto' }}
-                  />
-                )}
+                <Typography variant="body" style={{ color: Colors.primary[500] }}>
+                  Done
+                </Typography>
               </TouchableOpacity>
-            ))}
-          </View>
-        </SafeAreaView>
-      </Modal>
+            </View>
 
-      {/* Toast Notification */}
-      <Toast
-        visible={toast.visible}
-        message={toast.message}
-        type={toast.type}
-        onHide={hideToast}
-      />
-    </SafeAreaView>
+            <View style={{ padding: Spacing.layout.screenPadding }}>
+              {sortOptions.map((option) => (
+                <TouchableOpacity
+                  key={option.key}
+                  onPress={() => {
+                    setSortBy(option.key);
+                    setShowSortModal(false);
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: Spacing.md,
+                    borderBottomWidth: 1,
+                    borderBottomColor: Colors.semantic.borderPrimary,
+                  }}
+                >
+                  <option.icon 
+                    size={Spacing.iconSize.md} 
+                    color={sortBy === option.key ? Colors.primary[500] : Colors.semantic.textSecondary}
+                    strokeWidth={2}
+                  />
+                  <Body style={{ 
+                    marginLeft: Spacing.md,
+                    color: sortBy === option.key ? Colors.primary[500] : Colors.semantic.textPrimary,
+                    fontWeight: sortBy === option.key ? '600' : '400'
+                  }}>
+                    {option.label}
+                  </Body>
+                  {sortBy === option.key && (
+                    <CheckCircle 
+                      size={Spacing.iconSize.sm} 
+                      color={Colors.primary[500]}
+                      strokeWidth={2}
+                      style={{ marginLeft: 'auto' }}
+                    />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </SafeAreaView>
+        </Modal>
+
+        {/* Toast Notification */}
+        <Toast
+          visible={toast.visible}
+          message={toast.message}
+          type={toast.type}
+          onHide={hideToast}
+        />
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
@@ -949,7 +980,30 @@ function PlaceCard({
   const abbreviateAddress = (address: string): string => {
     if (!address) return '';
     
-    // Common Bangkok abbreviations
+    // Special handling for building/mall addresses with floor information
+    // Pattern: "BuildingName Floor/Market Floor [street number] Soi/Road..."
+    const buildingFloorPattern = /^([^,]+(?:Market Floor|Floor|Mall|Plaza|Center))\s+(\d+\s+(?:Soi|Thanon|Road)[^,]*)/i;
+    const buildingFloorMatch = address.match(buildingFloorPattern);
+    
+    if (buildingFloorMatch) {
+      const buildingInfo = buildingFloorMatch[1].trim();
+      const streetInfo = buildingFloorMatch[2].trim();
+      
+      // Clean up the building info
+      const cleanBuildingInfo = buildingInfo
+        .replace(/\bMarket Floor\b/g, 'Market Floor')
+        .replace(/\bFloor\b/g, 'Floor');
+        
+      // Clean up the street info and add Bangkok
+      const cleanStreetInfo = streetInfo
+        .replace(/\bSoi\b/g, 'Soi')
+        .replace(/\bThanon\b/g, 'Rd')
+        .replace(/\bRoad\b/g, 'Rd');
+      
+      return `${cleanBuildingInfo}\n${cleanStreetInfo}, Bangkok`;
+    }
+    
+    // Common Bangkok abbreviations for regular addresses
     let abbreviated = address
       .replace(/Bangkok \d{5}, Thailand$/, 'Bangkok') // Remove postal code and Thailand
       .replace(/, Bangkok Metropolis,.*$/, ', Bangkok') // Remove "Bangkok Metropolis" suffix
@@ -1010,232 +1064,241 @@ function PlaceCard({
     );
   };
 
-  return (
-    <TouchableOpacity
-      onPress={onViewDetails}
-      activeOpacity={0.7}
-    >
-      <ElevatedCard 
-        padding="sm" 
-        style={{ 
+  // Render the delete action for swipe
+  const renderRightAction = () => {
+    return (
+      <TouchableOpacity
+        onPress={onRemove}
+        style={{
+          backgroundColor: Colors.semantic.error,
+          justifyContent: 'center',
+          alignItems: 'center',
+          width: 80,
+          borderRadius: 12,
           marginBottom: Spacing.sm,
-          opacity: hasVisited ? 1 : 0.8,
-          borderLeftWidth: hasVisited ? 4 : 0,
-          borderLeftColor: hasVisited ? Colors.accent.green : 'transparent',
         }}
       >
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'flex-start',
+        <Trash2 
+          size={24} 
+          color="white"
+          strokeWidth={2}
+        />
+        <Typography style={{ 
+          color: 'white', 
+          fontSize: 12, 
+          marginTop: 4,
+          fontWeight: '600'
         }}>
-          {/* Category Icon */}
+          Delete
+        </Typography>
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <Swipeable renderRightActions={renderRightAction}>
+      <TouchableOpacity
+        onPress={onViewDetails}
+        activeOpacity={0.7}
+      >
+        <ElevatedCard 
+          padding="sm" 
+          style={{ 
+            marginBottom: Spacing.sm,
+            opacity: hasVisited ? 1 : 0.8,
+            borderLeftWidth: hasVisited ? 4 : 0,
+            borderLeftColor: hasVisited ? Colors.accent.green : 'transparent',
+          }}
+        >
           <View style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: Colors.semantic.backgroundTertiary,
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginRight: Spacing.md,
-            marginTop: 2, // Slight offset to align with text
+            flexDirection: 'row',
+            alignItems: 'flex-start',
           }}>
-            <Typography variant="body" style={{ fontSize: 20 }}>
-              {getCategoryIconForPlace(place) || '📍'}
-            </Typography>
+            {/* Category Icon */}
+            <View style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: Colors.semantic.backgroundTertiary,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginRight: Spacing.md,
+              marginTop: 2, // Slight offset to align with text
+            }}>
+              <Typography variant="body" style={{ fontSize: 20 }}>
+                {getCategoryIconForPlace(place) || '📍'}
+              </Typography>
+            </View>
+
+            <View style={{ flex: 1 }}>
+              {/* Place name and visited indicator */}
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginBottom: Spacing.xs,
+              }}>
+                <Typography variant="headline" style={{ 
+                  fontWeight: '600',
+                  flex: 1,
+                  fontSize: 16,
+                }}>
+                  {place.name || 'Unknown Place'}
+                </Typography>
+                {hasVisited && (
+                  <CheckCircle 
+                    size={Spacing.iconSize.sm} 
+                    color={Colors.accent.green}
+                    strokeWidth={2}
+                  />
+                )}
+              </View>
+
+              {/* Address with abbreviation */}
+              {place.address && (
+                <Body color="secondary" style={{ 
+                  marginBottom: Spacing.xs,
+                  fontSize: 13,
+                }}>
+                  {abbreviateAddress(place.address)}
+                </Body>
+              )}
+
+              {/* Your rating - only show if user has rated */}
+              {currentRating && (
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  marginBottom: Spacing.xs,
+                }}>
+                  <SecondaryText style={{ 
+                    marginRight: Spacing.sm,
+                    fontSize: 12,
+                  }}>
+                    Your rating:
+                  </SecondaryText>
+                  <View style={{
+                    paddingHorizontal: Spacing.xs,
+                    paddingVertical: 4,
+                    borderRadius: 4,
+                    backgroundColor: checkInUtils.getRatingColor(currentRating) + '20',
+                    borderWidth: 1,
+                    borderColor: checkInUtils.getRatingColor(currentRating),
+                  }}>
+                    <Typography style={{ fontSize: 14 }}>
+                      {currentRating === 'thumbs_up' ? '👍' : currentRating === 'thumbs_down' ? '👎' : '😐'}
+                    </Typography>
+                  </View>
+                </View>
+              )}
+
+              {/* Visit count badge */}
+              {(listPlace.visit_count || 0) > 0 && (
+                <View style={{
+                  alignSelf: 'flex-start',
+                  backgroundColor: Colors.accent.green,
+                  paddingHorizontal: Spacing.xs,
+                  paddingVertical: 2,
+                  borderRadius: 6,
+                  marginBottom: Spacing.xs,
+                }}>
+                  <Typography style={{ 
+                    color: Colors.neutral[950],
+                    fontSize: 11,
+                    fontWeight: '600' 
+                  }}>
+                    {listPlace.visit_count} visits
+                  </Typography>
+                </View>
+              )}
+
+              {/* Notes - enhanced styling to distinguish from address */}
+              {listPlace.notes && (
+                <View style={{
+                  backgroundColor: Colors.semantic.backgroundSecondary,
+                  paddingHorizontal: Spacing.sm,
+                  paddingVertical: Spacing.xs,
+                  borderRadius: 8,
+                  marginTop: Spacing.xs,
+                  marginBottom: Spacing.xs,
+                  borderLeftWidth: 3,
+                  borderLeftColor: Colors.accent.yellow + '60',
+                }}>
+                  <Body style={{ 
+                    fontSize: 13,
+                    fontStyle: 'italic',
+                    color: Colors.semantic.textSecondary,
+                    lineHeight: 18,
+                  }}>
+                    "{listPlace.notes}"
+                  </Body>
+                </View>
+              )}
+            </View>
           </View>
 
-          <View style={{ flex: 1 }}>
-            {/* Place name and visited indicator */}
+          {/* Bottom row: Added date + Actions */}
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginTop: Spacing.xs,
+            paddingTop: Spacing.xs,
+            borderTopWidth: 1,
+            borderTopColor: Colors.semantic.borderPrimary + '30',
+          }}>
+            {/* De-emphasized added date */}
+            <Typography style={{ 
+              fontSize: 11,
+              color: Colors.semantic.textTertiary,
+            }}>
+              Added {new Date(listPlace.added_at).toLocaleDateString()}
+            </Typography>
+
+            {/* Action buttons */}
             <View style={{
               flexDirection: 'row',
               alignItems: 'center',
-              marginBottom: Spacing.xs,
             }}>
-              <Typography variant="headline" style={{ 
-                fontWeight: '600',
-                flex: 1,
-                fontSize: 16,
-              }}>
-                {place.name || 'Unknown Place'}
-              </Typography>
-              {hasVisited && (
-                <CheckCircle 
-                  size={Spacing.iconSize.sm} 
-                  color={Colors.accent.green}
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onGetDirections();
+                }}
+                style={{
+                  padding: Spacing.xs,
+                  backgroundColor: Colors.neutral[100],
+                  borderRadius: 6,
+                  marginRight: Spacing.sm,
+                }}
+              >
+                <Navigation 
+                  size={16} 
+                  color={Colors.neutral[700]}
                   strokeWidth={2}
                 />
-              )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onCheckIn();
+                }}
+                style={{
+                  padding: Spacing.xs,
+                  backgroundColor: Colors.accent.yellow,
+                  borderRadius: 6,
+                }}
+              >
+                <Target 
+                  size={16} 
+                  color={Colors.neutral[950]}
+                  strokeWidth={2}
+                />
+              </TouchableOpacity>
             </View>
-
-            {/* Address with abbreviation */}
-            {place.address && (
-              <Body color="secondary" style={{ 
-                marginBottom: Spacing.xs,
-                fontSize: 13,
-              }}>
-                {abbreviateAddress(place.address)}
-              </Body>
-            )}
-
-            {/* Your rating - only show if user has rated */}
-            {currentRating && (
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                marginBottom: Spacing.xs,
-              }}>
-                <SecondaryText style={{ 
-                  marginRight: Spacing.sm,
-                  fontSize: 12,
-                }}>
-                  Your rating:
-                </SecondaryText>
-                <View style={{
-                  paddingHorizontal: Spacing.xs,
-                  paddingVertical: 4,
-                  borderRadius: 4,
-                  backgroundColor: checkInUtils.getRatingColor(currentRating) + '20',
-                  borderWidth: 1,
-                  borderColor: checkInUtils.getRatingColor(currentRating),
-                }}>
-                  <Typography style={{ fontSize: 14 }}>
-                    {currentRating === 'thumbs_up' ? '👍' : currentRating === 'thumbs_down' ? '👎' : '😐'}
-                  </Typography>
-                </View>
-              </View>
-            )}
-
-            {/* Google rating - simplified display */}
-            {place.google_rating && (
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                marginBottom: Spacing.xs,
-              }}>
-                <SecondaryText style={{ 
-                  marginRight: Spacing.sm,
-                  fontSize: 12,
-                }}>
-                  Google: {place.google_rating.toFixed(1)}
-                </SecondaryText>
-                <Typography style={{ fontSize: 12 }}>⭐</Typography>
-              </View>
-            )}
-
-            {/* Visit count badge */}
-            {(listPlace.visit_count || 0) > 0 && (
-              <View style={{
-                alignSelf: 'flex-start',
-                backgroundColor: Colors.accent.green,
-                paddingHorizontal: Spacing.xs,
-                paddingVertical: 2,
-                borderRadius: 6,
-                marginBottom: Spacing.xs,
-              }}>
-                <Typography style={{ 
-                  color: Colors.neutral[950],
-                  fontSize: 11,
-                  fontWeight: '600' 
-                }}>
-                  {listPlace.visit_count} visits
-                </Typography>
-              </View>
-            )}
-
-            {/* Notes */}
-            {listPlace.notes && (
-              <View style={{
-                backgroundColor: Colors.semantic.backgroundSecondary,
-                padding: Spacing.xs,
-                borderRadius: 6,
-                marginBottom: Spacing.xs,
-              }}>
-                <Body color="secondary" style={{ fontSize: 13 }}>
-                  {listPlace.notes}
-                </Body>
-              </View>
-            )}
           </View>
-
-          <TouchableOpacity
-            onPress={onRemove}
-            style={{
-              padding: Spacing.xs,
-              backgroundColor: Colors.semantic.error + '20',
-              borderRadius: 6,
-              marginLeft: Spacing.sm,
-            }}
-          >
-            <Trash2 
-              size={16} 
-              color={Colors.semantic.error}
-              strokeWidth={2}
-            />
-          </TouchableOpacity>
-        </View>
-
-        {/* Bottom row: Added date + Actions */}
-        <View style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginTop: Spacing.xs,
-          paddingTop: Spacing.xs,
-          borderTopWidth: 1,
-          borderTopColor: Colors.semantic.borderPrimary + '30',
-        }}>
-          {/* De-emphasized added date */}
-          <Typography style={{ 
-            fontSize: 11,
-            color: Colors.semantic.textTertiary,
-          }}>
-            Added {new Date(listPlace.added_at).toLocaleDateString()}
-          </Typography>
-
-          {/* Action buttons */}
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-          }}>
-            <TouchableOpacity
-              onPress={(e) => {
-                e.stopPropagation();
-                onGetDirections();
-              }}
-              style={{
-                padding: Spacing.xs,
-                backgroundColor: Colors.neutral[100],
-                borderRadius: 6,
-                marginRight: Spacing.sm,
-              }}
-            >
-              <Navigation 
-                size={16} 
-                color={Colors.neutral[700]}
-                strokeWidth={2}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={(e) => {
-                e.stopPropagation();
-                onCheckIn();
-              }}
-              style={{
-                padding: Spacing.xs,
-                backgroundColor: Colors.accent.yellow,
-                borderRadius: 6,
-              }}
-            >
-              <Target 
-                size={16} 
-                color={Colors.neutral[950]}
-                strokeWidth={2}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ElevatedCard>
-    </TouchableOpacity>
+        </ElevatedCard>
+      </TouchableOpacity>
+    </Swipeable>
   );
 } 
