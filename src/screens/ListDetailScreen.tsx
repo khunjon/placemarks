@@ -1191,26 +1191,6 @@ function PlaceCard({
                 </View>
               )}
 
-              {/* Visit count badge */}
-              {(listPlace.visit_count || 0) > 0 && (
-                <View style={{
-                  alignSelf: 'flex-start',
-                  backgroundColor: Colors.accent.green,
-                  paddingHorizontal: Spacing.xs,
-                  paddingVertical: 2,
-                  borderRadius: 6,
-                  marginBottom: Spacing.xs,
-                }}>
-                  <Typography style={{ 
-                    color: Colors.neutral[950],
-                    fontSize: 11,
-                    fontWeight: '600' 
-                  }}>
-                    {listPlace.visit_count} visits
-                  </Typography>
-                </View>
-              )}
-
               {/* Notes - enhanced styling to distinguish from address */}
               {listPlace.notes && (
                 <View style={{
