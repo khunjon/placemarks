@@ -1,7 +1,6 @@
 import { supabase } from './supabase';
 import { PlacesService } from './places';
-import { Place, List, User, CheckIn } from '../types/database';
-import { PlaceSuggestion, PlaceDetails, Location } from '../types/places';
+import { Place, List, User, CheckIn, PlaceSuggestion, PlaceDetails, Location } from '../types';
 
 // Enhanced type definitions for the new schema
 export interface EnhancedPlace extends Place {
@@ -204,7 +203,7 @@ export class EnhancedListsService {
       result.sort((a, b) => {
         if (a.is_default && !b.is_default) return -1;
         if (!a.is_default && b.is_default) return 1;
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
       });
 
       return result;

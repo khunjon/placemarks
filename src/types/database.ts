@@ -1,20 +1,5 @@
-// Bangkok-specific context interfaces
-export interface BangkokContext {
-  environment: 'indoor' | 'outdoor' | 'mixed';
-  location_type: 'mall' | 'street' | 'building' | 'market';
-  bts_proximity: 'walking' | 'near' | 'far' | 'none';
-  air_conditioning: boolean;
-  noise_level: 'quiet' | 'moderate' | 'loud';
-  price_tier: 'street' | 'casual' | 'mid' | 'upscale' | 'luxury';
-}
-
-export interface CheckInContext {
-  weather?: string;
-  companion?: 'solo' | 'partner' | 'friends' | 'business';
-  meal_type?: 'breakfast' | 'lunch' | 'dinner' | 'snack';
-  transportation?: 'walking' | 'bts' | 'taxi' | 'car';
-  mood?: 'adventurous' | 'comfort' | 'healthy' | 'indulgent';
-}
+// Legacy database types for backwards compatibility
+// New code should use types from entities/index.ts
 
 // Bangkok-specific types
 export type BangkokDistrict = 
@@ -40,61 +25,13 @@ export type ActivityType =
   | 'dining' | 'shopping' | 'nightlife' | 'culture' | 'nature'
   | 'fitness' | 'entertainment' | 'business' | 'relaxation';
 
-export interface UserPreferences {
-  favorite_districts: string[];
-  dietary_restrictions: string[];
-  preferred_cuisines: string[];
-  price_range: 'budget' | 'mid' | 'upscale' | 'luxury';
-  transport_preference: 'walking' | 'bts' | 'taxi' | 'car';
-  activity_types: string[];
-}
-
-// Main database interfaces as specified in Task 1
-export interface User {
-  id: string;
-  email: string;
-  full_name?: string;
-  avatar_url?: string;
-  auth_provider: 'email' | 'google' | 'facebook' | 'apple';
-  preferences: UserPreferences;
-  created_at: string;
-}
-
-export interface Place {
-  id: string;
-  google_place_id: string;
-  name: string;
-  address: string;
-  coordinates: [number, number]; // [longitude, latitude] format
-  place_type: string;
-  google_types?: string[]; // Full array of Google Places API types
-  primary_type?: string; // Primary type (computed from google_types[0] or place_type)
-  price_level?: number;
-  bangkok_context: BangkokContext;
-}
-
-export interface CheckIn {
-  id: string;
-  user_id: string;
-  place_id: string;
-  timestamp: string;
-  rating: number;
-  tags: string[];
-  context: CheckInContext;
-  photos: string[];
-  notes?: string;
-}
-
-export interface List {
-  id: string;
-  user_id: string;
-  name: string;
-  auto_generated: boolean;
-  privacy_level: 'private' | 'friends' | 'public';
-  description?: string;
-  list_type?: string;
-  icon?: string;
-  color?: string;
-  type?: 'user' | 'auto';
-  created_at: string;
-} 
+// Re-export core entity types from entities for backwards compatibility
+export { 
+  UserPreferences, 
+  User, 
+  Place, 
+  CheckIn, 
+  List, 
+  BangkokContext, 
+  CheckInContext 
+} from './entities'; 

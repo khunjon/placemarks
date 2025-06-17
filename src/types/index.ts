@@ -1,31 +1,44 @@
 // Main types index - re-exports from specialized type files
 // This file serves as the single entry point for all types
 
-// Core database types (source of truth)
+// Core entity types (single source of truth)
 export {
+  // Base types
+  BaseEntity,
+  
+  // Core entities
   User,
   Place,
+  CheckIn,
   List,
+  ListPlace,
+  UserPlaceRating,
+  RecommendationRequest,
+  
+  // Context interfaces
   UserPreferences,
   BangkokContext,
   CheckInContext,
-  BangkokDistrict,
-  CuisineType,
-  DietaryRestriction,
-  PriceRange,
-  TransportMethod,
-  ActivityType
-} from './database';
-
-// User-specific types
-export {
-  AuthResponse,
-  ProfileUpdate,
+  WeatherContext,
+  
+  // Type aliases
+  ThumbsRating,
   AuthProvider,
-  SocialAuthData
-} from './user';
+  CompanionType,
+  MealType,
+  TransportationMethod,
+  PrivacyLevel,
+  
+  // Create/Update types
+  CheckInCreate,
+  CheckInUpdate,
+  UserUpdate,
+  ListCreate,
+  ListUpdate,
+  ProfileUpdate, // Legacy alias
+} from './entities';
 
-// Place-specific types
+// Place-specific types (non-entity)
 export {
   PlaceSuggestion,
   PlaceDetails,
@@ -34,16 +47,24 @@ export {
   PlaceSearchParams
 } from './places';
 
-// CheckIn-specific types
+// Legacy types from other files (keeping for backwards compatibility)
 export {
-  ThumbsRating,
-  CheckIn,
-  WeatherContext,
-  CompanionType,
-  MealType,
-  TransportationMethod,
-  CheckInCreate,
-  CheckInUpdate,
+  BangkokDistrict,
+  CuisineType,
+  DietaryRestriction,
+  PriceRange,
+  TransportMethod,
+  ActivityType
+} from './database';
+
+// Auth-specific types
+export {
+  AuthResponse,
+  SocialAuthData
+} from './user';
+
+// Check-in specific constants and tags
+export {
   BANGKOK_TAGS,
   BangkokTag
 } from './checkins';
@@ -66,7 +87,6 @@ export {
   Recommendation,
   RecommendationSet,
   RecommendationFilters,
-  RecommendationRequest,
   TimeBasedConfig
 } from './recommendations';
 

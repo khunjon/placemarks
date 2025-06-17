@@ -4,7 +4,7 @@ import { Marker, Callout } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { MapMarkerData } from '../../services/maps';
 import { TransitStation } from '../../data/btsStations';
-import { Place } from '../../types/database';
+import { Place } from '../../types';
 
 interface CustomMarkerProps {
   marker: MapMarkerData;

@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { placesService } from './places';
-import { Place, BangkokContext } from '../types/database';
+import { Place, BangkokContext } from '../types';
 import * as ImagePicker from 'expo-image-picker';
 
 // Thumbs rating system type

@@ -1,5 +1,5 @@
 import * as Location from 'expo-location';
-import { Place } from '../types/database';
+import { Place } from '../types';
 import { TransitStation, findNearestStation } from '../data/btsStations';
 
 export interface MapRegion {

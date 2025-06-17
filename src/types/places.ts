@@ -1,8 +1,6 @@
-import { BangkokContext, Place } from './database';
+import { BangkokContext, Place } from './entities';
 
-// Re-export Place from database for convenience
-export { Place } from './database';
-
+// Place-specific types that are not core entities
 export interface PlaceSuggestion {
   place_id: string;
   description: string;

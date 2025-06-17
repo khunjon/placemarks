@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { CheckInContext, WeatherContext, CompanionType, MealType, TransportationMethod } from '../../types/checkins';
+import { CheckInContext, WeatherContext, CompanionType, MealType, TransportationMethod } from '../../types';
 
 interface ContextCaptureProps {
   context: CheckInContext;

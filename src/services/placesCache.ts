@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Place, Location } from '../types/places';
+import { Place, Location } from '../types';
 
 export class PlacesCacheService {
   private cacheExpiryHours = 24; // Cache places for 24 hours

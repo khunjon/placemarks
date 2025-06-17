@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { authService } from '../../services/auth';
-import { UserPreferences } from '../../types/database';
+import { UserPreferences } from '../../types';
 
 const BANGKOK_DISTRICTS = [
   'Sukhumvit', 'Silom', 'Siam', 'Chatuchak', 'Thonglor', 'Ekkamai',

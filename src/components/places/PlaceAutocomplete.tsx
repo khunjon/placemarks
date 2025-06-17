@@ -8,7 +8,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { PlaceSuggestion, Location } from '../../types/places';
+import { PlaceSuggestion, Location } from '../../types';
 import { placesService } from '../../services/places';
 
 interface PlaceAutocompleteProps {

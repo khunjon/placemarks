@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { User } from '../types/database';
+import { User } from '../types';
 
 export class ProfileService {
   /**

@@ -1,95 +1,28 @@
 // Check-in related types for Bangkok-specific context
+import { 
+  ThumbsRating, 
+  CheckIn, 
+  CheckInContext, 
+  WeatherContext, 
+  CompanionType, 
+  MealType, 
+  TransportationMethod,
+  CheckInCreate,
+  CheckInUpdate
+} from './entities';
 
-// Thumbs rating system type
-export type ThumbsRating = 'thumbs_down' | 'neutral' | 'thumbs_up';
-
-export interface CheckIn {
-  id: string;
-  user_id: string;
-  place_id: string;
-  timestamp: string;
-  rating?: ThumbsRating; // Optional thumbs rating
-  tags: string[];
-  context: CheckInContext;
-  photos: string[];
-  notes?: string;
-  comment?: string; // Alias for notes
-  weather_context: WeatherContext;
-  companion_type?: CompanionType;
-  meal_type?: MealType;
-  transportation_method?: TransportationMethod;
-  visit_duration?: number; // in minutes
-  would_return: boolean;
-  created_at: string;
-  updated_at: string;
-  // Relationships (when joined)
-  places?: {
-    id: string;
-    name: string;
-    address: string;
-    google_place_id: string;
-  };
-  users?: {
-    id: string;
-    full_name: string;
-    avatar_url: string;
-  };
-}
-
-
-
-export interface CheckInContext {
-  environment: 'indoor' | 'outdoor' | 'mixed';
-  location_type: 'mall' | 'street' | 'building' | 'market' | 'rooftop' | 'riverside';
-  bts_proximity: 'walking' | 'near' | 'far' | 'none';
-  air_conditioning: boolean;
-  noise_level: 'quiet' | 'moderate' | 'loud';
-  price_tier: 'street' | 'casual' | 'mid' | 'upscale' | 'luxury';
-  crowd_level: 'empty' | 'few' | 'moderate' | 'busy' | 'packed';
-  wifi_available: boolean;
-  parking_available: boolean;
-}
-
-export interface WeatherContext {
-  condition: 'sunny' | 'cloudy' | 'rainy' | 'stormy';
-  temperature_feel: 'cool' | 'comfortable' | 'warm' | 'hot' | 'sweltering';
-  humidity_level: 'low' | 'moderate' | 'high';
-}
-
-export type CompanionType = 'solo' | 'partner' | 'friends' | 'family' | 'business' | 'date';
-export type MealType = 'breakfast' | 'brunch' | 'lunch' | 'afternoon_snack' | 'dinner' | 'late_night' | 'drinks';
-export type TransportationMethod = 'walking' | 'bts' | 'mrt' | 'bus' | 'taxi' | 'grab' | 'motorcycle' | 'car' | 'boat';
-
-export interface CheckInCreate {
-  place_id: string;
-  rating?: ThumbsRating; // Optional thumbs rating
-  tags?: string[];
-  context: CheckInContext;
-  photos?: string[];
-  notes?: string;
-  comment?: string; // Alias for notes
-  weather_context: WeatherContext;
-  companion_type?: CompanionType;
-  meal_type?: MealType;
-  transportation_method?: TransportationMethod;
-  visit_duration?: number;
-  would_return: boolean;
-}
-
-export interface CheckInUpdate {
-  rating?: ThumbsRating; // Optional thumbs rating
-  tags?: string[];
-  context?: CheckInContext;
-  photos?: string[];
-  notes?: string;
-  comment?: string; // Alias for notes
-  weather_context?: WeatherContext;
-  companion_type?: CompanionType;
-  meal_type?: MealType;
-  transportation_method?: TransportationMethod;
-  visit_duration?: number;
-  would_return?: boolean;
-}
+// Re-export types from entities for backwards compatibility
+export {
+  ThumbsRating,
+  CheckIn,
+  CheckInContext,
+  WeatherContext,
+  CompanionType,
+  MealType,
+  TransportationMethod,
+  CheckInCreate,
+  CheckInUpdate
+} from './entities';
 
 // Bangkok-specific tag suggestions
 export const BANGKOK_TAGS = {

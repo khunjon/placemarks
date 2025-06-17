@@ -1,5 +1,4 @@
-import { AuthProvider, SocialAuthData, ProfileUpdate } from '../types/user';
-import { User } from '../types/database';
+import { AuthProvider, SocialAuthData, UserUpdate as ProfileUpdate, User } from '../types';
 import { supabase } from './supabase';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';

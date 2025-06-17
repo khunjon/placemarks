@@ -11,7 +11,7 @@ import {
   ScrollView,
 } from 'react-native';
 import * as Location from 'expo-location';
-import { Place, PlaceSuggestion, Location as LocationType } from '../../types/places';
+import { Place, PlaceSuggestion, Location as LocationType } from '../../types';
 import { placesService } from '../../services/places';
 import { placesCacheService } from '../../services/placesCache';
 import PlaceCard from '../../components/places/PlaceCard';

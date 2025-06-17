@@ -1,5 +1,4 @@
-import { Place, PlaceDetails, PlaceSuggestion, Location, PlaceSearchParams } from '../types/places';
-import { BangkokContext } from '../types/database';
+import { Place, PlaceDetails, PlaceSuggestion, Location, PlaceSearchParams, BangkokContext } from '../types';
 import { placesCacheService } from './placesCache';
 import { Database } from '../types/supabase';
 
@@ -299,7 +298,7 @@ export class PlacesService {
     };
 
     // Analyze place type and location for Bangkok context
-    const types = place.place_type.split(',');
+    const types = place.place_type?.split(',') || [];
     
     // Determine environment
     if (types.some(type => ['park', 'tourist_attraction', 'amusement_park'].includes(type))) {

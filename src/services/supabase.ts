@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User, Place, CheckIn, List } from '../types/database';
+import { User, Place, CheckIn, List } from '../types';
 
 // Database type definitions for Supabase
 export interface Database {
