@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -58,6 +58,9 @@ export default function CheckInScreen({ navigation }: CheckInScreenProps) {
     }
   }, [user]);
 
+  // Track if this is the initial mount to prevent useFocusEffect from running twice
+  const isInitialMount = useRef(true);
+
   // Initial load
   useEffect(() => {
     // If auth is still loading, wait
@@ -79,10 +82,18 @@ export default function CheckInScreen({ navigation }: CheckInScreenProps) {
     }
   }, [user, authLoading, loadCheckInHistory]);
 
-  // Refresh data when screen comes back into focus
+  // Refresh data when screen comes back into focus (but not on initial mount)
   useFocusEffect(
     useCallback(() => {
+      // Skip the first focus effect call (initial mount)
+      if (isInitialMount.current) {
+        isInitialMount.current = false;
+        return;
+      }
+
+      // Only reload if user exists and auth is not loading
       if (user && !authLoading) {
+        console.log('Screen focused, refreshing check-in history');
         loadCheckInHistory();
       }
     }, [user, authLoading, loadCheckInHistory])

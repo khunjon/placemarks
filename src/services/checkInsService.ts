@@ -147,27 +147,19 @@ export class CheckInsService {
 
   /**
    * Get user's check-ins organized by date for history display
+   * Updated to use optimized database function for better performance
    */
   async getUserCheckInsByDate(userId: string, limit = 50): Promise<CheckInsByDate[]> {
     try {
-      const { data: checkIns, error } = await supabase
-        .from('check_ins')
-        .select(`
-          *,
-          places:place_id (
-            id,
-            google_place_id,
-            name,
-            address,
-            place_type,
-            price_level,
-            bangkok_context,
-            coordinates
-          )
-        `)
-        .eq('user_id', userId)
-        .order('timestamp', { ascending: false })
-        .limit(limit);
+      // Use the optimized function to get check-ins with place data in a single query
+      const { data: checkIns, error } = await supabase.rpc(
+        'get_user_check_ins_optimized',
+        { 
+          user_uuid: userId,
+          limit_count: limit,
+          offset_count: 0
+        }
+      );
 
       if (error) throw error;
 
@@ -176,38 +168,38 @@ export class CheckInsService {
 
       for (const checkIn of checkIns || []) {
         // Use local date to avoid timezone issues
-        const checkInDate = new Date(checkIn.timestamp);
+        const checkInDate = new Date(checkIn.check_in_timestamp);
         const date = `${checkInDate.getFullYear()}-${String(checkInDate.getMonth() + 1).padStart(2, '0')}-${String(checkInDate.getDate()).padStart(2, '0')}`;
         
         // Extract coordinates from PostGIS geometry
         let coordinates: [number, number] = [0, 0];
-        if (checkIn.places?.coordinates) {
+        if (checkIn.place_coordinates) {
           // Handle PostGIS POINT geometry - coordinates are stored as geometry type
           // For now, we'll use [0, 0] as placeholder - this would need proper PostGIS parsing
           coordinates = [0, 0];
         }
         
         const checkInWithPlace: CheckInWithPlace = {
-          id: checkIn.id,
+          id: checkIn.check_in_id,
           user_id: checkIn.user_id,
           place_id: checkIn.place_id,
-          timestamp: checkIn.timestamp,
-          rating: checkIn.rating as ThumbsRating, // Direct string assignment, no conversion needed
+          timestamp: checkIn.check_in_timestamp,
+          rating: checkIn.rating as ThumbsRating,
           comment: checkIn.comment,
           photos: checkIn.photos || [],
           created_at: checkIn.created_at,
           updated_at: checkIn.updated_at,
           place: {
-            id: checkIn.places.id,
-            google_place_id: checkIn.places.google_place_id || '',
-            name: checkIn.places.name,
-            address: checkIn.places.address || '',
-            coordinates,
-            place_type: checkIn.places.place_type || '',
-            price_level: checkIn.places.price_level,
-            district: checkIn.places.address ? this.extractDistrictFromAddress(checkIn.places.address) : undefined,
-            bangkok_context: checkIn.places.bangkok_context,
-          },
+            id: checkIn.place_id,
+            google_place_id: checkIn.google_place_id,
+            name: checkIn.place_name,
+            address: checkIn.place_address,
+            coordinates: coordinates,
+            place_type: checkIn.place_type,
+            price_level: checkIn.price_level,
+            district: this.extractDistrictFromAddress(checkIn.place_address),
+            bangkok_context: checkIn.bangkok_context
+          }
         };
 
         if (!groupedByDate.has(date)) {
@@ -217,13 +209,19 @@ export class CheckInsService {
       }
 
       // Convert to array and sort by date (most recent first)
-      return Array.from(groupedByDate.entries())
-        .map(([date, checkIns]) => ({ date, checkIns }))
+      const result: CheckInsByDate[] = Array.from(groupedByDate.entries())
+        .map(([date, checkIns]) => ({
+          date,
+          checkIns: checkIns.sort((a, b) => 
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          )
+        }))
         .sort((a, b) => b.date.localeCompare(a.date));
 
+      return result;
     } catch (error) {
-      console.error('Error fetching user check-ins by date:', error);
-      throw new CheckInError('Failed to fetch check-ins', 'FETCH_ERROR');
+      console.error('Error getting user check-ins by date:', error);
+      throw error;
     }
   }
 
@@ -345,52 +343,86 @@ export class CheckInsService {
   }
 
   /**
-   * Get check-in statistics for a user
+   * Get user's check-in statistics
+   * Updated to use optimized database view for better performance
    */
   async getCheckInStats(userId: string): Promise<CheckInStats> {
     try {
+      // Use enriched_check_ins view for better performance
       const { data: checkIns, error } = await supabase
-        .from('check_ins')
-        .select('rating, place_id, timestamp')
+        .from('enriched_check_ins')
+        .select('rating, timestamp')
         .eq('user_id', userId);
 
       if (error) throw error;
 
-      const totalCheckIns = checkIns?.length || 0;
-      const thumbsUp = checkIns?.filter(c => c.rating === 'thumbs_up').length || 0;
-      const neutral = checkIns?.filter(c => c.rating === 'neutral').length || 0;
-      const thumbsDown = checkIns?.filter(c => c.rating === 'thumbs_down').length || 0;
-      
-      // Count unique places
-      const uniquePlaces = new Set(checkIns?.map(c => c.place_id) || []);
-      const placesVisited = uniquePlaces.size;
-
-      // Count check-ins this month
-      const thisMonth = new Date();
-      const firstDayOfMonth = new Date(thisMonth.getFullYear(), thisMonth.getMonth(), 1);
-      const thisMonthCheckIns = checkIns?.filter(c => 
-        new Date(c.timestamp) >= firstDayOfMonth
-      ).length || 0;
-
-      // Calculate average rating (convert thumbs to numeric for stats only)
-      const ratedCheckIns = checkIns?.filter(c => c.rating) || [];
-      const averageRating = ratedCheckIns.length > 0 
-        ? ratedCheckIns.reduce((sum, c) => sum + this.thumbsToNumeric(c.rating as ThumbsRating), 0) / ratedCheckIns.length
-        : 0;
-
-      return {
-        totalCheckIns,
-        thumbsUp,
-        neutral,
-        thumbsDown,
-        placesVisited,
-        thisMonth: thisMonthCheckIns,
-        averageRating,
+      const stats: CheckInStats = {
+        totalCheckIns: checkIns?.length || 0,
+        thumbsUp: 0,
+        neutral: 0,
+        thumbsDown: 0,
+        placesVisited: 0,
+        thisMonth: 0,
+        averageRating: 0,
       };
 
+      if (!checkIns || checkIns.length === 0) {
+        return stats;
+      }
+
+      // Get unique places count
+      const { data: uniquePlaces, error: placesError } = await supabase
+        .from('enriched_check_ins')
+        .select('place_id')
+        .eq('user_id', userId);
+
+      if (!placesError && uniquePlaces) {
+        const uniquePlaceIds = new Set(uniquePlaces.map(p => p.place_id));
+        stats.placesVisited = uniquePlaceIds.size;
+      }
+
+      // Calculate rating statistics
+      let totalRatingValue = 0;
+      let ratedCheckIns = 0;
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+
+      for (const checkIn of checkIns) {
+        // Count ratings
+        if (checkIn.rating) {
+          ratedCheckIns++;
+          const ratingValue = this.thumbsToNumeric(checkIn.rating as ThumbsRating);
+          totalRatingValue += ratingValue;
+
+          switch (checkIn.rating) {
+            case 'thumbs_up':
+              stats.thumbsUp++;
+              break;
+            case 'neutral':
+              stats.neutral++;
+              break;
+            case 'thumbs_down':
+              stats.thumbsDown++;
+              break;
+          }
+        }
+
+        // Count this month's check-ins
+        const checkInDate = new Date(checkIn.timestamp);
+        if (checkInDate.getMonth() === currentMonth && checkInDate.getFullYear() === currentYear) {
+          stats.thisMonth++;
+        }
+      }
+
+      // Calculate average rating
+      if (ratedCheckIns > 0) {
+        stats.averageRating = totalRatingValue / ratedCheckIns;
+      }
+
+      return stats;
     } catch (error) {
-      console.error('Error fetching check-in stats:', error);
-      throw new CheckInError('Failed to fetch check-in stats', 'STATS_ERROR');
+      console.error('Error getting check-in stats:', error);
+      throw new CheckInError('Failed to get check-in statistics', 'STATS_ERROR');
     }
   }
 
@@ -399,63 +431,92 @@ export class CheckInsService {
    */
   async getPlaceCheckIns(placeId: string, limit = 10): Promise<CheckInWithPlace[]> {
     try {
+      // Use enriched_check_ins view for better performance
       const { data: checkIns, error } = await supabase
-        .from('check_ins')
-        .select(`
-          *,
-          places:place_id (
-            id,
-            google_place_id,
-            name,
-            address,
-            place_type,
-            price_level,
-            bangkok_context,
-            coordinates
-          )
-        `)
+        .from('enriched_check_ins')
+        .select('*')
         .eq('place_id', placeId)
         .order('timestamp', { ascending: false })
         .limit(limit);
 
       if (error) throw error;
 
-      return (checkIns || []).map(checkIn => {
-        // Extract coordinates from PostGIS geometry
-        let coordinates: [number, number] = [0, 0];
-        if (checkIn.places?.coordinates) {
-          // Handle PostGIS POINT geometry - coordinates are stored as geometry type
-          // For now, we'll use [0, 0] as placeholder - this would need proper PostGIS parsing
-          coordinates = [0, 0];
+      return (checkIns || []).map(checkIn => ({
+        id: checkIn.id,
+        user_id: checkIn.user_id,
+        place_id: checkIn.place_id,
+        timestamp: checkIn.timestamp,
+        rating: checkIn.rating as ThumbsRating,
+        comment: checkIn.comment,
+        photos: checkIn.photos || [],
+        created_at: checkIn.created_at,
+        updated_at: checkIn.updated_at,
+        place: {
+          id: checkIn.place_id,
+          google_place_id: checkIn.google_place_id,
+          name: checkIn.place_name,
+          address: checkIn.place_address,
+          coordinates: [0, 0], // PostGIS geometry parsing would go here
+          place_type: checkIn.place_type,
+          price_level: checkIn.price_level,
+          district: this.extractDistrictFromAddress(checkIn.place_address),
+          bangkok_context: checkIn.bangkok_context
         }
-
-        return {
-          id: checkIn.id,
-          user_id: checkIn.user_id,
-          place_id: checkIn.place_id,
-          timestamp: checkIn.timestamp,
-          rating: checkIn.rating as ThumbsRating, // Direct string assignment
-          comment: checkIn.comment,
-          photos: checkIn.photos || [],
-          created_at: checkIn.created_at,
-          updated_at: checkIn.updated_at,
-          place: {
-            id: checkIn.places.id,
-            google_place_id: checkIn.places.google_place_id || '',
-            name: checkIn.places.name,
-            address: checkIn.places.address || '',
-            coordinates,
-            place_type: checkIn.places.place_type || '',
-            price_level: checkIn.places.price_level,
-            district: checkIn.places.address ? this.extractDistrictFromAddress(checkIn.places.address) : undefined,
-            bangkok_context: checkIn.places.bangkok_context,
-          },
-        };
-      });
-
+      }));
     } catch (error) {
-      console.error('Error fetching place check-ins:', error);
-      throw new CheckInError('Failed to fetch place check-ins', 'FETCH_ERROR');
+      console.error('Error getting place check-ins:', error);
+      throw new CheckInError('Failed to get place check-ins', 'FETCH_ERROR');
+    }
+  }
+
+  /**
+   * Get comprehensive statistics for a specific place using optimized database function
+   */
+  async getPlaceCheckInStats(placeId: string): Promise<{
+    placeId: string;
+    totalCheckIns: number;
+    uniqueVisitors: number;
+    thumbsUpCount: number;
+    thumbsDownCount: number;
+    neutralCount: number;
+    averageRating: number | null;
+    mostRecentCheckIn: string | null;
+  }> {
+    try {
+      const { data: stats, error } = await supabase.rpc(
+        'get_place_check_in_stats',
+        { place_uuid: placeId }
+      );
+
+      if (error) throw error;
+
+      if (!stats || stats.length === 0) {
+        return {
+          placeId,
+          totalCheckIns: 0,
+          uniqueVisitors: 0,
+          thumbsUpCount: 0,
+          thumbsDownCount: 0,
+          neutralCount: 0,
+          averageRating: null,
+          mostRecentCheckIn: null
+        };
+      }
+
+      const stat = stats[0];
+      return {
+        placeId,
+        totalCheckIns: Number(stat.total_check_ins),
+        uniqueVisitors: Number(stat.unique_visitors),
+        thumbsUpCount: Number(stat.thumbs_up_count),
+        thumbsDownCount: Number(stat.thumbs_down_count),
+        neutralCount: Number(stat.neutral_count),
+        averageRating: stat.average_rating ? Number(stat.average_rating) : null,
+        mostRecentCheckIn: stat.most_recent_check_in
+      };
+    } catch (error) {
+      console.error('Error getting place check-in stats:', error);
+      throw new CheckInError('Failed to get place statistics', 'STATS_ERROR');
     }
   }
 

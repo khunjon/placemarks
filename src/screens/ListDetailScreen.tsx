@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   ScrollView, 
@@ -92,6 +92,9 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
   const { listId, listName: initialListName } = route.params;
   const { user } = useAuth();
   
+  // Track initial mount to prevent duplicate loading
+  const isInitialMount = useRef(true);
+  
   // State
   const [list, setList] = useState<ListWithPlaces | null>(null);
   const [loading, setLoading] = useState(true);
@@ -120,16 +123,24 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
     setToast(prev => ({ ...prev, visible: false }));
   };
   
-  // Load list data
+  // Initial load
   useEffect(() => {
     if (user && listId) {
       loadListData();
     }
   }, [user, listId]);
 
+  // Refresh data when screen comes back into focus (but not on initial mount)
   useFocusEffect(
     React.useCallback(() => {
+      // Skip the first focus effect call (initial mount)
+      if (isInitialMount.current) {
+        isInitialMount.current = false;
+        return;
+      }
+
       if (user && listId) {
+        console.log('ListDetailScreen focused, reloading list data...');
         loadListData();
       }
     }, [user, listId])

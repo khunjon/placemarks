@@ -115,37 +115,72 @@ export class EnhancedListsService {
 
   /**
    * Gets user's lists with proper sorting (Favorites pinned, then custom lists)
+   * Updated to use optimized database function for better performance
    */
   async getUserLists(userId: string): Promise<ListWithPlaces[]> {
     try {
-      // First get all lists for the user
-      const { data: lists, error: listsError } = await supabase
-        .from('lists')
-        .select('*')
-        .eq('user_id', userId);
+      // Use the optimized function to get lists with counts in a single query
+      const { data: listsWithCounts, error: listsError } = await supabase.rpc(
+        'get_user_lists_with_counts',
+        { user_uuid: userId }
+      );
 
       if (listsError) throw listsError;
 
-      // Then get all places for these lists
-      const listIds = lists?.map(list => list.id) || [];
-      let placesData: any[] = [];
-      
-      if (listIds.length > 0) {
-        const { data: places, error: placesError } = await supabase
-          .from('enriched_list_places')
-          .select('*')
-          .in('list_id', listIds);
-
-        if (placesError) throw placesError;
-        placesData = places || [];
-      }
-
-      // Build the result
       const result: ListWithPlaces[] = [];
 
-      for (const list of lists || []) {
-        const listPlaces = placesData.filter(p => p.list_id === list.id);
+      // For each list, get the places using the optimized function
+      for (const list of listsWithCounts || []) {
+        const { data: listData, error: placesError } = await supabase.rpc(
+          'get_list_with_places_optimized',
+          { 
+            list_uuid: list.id,
+            requesting_user_uuid: userId 
+          }
+        );
+
+        if (placesError) throw placesError;
+
+        // Group the results by list (should all be the same list)
+        const places: EnrichedListPlace[] = [];
         
+        if (listData && listData.length > 0) {
+          // All rows should have the same list info, so take from first row
+          const firstRow = listData[0];
+          
+          // Build places array from all rows that have place data
+          for (const row of listData) {
+            if (row.place_id) {
+              places.push({
+                list_id: row.list_id,
+                place_id: row.place_id,
+                added_at: row.added_at,
+                notes: row.notes,
+                personal_rating: row.personal_rating,
+                visit_count: row.visit_count,
+                sort_order: row.sort_order,
+                place: {
+                  id: row.place_id,
+                  google_place_id: row.google_place_id,
+                  name: row.place_name,
+                  address: row.place_address || '',
+                  coordinates: [0, 0], // PostGIS geometry parsing would go here
+                  place_type: row.place_type,
+                  google_types: row.google_types,
+                  primary_type: row.primary_type,
+                  price_level: row.price_level,
+                  bangkok_context: row.bangkok_context,
+                  google_rating: row.google_rating,
+                  phone: row.place_phone,
+                  website: row.place_website,
+                  hours_open: row.hours_open,
+                  photos_urls: row.place_photos
+                }
+              });
+            }
+          }
+        }
+
         result.push({
           id: list.id,
           user_id: list.user_id,
@@ -159,57 +194,15 @@ export class EnhancedListsService {
           icon: list.icon,
           color: list.color,
           type: list.type,
-          places: listPlaces.map(p => ({
-            list_id: p.list_id,
-            place_id: p.place_id,
-            added_at: p.added_at,
-            notes: p.notes,
-            personal_rating: p.personal_rating,
-            visit_count: p.visit_count,
-            sort_order: p.sort_order,
-            place: {
-              id: p.place_id,
-              google_place_id: p.google_place_id,
-              name: p.name,
-              address: p.address,
-              coordinates: [0, 0], // Will be parsed from geometry if needed
-              place_type: p.place_type,
-              google_types: p.google_types,
-              primary_type: p.primary_type,
-              price_level: p.price_level,
-              bangkok_context: p.bangkok_context,
-              google_rating: p.google_rating,
-              phone: p.phone,
-              website: p.website,
-              hours_open: p.hours_open,
-              photos_urls: p.photos_urls
-            }
-          })),
-          place_count: listPlaces.length,
+          places: places,
+          place_count: places.length,
         });
       }
-
-      // Sort places within each list by sort_order, then by added_at
-      result.forEach(list => {
-        list.places.sort((a, b) => {
-          if (a.sort_order !== b.sort_order) {
-            return (a.sort_order || 0) - (b.sort_order || 0);
-          }
-          return new Date(b.added_at).getTime() - new Date(a.added_at).getTime();
-        });
-      });
-
-      // Sort lists: Favorites first, then by creation date
-      result.sort((a, b) => {
-        if (a.is_default && !b.is_default) return -1;
-        if (!a.is_default && b.is_default) return 1;
-        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-      });
 
       return result;
     } catch (error) {
       console.error('Error getting user lists:', error);
-      throw new ListError('Failed to load user lists', 'FETCH_ERROR');
+      throw new ListError('Failed to get user lists', 'GET_LISTS_ERROR');
     }
   }
 

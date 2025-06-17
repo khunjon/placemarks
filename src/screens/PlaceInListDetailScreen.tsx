@@ -93,9 +93,10 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
   const { placeId, listId, listName } = route.params;
   const { user } = useAuth();
   
-  // Refs for keyboard handling
+  // Refs for keyboard handling and tracking initial mount
   const scrollViewRef = useRef<ScrollView>(null);
   const textInputRef = useRef<TextInput>(null);
+  const isInitialMount = useRef(true);
   
   // State
   const [loading, setLoading] = useState(true);
@@ -125,13 +126,20 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
     setToast(prev => ({ ...prev, visible: false }));
   };
 
+  // Initial load
   useEffect(() => {
     loadPlaceDetails();
   }, [placeId, listId]);
 
-  // Add navigation listener to refresh data when coming back to this screen
+  // Add navigation listener to refresh data when coming back to this screen (but not on initial mount)
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
+      // Skip the first focus event (initial mount)
+      if (isInitialMount.current) {
+        isInitialMount.current = false;
+        return;
+      }
+
       if (user?.id) {
         console.log('Screen focused, reloading place details...');
         loadPlaceDetails();

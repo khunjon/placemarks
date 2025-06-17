@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, ScrollView, Modal, Alert, RefreshControl, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -34,6 +34,10 @@ type ListsScreenProps = ListsStackScreenProps<'Lists'>;
 
 export default function ListsScreen({ navigation }: ListsScreenProps) {
   const { user } = useAuth();
+  
+  // Track initial mount to prevent duplicate loading
+  const isInitialMount = useRef(true);
+  
   const [userLists, setUserLists] = useState<ListWithPlaces[]>([]);
   const [smartLists, setSmartLists] = useState<EnhancedList[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,17 +45,24 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
 
 
-  // Load user's lists on component mount
+  // Initial load of user's lists
   useEffect(() => {
     if (user) {
       loadAllLists();
     }
   }, [user]);
 
-  // Refresh data when screen comes into focus
+  // Refresh data when screen comes into focus (but not on initial mount)
   useFocusEffect(
     React.useCallback(() => {
+      // Skip the first focus effect call (initial mount)
+      if (isInitialMount.current) {
+        isInitialMount.current = false;
+        return;
+      }
+
       if (user) {
+        console.log('ListsScreen focused, reloading lists...');
         loadAllLists();
       }
     }, [user])
