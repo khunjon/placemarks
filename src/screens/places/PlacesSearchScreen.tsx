@@ -147,10 +147,18 @@ export default function PlacesSearchScreen() {
 
   const renderPlace = ({ item }: { item: Place }) => (
     <PlaceCard
-      place={item}
-      onPress={handlePlacePress}
-      showDistance={currentLocation !== null}
-      distance={currentLocation ? calculateDistance(item) : undefined}
+      id={item.id}
+      name={item.name}
+      type={item.primary_type as any || 'restaurant'}
+      description={item.place_type || ''}
+      address={item.address}
+      distance={currentLocation ? `${calculateDistance(item).toFixed(1)}km away` : ''}
+      rating={item.price_level}
+      onCheckIn={(placeId, placeName) => {
+        // Handle check-in if needed
+        console.log('Check-in at:', placeName);
+      }}
+      onPress={() => handlePlacePress(item)}
     />
   );
 

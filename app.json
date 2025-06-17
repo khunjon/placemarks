@@ -38,7 +38,9 @@
       },
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
@@ -47,6 +49,12 @@
     "plugins": [
       "expo-location",
       "expo-sqlite"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "bd50644d-541a-485f-a6e2-43992ad3145f"
+      }
+    },
+    "owner": "khunjon"
   }
 }

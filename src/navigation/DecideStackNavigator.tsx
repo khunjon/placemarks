@@ -1,7 +1,7 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Colors } from '../constants/Colors';
-import { DecideStackParamList } from './types';
+import { DecideStackParamList, DecideStackScreenProps } from './types';
 
 // Import screens
 import DecideScreen from '../screens/DecideScreen';
@@ -9,6 +9,27 @@ import ListDetailScreen from '../screens/ListDetailScreen';
 import PlaceDetailsScreen from '../screens/PlaceDetailsScreen';
 
 const Stack = createNativeStackNavigator<DecideStackParamList>();
+
+// Wrapper component to adapt DecideStack navigation props to ListsStack props
+function ListDetailScreenWrapper({ navigation, route }: DecideStackScreenProps<'ListDetail'>) {
+  // Convert DecideStack params to ListsStack params format
+  const adaptedRoute = {
+    ...route,
+    params: {
+      ...route.params,
+      listType: route.params.listType === 'smart' ? 'auto' as const : 'user' as const,
+      isEditable: route.params.listType === 'user',
+    }
+  };
+
+  // Type assertion is safe here because we're adapting the props
+  return (
+    <ListDetailScreen 
+      navigation={navigation as any} 
+      route={adaptedRoute as any} 
+    />
+  );
+}
 
 export default function DecideStackNavigator() {
   return (
@@ -40,7 +61,7 @@ export default function DecideStackNavigator() {
       
       <Stack.Screen 
         name="ListDetail" 
-        component={ListDetailScreen}
+        component={ListDetailScreenWrapper}
         options={({ route }) => ({
           title: route.params.listName,
           headerShown: true,

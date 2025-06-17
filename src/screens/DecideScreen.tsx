@@ -63,14 +63,22 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
     location,
     loading: locationLoading,
     error: locationError,
-    isLocationAvailable,
-    isUsingFallback,
-    retry: retryLocation,
+    source,
+    refreshLocation,
   } = useLocation({
     enableHighAccuracy: false, // Use balanced accuracy for better performance
     fallbackToBangkok: true,
     autoRequest: true,
+    enableCaching: true,
+    enableOfflineFallback: true,
+    enableBackgroundUpdates: true,
+    // disabled: true, // Uncomment for faster testing without location
   });
+
+  // Computed values for backward compatibility
+  const isLocationAvailable = !!location;
+  const isUsingFallback = source === 'fallback';
+  const retryLocation = refreshLocation;
 
   // State for recommendations and time context
   const [cityContext, setCityContext] = useState<CityContext | null>(null);

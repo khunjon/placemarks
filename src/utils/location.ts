@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 import { LocationCoords, MapRegion } from '../types/navigation';
+import { LocationCache } from '../services/locationCache';
 
 // Location error types for better error handling
 export enum LocationErrorType {
@@ -33,6 +34,208 @@ export const DEFAULT_LOCATION: LocationCoords = {
 };
 
 export const locationUtils = {
+  // Check network connectivity (basic implementation)
+  async isNetworkAvailable(): Promise<boolean> {
+    try {
+      // Use a faster, more reliable endpoint with shorter timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1500); // Reduced to 1.5 seconds
+      
+      const response = await fetch('https://httpbin.org/status/200', {
+        method: 'HEAD',
+        signal: controller.signal,
+        cache: 'no-cache',
+      });
+      
+      clearTimeout(timeoutId);
+      return response.ok;
+    } catch (error) {
+      // Consider offline if network check fails
+      return false;
+    }
+  },
+
+  // Get location with caching and offline fallback
+  async getLocationWithCache(options: {
+    forceRefresh?: boolean;
+    useCache?: boolean;
+    enableOfflineFallback?: boolean;
+    timeout?: number;
+  } = {}): Promise<{
+    location: LocationCoords | null;
+    source: 'cache' | 'gps' | 'network' | 'offline' | 'fallback';
+    error?: LocationError;
+  }> {
+    const {
+      forceRefresh = false,
+      useCache = true,
+      enableOfflineFallback = true,
+      timeout = 10000, // 10 second timeout
+    } = options;
+
+    try {
+      // Check cache first if not forcing refresh
+      if (!forceRefresh && useCache) {
+        const cachedLocation = await LocationCache.getCachedLocation();
+        if (cachedLocation) {
+          return {
+            location: cachedLocation,
+            source: 'cache',
+          };
+        }
+      }
+
+      // Check network availability with timeout
+      const networkCheckPromise = this.isNetworkAvailable();
+      const networkTimeoutPromise = new Promise<boolean>((_, reject) => 
+        setTimeout(() => reject(new Error('Network check timeout')), 2000)
+      );
+      
+      let isOnline = false;
+      try {
+        isOnline = await Promise.race([networkCheckPromise, networkTimeoutPromise]);
+      } catch (error) {
+        console.warn('Network check failed or timed out, assuming offline');
+        isOnline = false;
+      }
+      
+      if (!isOnline && enableOfflineFallback) {
+        // Use last known location if offline
+        const lastKnown = await LocationCache.getLastKnownLocation();
+        if (lastKnown.location) {
+          return {
+            location: lastKnown.location,
+            source: 'offline',
+          };
+        }
+        
+        // Fall back to Bangkok if no cached location
+        await LocationCache.saveLocation(DEFAULT_LOCATION, 'fallback');
+        return {
+          location: DEFAULT_LOCATION,
+          source: 'fallback',
+        };
+      }
+
+      // Try to get fresh location with timeout
+      const locationPromise = this.getCurrentLocation();
+      const locationTimeoutPromise = new Promise<{location: LocationCoords | null; error?: LocationError}>((_, reject) => 
+        setTimeout(() => reject(new Error('Location request timeout')), timeout)
+      );
+      
+      let locationResult;
+      try {
+        locationResult = await Promise.race([locationPromise, locationTimeoutPromise]);
+      } catch (error) {
+        console.warn('Location request timed out');
+        locationResult = { 
+          location: null, 
+          error: {
+            type: LocationErrorType.TIMEOUT,
+            message: 'Location request timed out',
+            userMessage: 'Location request timed out. Using fallback.',
+            canRetry: true,
+          }
+        };
+      }
+      
+      if (locationResult.location) {
+        // Cache the new location
+        await LocationCache.saveLocation(locationResult.location, 'gps');
+        return {
+          location: locationResult.location,
+          source: 'gps',
+        };
+      }
+
+      // If GPS failed but we're online, try network location
+      if (isOnline) {
+        try {
+          const networkLocation = await this.getNetworkLocation();
+          if (networkLocation) {
+            await LocationCache.saveLocation(networkLocation, 'network');
+            return {
+              location: networkLocation,
+              source: 'network',
+            };
+          }
+        } catch (error) {
+          console.warn('Network location failed:', error);
+        }
+      }
+
+      // If all else fails, use offline fallback
+      if (enableOfflineFallback) {
+        const lastKnown = await LocationCache.getLastKnownLocation();
+        if (lastKnown.location) {
+          return {
+            location: lastKnown.location,
+            source: 'offline',
+          };
+        }
+      }
+
+      // Final fallback to Bangkok
+      await LocationCache.saveLocation(DEFAULT_LOCATION, 'fallback');
+      return {
+        location: DEFAULT_LOCATION,
+        source: 'fallback',
+        error: locationResult.error,
+      };
+
+    } catch (error) {
+      console.error('Error in getLocationWithCache:', error);
+      
+      // Try offline fallback
+      if (enableOfflineFallback) {
+        try {
+          const lastKnown = await LocationCache.getLastKnownLocation();
+          if (lastKnown.location) {
+            return {
+              location: lastKnown.location,
+              source: 'offline',
+            };
+          }
+        } catch (fallbackError) {
+          console.warn('Offline fallback failed:', fallbackError);
+        }
+      }
+
+      // Final fallback
+      return {
+        location: DEFAULT_LOCATION,
+        source: 'fallback',
+        error: {
+          type: LocationErrorType.UNKNOWN,
+          message: 'Failed to get location',
+          userMessage: 'Unable to get your location. Using Bangkok as default.',
+          canRetry: true,
+        },
+      };
+    }
+  },
+
+  // Get network-based location (simplified implementation)
+  async getNetworkLocation(): Promise<LocationCoords | null> {
+    try {
+      // This is a simplified implementation
+      // In a real app, you might use IP geolocation services
+      // For now, we'll try a lower accuracy GPS request
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Low,
+      });
+
+      return {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        accuracy: location.coords.accuracy || undefined,
+      };
+    } catch (error) {
+      console.warn('Network location failed:', error);
+      return null;
+    }
+  },
+
   // Request location permissions with better error handling
   async requestLocationPermission(): Promise<{
     granted: boolean;
