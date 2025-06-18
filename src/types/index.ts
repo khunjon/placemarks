@@ -97,4 +97,11 @@ export {
 } from './recommendations';
 
 // Supabase database schema types
-export type { Database } from './supabase'; 
+export type { Database } from './supabase';
+
+// Place availability types
+export type {
+  PlaceAvailabilityConfig,
+  PlaceAvailabilityResult,
+  PlaceCountResult
+} from '../services/placeAvailability'; 
