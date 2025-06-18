@@ -76,6 +76,8 @@ export class PlaceError extends Error {
 
 export class EnhancedListsService {
   private placesService: PlacesService;
+  private searchCache: Map<string, { results: PlaceSearchResult[]; timestamp: number }> = new Map();
+  private readonly SEARCH_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   constructor() {
     this.placesService = new PlacesService();
@@ -633,6 +635,7 @@ export class EnhancedListsService {
 
   /**
    * Searches places using Google Places API for list addition
+   * OPTIMIZED: Uses autocomplete data efficiently, only fetches details when adding to list
    */
   async searchPlacesForList(
     query: string, 
@@ -640,38 +643,59 @@ export class EnhancedListsService {
     limit: number = 10
   ): Promise<PlaceSearchResult[]> {
     try {
+      const cacheKey = `${query.toLowerCase()}_${location?.latitude || 'no-loc'}_${location?.longitude || 'no-loc'}_${limit}`;
+      
+      // Check cache first
+      const cached = this.searchCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp) < this.SEARCH_CACHE_DURATION) {
+        console.log('🗄️ SEARCH CACHE HIT: Using cached search results', {
+          query: query,
+          resultCount: cached.results.length,
+          cost: '$0.000 - FREE!',
+          cacheAge: `${Math.round((Date.now() - cached.timestamp) / 1000)}s ago`
+        });
+        return cached.results;
+      }
+
       // Use the existing places service for autocomplete
       const suggestions = await this.placesService.getPlaceAutocomplete(query, location);
       
-      // Get detailed information for each suggestion
-      const results: PlaceSearchResult[] = [];
-      
-      for (const suggestion of suggestions.slice(0, limit)) {
-        try {
-          const details = await this.placesService.getPlaceDetails(suggestion.place_id);
-          
-          results.push({
-            google_place_id: details.google_place_id,
-            name: details.name,
-            address: details.address,
-            rating: details.rating,
-            price_level: details.price_level,
-            photos: details.photos?.slice(0, 3), // Limit to 3 photos
-            types: details.types,
-            formatted_for_list: true
-          });
-        } catch (error) {
-          console.warn(`Failed to get details for place ${suggestion.place_id}:`, error);
-          // Still include basic info from suggestion
-          results.push({
-            google_place_id: suggestion.place_id,
-            name: suggestion.main_text,
-            address: suggestion.secondary_text,
-            types: [], // No types available from suggestion
-            formatted_for_list: true
-          });
+      // Convert suggestions to search results WITHOUT making additional API calls
+      const results: PlaceSearchResult[] = suggestions.slice(0, limit).map(suggestion => ({
+        google_place_id: suggestion.place_id,
+        name: suggestion.main_text,
+        address: suggestion.secondary_text,
+        // Don't fetch detailed info here - it's expensive and not needed for search results
+        rating: undefined,
+        price_level: undefined,
+        photos: undefined,
+        types: [],
+        formatted_for_list: true
+      }));
+
+      // Cache the results
+      this.searchCache.set(cacheKey, {
+        results: results,
+        timestamp: Date.now()
+      });
+
+      // Clean up old cache entries periodically
+      if (this.searchCache.size > 50) {
+        const now = Date.now();
+        for (const [key, value] of this.searchCache.entries()) {
+          if (now - value.timestamp > this.SEARCH_CACHE_DURATION) {
+            this.searchCache.delete(key);
+          }
         }
       }
+
+      console.log('🔍 SEARCH OPTIMIZED: Using autocomplete data only', {
+        query: query,
+        resultCount: results.length,
+        cost: 'Only 1 API call instead of ' + (results.length + 1),
+        savings: `$${(results.length * 0.017).toFixed(3)} saved per search`,
+        cached: 'Results cached for 5 minutes'
+      });
 
       return results;
     } catch (error) {

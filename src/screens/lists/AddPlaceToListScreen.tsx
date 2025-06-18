@@ -59,6 +59,7 @@ export default function AddPlaceToListScreen({
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [addedPlaces, setAddedPlaces] = useState<Set<string>>(new Set());
+  const [lastSearchedQuery, setLastSearchedQuery] = useState('');
   
   // Toast state
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' }>({
@@ -84,14 +85,19 @@ export default function AddPlaceToListScreen({
       clearTimeout(searchTimeoutRef.current);
     }
 
-    if (searchQuery.trim().length >= 2) {
+    const trimmedQuery = searchQuery.trim();
+    
+    // Require at least 3 characters and increase debounce time
+    if (trimmedQuery.length >= 3) {
       searchTimeoutRef.current = setTimeout(() => {
-        performSearch(searchQuery.trim());
-      }, 300);
-    } else {
+        performSearch(trimmedQuery);
+      }, 800); // Increased from 300ms to 800ms for better debouncing
+    } else if (trimmedQuery.length === 0) {
+      // Clear results immediately when query is empty
       setSearchResults([]);
       setHasSearched(false);
     }
+    // Don't search for queries with 1-2 characters
 
     return () => {
       if (searchTimeoutRef.current) {
@@ -140,9 +146,21 @@ export default function AddPlaceToListScreen({
   const performSearch = async (query: string) => {
     if (!user?.id) return;
 
+    // Skip search if query is too similar to the last searched query
+    if (lastSearchedQuery && query.length >= lastSearchedQuery.length && 
+        query.startsWith(lastSearchedQuery) && query.length - lastSearchedQuery.length <= 2) {
+      console.log('⏭️ SEARCH SKIPPED: Query too similar to previous search', {
+        previousQuery: lastSearchedQuery,
+        currentQuery: query,
+        reason: 'Likely same results - avoiding unnecessary API call'
+      });
+      return;
+    }
+
     try {
       setIsSearching(true);
       setHasSearched(true);
+      setLastSearchedQuery(query);
 
       const results = await enhancedListsService.searchPlacesForList(query);
       setSearchResults(results);
@@ -169,15 +187,24 @@ export default function AddPlaceToListScreen({
         )
       );
 
-      await enhancedListsService.addPlaceToList(listId, {
-        google_place_id: place.google_place_id,
+      // Fetch detailed place information only when adding to list
+      console.log('🔍 FETCHING DETAILS: Getting full place details for list addition', {
+        placeId: place.google_place_id.substring(0, 20) + '...',
         name: place.name,
-        address: place.address,
-        place_type: place.types?.[0] || 'establishment', // Use primary type
-        google_types: place.types || [], // Full types array for better categorization
-        google_rating: place.rating,
-        price_level: place.price_level,
-        photos_urls: place.photos,
+        reason: 'Adding to list - details required'
+      });
+
+      const detailedPlace = await enhancedListsService.getPlaceDetailsForList(place.google_place_id);
+
+      await enhancedListsService.addPlaceToList(listId, {
+        google_place_id: detailedPlace.google_place_id,
+        name: detailedPlace.name,
+        address: detailedPlace.address,
+        place_type: detailedPlace.types?.[0] || 'establishment',
+        google_types: detailedPlace.types || [],
+        google_rating: detailedPlace.rating,
+        price_level: detailedPlace.price_level,
+        photos_urls: detailedPlace.photos,
       });
 
       setSearchResults(prev => 
@@ -262,7 +289,7 @@ export default function AddPlaceToListScreen({
             </View>
 
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              {place.rating && (
+              {place.rating ? (
                 <>
                   <Star size={14} color={Colors.accent.yellow} fill={Colors.accent.yellow} />
                   <SecondaryText style={{
@@ -273,6 +300,14 @@ export default function AddPlaceToListScreen({
                     {place.rating?.toFixed(1) || '0.0'}
                   </SecondaryText>
                 </>
+              ) : (
+                <SecondaryText style={{
+                  fontSize: 13,
+                  color: Colors.neutral[400],
+                  fontStyle: 'italic',
+                }}>
+                  Tap to see details
+                </SecondaryText>
               )}
               {place.price_level && (
                 <SecondaryText style={{
@@ -413,7 +448,7 @@ export default function AddPlaceToListScreen({
           />
         )}
 
-        {!hasSearched && searchQuery.length === 0 && (
+        {!hasSearched && (
           <View style={{
             alignItems: 'center',
             paddingVertical: Spacing.xl,
@@ -423,7 +458,12 @@ export default function AddPlaceToListScreen({
               marginTop: Spacing.md,
               color: Colors.neutral[500],
             }}>
-              Search for Places
+              {searchQuery.length === 0 
+                ? 'Search for Places' 
+                : searchQuery.length < 3 
+                  ? `Type ${3 - searchQuery.length} more character${3 - searchQuery.length > 1 ? 's' : ''}...`
+                  : 'Searching...'
+              }
             </Title3>
           </View>
         )}

@@ -154,6 +154,8 @@ const mockPlaces: PlaceRow[] = [
 export class PlacesService {
   private apiKey: string;
   private baseUrl = 'https://maps.googleapis.com/maps/api/place';
+  private autocompleteCache: Map<string, { suggestions: PlaceSuggestion[]; timestamp: number }> = new Map();
+  private readonly AUTOCOMPLETE_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
   constructor() {
     this.apiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '';
@@ -412,15 +414,65 @@ export class PlacesService {
     return placesCacheService.clearExpiredCache();
   }
 
-  // Cache autocomplete results (simplified - in production might use Redis)
+  // Cache autocomplete results with intelligent key matching
   private async cacheAutocomplete(query: string, suggestions: PlaceSuggestion[]): Promise<void> {
-    // For now, we'll skip caching autocomplete results
-    // In production, you might want to cache these in a separate table or Redis
+    const cacheKey = query.toLowerCase().trim();
+    this.autocompleteCache.set(cacheKey, {
+      suggestions,
+      timestamp: Date.now()
+    });
+
+    // Clean up old cache entries periodically
+    if (this.autocompleteCache.size > 100) {
+      const now = Date.now();
+      for (const [key, value] of this.autocompleteCache.entries()) {
+        if (now - value.timestamp > this.AUTOCOMPLETE_CACHE_DURATION) {
+          this.autocompleteCache.delete(key);
+        }
+      }
+    }
   }
 
-  // Get cached autocomplete results
+  // Get cached autocomplete results with smart matching
   private async getCachedAutocomplete(query: string): Promise<PlaceSuggestion[]> {
-    // For now, return empty array - no autocomplete caching
+    const cacheKey = query.toLowerCase().trim();
+    const cached = this.autocompleteCache.get(cacheKey);
+    
+    if (cached && (Date.now() - cached.timestamp) < this.AUTOCOMPLETE_CACHE_DURATION) {
+      console.log('🗄️ AUTOCOMPLETE CACHE HIT: Using cached suggestions', {
+        query: query,
+        resultCount: cached.suggestions.length,
+        cost: '$0.000 - FREE!',
+        cacheAge: `${Math.round((Date.now() - cached.timestamp) / 1000)}s ago`
+      });
+      return cached.suggestions;
+    }
+
+    // Try to find a shorter query that might have similar results
+    for (const [cachedQuery, cachedData] of this.autocompleteCache.entries()) {
+      if (query.toLowerCase().startsWith(cachedQuery) && 
+          cachedQuery.length >= 3 && 
+          query.length - cachedQuery.length <= 2 &&
+          (Date.now() - cachedData.timestamp) < this.AUTOCOMPLETE_CACHE_DURATION) {
+        
+        console.log('🗄️ AUTOCOMPLETE SMART CACHE: Using similar cached query', {
+          originalQuery: query,
+          cachedQuery: cachedQuery,
+          resultCount: cachedData.suggestions.length,
+          cost: '$0.000 - FREE!',
+          reason: 'Similar query likely has same results'
+        });
+        
+        // Cache this query too for faster future access
+        this.autocompleteCache.set(cacheKey, {
+          suggestions: cachedData.suggestions,
+          timestamp: Date.now()
+        });
+        
+        return cachedData.suggestions;
+      }
+    }
+
     return [];
   }
 
