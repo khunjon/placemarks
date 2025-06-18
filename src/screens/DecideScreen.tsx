@@ -6,9 +6,10 @@ import { DarkTheme } from '../constants/theme';
 import ListCard, { ListCardProps } from '../components/lists/ListCard';
 import type { DecideStackScreenProps } from '../navigation/types';
 import { createCityContext, createValidatedCityContext, Location as CityLocation, CityContext } from '../services/cityContext';
-import { getCurrentRecommendations, getTimeContext } from '../services/recommendations';
-import { Recommendation, TimeContext } from '../types/recommendations';
+import { recommendationService, getTimeContext } from '../services/recommendationService';
+import { TimeContext, ScoredPlace, RecommendationResponse } from '../types/recommendations';
 import { useLocation } from '../hooks/useLocation';
+import { useAuth } from '../services/auth-context';
 import { locationUtils } from '../utils/location';
 
 type DecideScreenProps = DecideStackScreenProps<'Decide'>;
@@ -58,6 +59,9 @@ const mockCuratedListsData = [
 ];
 
 export default function DecideScreen({ navigation }: DecideScreenProps) {
+  // Get user from auth context
+  const { user } = useAuth();
+  
   // Use the location hook with session-based settings for DecideScreen
   const {
     location,
@@ -89,7 +93,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
   // State for recommendations and time context
   const [cityContext, setCityContext] = useState<CityContext | null>(null);
   const [timeContext, setTimeContext] = useState<TimeContext>(getTimeContext());
-  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [databaseRecommendations, setDatabaseRecommendations] = useState<RecommendationResponse | null>(null);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
 
   // Update time context every minute
@@ -116,28 +120,29 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
 
   // Load recommendations when location or time changes
   useEffect(() => {
-    if (location && cityContext) {
+    if (location && cityContext && user) {
       loadRecommendations();
     }
-  }, [location, cityContext, timeContext]);
+  }, [location, cityContext, timeContext, user]);
 
   const loadRecommendations = async () => {
-    if (!location || !cityContext) return;
+    if (!location || !cityContext || !user) return;
 
     try {
       setRecommendationsLoading(true);
-      const userLoc: CityLocation = {
+      
+      // Load database-backed recommendations
+      const databaseRecs = await recommendationService.getRecommendations({
+        userId: user.id,
         latitude: location.latitude,
         longitude: location.longitude,
-      };
+        limit: 6,
+        timeContext
+      });
       
-      const recommendationSet = await getCurrentRecommendations(
-        userLoc,
-        cityContext.tier
-      );
+      // Set database recommendations
+      setDatabaseRecommendations(databaseRecs);
       
-      // Take top 4 recommendations for the main display
-      setRecommendations(recommendationSet.recommendations.slice(0, 4));
     } catch (error) {
       console.error('Error loading recommendations:', error);
     } finally {
@@ -220,18 +225,43 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
     }
   };
 
-  const getRecommendationReason = (rec: Recommendation, timeCtx: TimeContext) => {
-    if (rec.timeRelevance.currentRelevance > 0.8) {
+
+
+  // Helper functions for database recommendations
+  const getDatabaseRecommendationReason = (place: ScoredPlace, timeCtx: TimeContext) => {
+    if (place.recommendation_score > 80) {
       return `Perfect for ${timeCtx.timeOfDay}`;
-    } else if (rec.distanceKm < 0.5) {
+    } else if (place.distance_km < 0.5) {
       return 'Very close to you';
-    } else if (rec.rating && rec.rating > 4.5) {
+    } else if (place.rating && place.rating > 4.5) {
       return 'Highly rated';
-    } else if (rec.type === 'curated') {
-      return 'Local favorite';
-    } else {
+    } else if (place.user_ratings_total && place.user_ratings_total > 1000) {
       return 'Popular choice';
+    } else {
+      return 'Recommended for you';
     }
+  };
+
+  const getDatabasePlaceCategory = (types: string[] = []) => {
+    // Map Google Places types to our category system
+    if (types.includes('restaurant') || types.includes('meal_takeaway') || types.includes('meal_delivery')) {
+      return 'restaurant';
+    } else if (types.includes('cafe') || types.includes('bakery')) {
+      return 'cafe';
+    } else if (types.includes('bar') || types.includes('night_club')) {
+      return 'bar';
+    } else if (types.includes('shopping_mall') || types.includes('store')) {
+      return 'shopping';
+    } else if (types.includes('tourist_attraction') || types.includes('point_of_interest')) {
+      return 'attraction';
+    } else {
+      return 'place';
+    }
+  };
+
+  const getPriceRangeText = (priceLevel?: number) => {
+    if (!priceLevel) return '';
+    return '$ '.repeat(priceLevel).trim();
   };
 
   // Convert curated data with navigation handlers
@@ -412,13 +442,13 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
                 </Text>
               </TouchableOpacity>
             </View>
-          ) : recommendations.length > 0 ? (
+          ) : databaseRecommendations && databaseRecommendations.places.length > 0 ? (
             <View>
-              {recommendations.map((rec, index) => {
-                const IconComponent = getCategoryIcon(rec.category);
+              {databaseRecommendations.places.map((place, index) => {
+                const category = getDatabasePlaceCategory(place.types);
                 return (
                   <TouchableOpacity
-                    key={rec.id}
+                    key={place.google_place_id}
                     style={{
                       backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
                       borderRadius: DarkTheme.borderRadius.lg,
@@ -429,7 +459,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
                     }}
                     onPress={() => {
                       // Navigate to place details - you can implement this later
-                      console.log('Navigate to place:', rec.name);
+                      console.log('Navigate to place:', place.name);
                     }}
                   >
                     {/* Category Icon */}
@@ -443,7 +473,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
                       marginRight: DarkTheme.spacing.md,
                     }}>
                       <Text style={{ fontSize: 20 }}>
-                        {getCategoryEmoji(rec.category)}
+                        {getCategoryEmoji(category)}
                       </Text>
                     </View>
 
@@ -457,7 +487,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
                           marginBottom: DarkTheme.spacing.xs,
                         }
                       ]}>
-                        {rec.name}
+                        {place.name}
                       </Text>
                       
                       <Text style={[
@@ -468,7 +498,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
                           marginBottom: DarkTheme.spacing.xs,
                         }
                       ]}>
-                        {getRecommendationReason(rec, timeContext)}
+                        {getDatabaseRecommendationReason(place, timeContext)}
                       </Text>
                       
                       <View style={{
@@ -482,29 +512,62 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
                             color: DarkTheme.colors.semantic.secondaryLabel,
                           }
                         ]}>
-                          {formatDistance(rec.distanceKm)}
+                          {formatDistance(place.distance_km)}
                         </Text>
                         
-                        {rec.rating && (
-                          <View style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                          }}>
+                        <View style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: DarkTheme.spacing.xs,
+                        }}>
+                          {place.price_level && (
                             <Text style={[
                               DarkTheme.typography.caption2,
                               { 
                                 color: DarkTheme.colors.semantic.secondaryLabel,
                               }
                             ]}>
-                              ⭐ {rec.rating.toFixed(1)}
+                              {getPriceRangeText(place.price_level)}
                             </Text>
-                          </View>
-                        )}
+                          )}
+                          
+                          {place.rating && (
+                            <Text style={[
+                              DarkTheme.typography.caption2,
+                              { 
+                                color: DarkTheme.colors.semantic.secondaryLabel,
+                              }
+                            ]}>
+                              ⭐ {place.rating.toFixed(1)}
+                            </Text>
+                          )}
+                        </View>
                       </View>
                     </View>
                   </TouchableOpacity>
                 );
               })}
+              
+              {/* Show fallback message if not enough places */}
+              {databaseRecommendations.places.length < 3 && (
+                <View style={{
+                  backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+                  borderRadius: DarkTheme.borderRadius.lg,
+                  padding: DarkTheme.spacing.md,
+                  marginTop: DarkTheme.spacing.sm,
+                  alignItems: 'center',
+                }}>
+                  <Text style={[
+                    DarkTheme.typography.caption1,
+                    { 
+                      color: DarkTheme.colors.semantic.secondaryLabel,
+                      textAlign: 'center',
+                    }
+                  ]}>
+                    More recommendations coming soon as we expand our database!
+                  </Text>
+                </View>
+              )}
             </View>
           ) : (
             <View style={{
@@ -524,9 +587,22 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
                   color: DarkTheme.colors.semantic.secondaryLabel,
                   textAlign: 'center',
                   marginTop: DarkTheme.spacing.sm,
+                  marginBottom: DarkTheme.spacing.xs,
                 }
               ]}>
-                No recommendations available right now
+                Recommendations coming soon!
+              </Text>
+              <Text style={[
+                DarkTheme.typography.caption1,
+                { 
+                  color: DarkTheme.colors.semantic.tertiaryLabel,
+                  textAlign: 'center',
+                }
+              ]}>
+                {databaseRecommendations?.totalAvailable 
+                  ? `Found ${databaseRecommendations.totalAvailable} places nearby, but you've visited them all!`
+                  : `We're building our database for this area`
+                }
               </Text>
             </View>
           )}

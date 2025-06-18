@@ -87,13 +87,10 @@ export {
 export {
   TimeOfDay,
   CityTier,
-  RecommendationType,
   TimeContext,
-  RecommendationContext,
-  Recommendation,
-  RecommendationSet,
-  RecommendationFilters,
-  TimeBasedConfig
+  DatabaseRecommendationRequest,
+  ScoredPlace,
+  RecommendationResponse
 } from './recommendations';
 
 // Supabase database schema types
