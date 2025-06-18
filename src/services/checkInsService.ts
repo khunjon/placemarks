@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { placesService } from './places';
+import { googlePlacesCache } from './googlePlacesCache';
 import { Place, BangkokContext } from '../types';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -568,37 +569,42 @@ export class CheckInsService {
    * Fetch place details from Google Places API
    */
   private async fetchGooglePlaceDetails(placeId: string): Promise<GooglePlaceDetailsResult> {
-    if (!this.GOOGLE_PLACES_API_KEY) {
-      throw new CheckInError('Google Places API key not configured', 'API_KEY_MISSING');
-    }
-
     try {
-      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${this.GOOGLE_PLACES_API_KEY}&fields=place_id,name,formatted_address,address_components,geometry,types,price_level,rating,formatted_phone_number,website,opening_hours`;
-
-      console.log('🔍 GOOGLE PLACES API CALL: Place Details (CheckInsService)', {
-        url: url,
-        placeId: placeId,
-        fields: 'place_id,name,formatted_address,address_components,geometry,types,price_level,rating,formatted_phone_number,website,opening_hours'
-      });
-
-      const response = await fetch(url);
-      const data = await response.json();
-
-      console.log('✅ GOOGLE PLACES API RESPONSE: Place Details (CheckInsService)', {
-        status: data.status,
-        hasResult: !!data.result,
-        cost: '$0.017 per 1000 calls'
-      });
-
-      if (data.status !== 'OK') {
-        throw new Error(`Google Places API error: ${data.status}`);
+      // Use Google Places cache instead of direct API call
+      const cachedData = await googlePlacesCache.getPlaceDetails(placeId);
+      
+      if (!cachedData) {
+        throw new CheckInError('Place not found', 'PLACE_NOT_FOUND');
       }
 
-      return data.result;
+      // Convert cached data to the expected format
+      const result: GooglePlaceDetailsResult = {
+        place_id: cachedData.google_place_id,
+        name: cachedData.name || 'Unknown Place',
+        formatted_address: cachedData.formatted_address || '',
+        address_components: [], // Would need to be parsed from cached data if needed
+        geometry: {
+          location: {
+            lat: cachedData.geometry?.location?.lat || 0,
+            lng: cachedData.geometry?.location?.lng || 0,
+          }
+        },
+        types: cachedData.types || [],
+        price_level: cachedData.price_level,
+        rating: cachedData.rating,
+        formatted_phone_number: cachedData.formatted_phone_number,
+        website: cachedData.website,
+        opening_hours: cachedData.opening_hours ? {
+          open_now: true, // Would need to be calculated from current time
+          weekday_text: cachedData.opening_hours.weekday_text || []
+        } : undefined,
+      };
+
+      return result;
 
     } catch (error) {
       console.error('Error fetching Google Place details:', error);
-      throw new CheckInError('Failed to fetch place details from Google Places API', 'GOOGLE_API_ERROR');
+      throw new CheckInError('Failed to fetch place details', 'GOOGLE_API_ERROR');
     }
   }
 

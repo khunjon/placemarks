@@ -1,5 +1,6 @@
 import { Place, PlaceDetails, PlaceSuggestion, Location, PlaceSearchParams, BangkokContext } from '../types';
 import { placesCacheService } from './placesCache';
+import { googlePlacesCache } from './googlePlacesCache';
 import { Database } from '../types/supabase';
 
 interface GooglePlaceResult {
@@ -167,6 +168,13 @@ export class PlacesService {
       // First check cache for recent searches in this area
       const cachedPlaces = await placesCacheService.getCachedNearbyPlaces(location, radius, type);
       if (cachedPlaces.length > 0) {
+        console.log('🗄️ CACHE HIT: Retrieved nearby places from local cache', {
+          location: `${location.latitude},${location.longitude}`,
+          radius: radius,
+          type: type || 'all',
+          resultCount: cachedPlaces.length,
+          cost: '$0.000 - FREE!'
+        });
         return cachedPlaces;
       }
 
@@ -182,7 +190,7 @@ export class PlacesService {
         params.append('type', type);
       }
 
-      console.log('🔍 GOOGLE PLACES API: Nearby Search (PlacesService)', {
+      console.log('🟢 GOOGLE API CALL: Nearby Search from Google Places API', {
         url: `${url}?${params}`,
         location: `${location.latitude},${location.longitude}`,
         radius: radius,
@@ -192,10 +200,10 @@ export class PlacesService {
       const response = await fetch(`${url}?${params}`);
       const data = await response.json();
 
-      console.log('💾 GOOGLE PLACES API: Nearby Search (completed)', {
+      console.log('🟢 GOOGLE API RESPONSE: Nearby Search completed', {
         status: data.status,
         resultCount: data.results?.length || 0,
-        cost: '$0.032 per 1000 calls'
+        cost: '$0.032 per 1000 calls - PAID'
       });
 
       if (data.status !== 'OK') {
@@ -242,20 +250,14 @@ export class PlacesService {
         params.append('radius', '50000'); // 50km radius
       }
 
-      console.log('🔍 GOOGLE PLACES API: Autocomplete', {
-        url: `${url}?${params}`,
+      console.log('🟢 GOOGLE API CALL: Autocomplete from Google Places API', {
         query: query,
-        location: location ? `${location.latitude},${location.longitude}` : 'none'
+        location: location ? `${location.latitude},${location.longitude}` : 'none',
+        cost: '$0.00283 per 1000 calls - PAID'
       });
 
       const response = await fetch(`${url}?${params}`);
       const data = await response.json();
-
-      console.log('💾 GOOGLE PLACES API: Autocomplete (completed)', {
-        status: data.status,
-        suggestionCount: data.predictions?.length || 0,
-        cost: '$0.00283 per 1000 calls'
-      });
 
       if (data.status !== 'OK') {
         throw new Error(`Google Places Autocomplete API error: ${data.status}`);
@@ -281,39 +283,34 @@ export class PlacesService {
   // Get detailed place information
   async getPlaceDetails(placeId: string): Promise<PlaceDetails> {
     try {
-      // Check cache first
+      // First check local places cache
       const cachedPlace = await placesCacheService.getCachedPlace(placeId);
       if (cachedPlace) {
+        console.log('🗄️ CACHE HIT: Retrieved place from local places cache', {
+          placeId: placeId.substring(0, 20) + '...',
+          name: cachedPlace.name,
+          cost: '$0.000 - FREE!'
+        });
+        
+        // Enrich with Google Places data if available
+        const googleData = await googlePlacesCache.getPlaceDetails(placeId);
+        if (googleData) {
+          return this.enrichPlaceDetailsWithGoogleData(
+            this.convertPlaceToDetails(cachedPlace),
+            googleData
+          );
+        }
         return this.convertPlaceToDetails(cachedPlace);
       }
 
-      const url = `${this.baseUrl}/details/json`;
-      const params = new URLSearchParams({
-        place_id: placeId,
-        key: this.apiKey,
-        fields: 'place_id,name,formatted_address,geometry,types,price_level,rating,photos,opening_hours,formatted_phone_number,website,reviews',
-      });
-
-      console.log('🔍 GOOGLE PLACES API: Place Details (PlacesService)', {
-        url: `${url}?${params}`,
-        placeId: placeId,
-        fields: 'place_id,name,formatted_address,geometry,types,price_level,rating,photos,opening_hours,formatted_phone_number,website,reviews'
-      });
-
-      const response = await fetch(`${url}?${params}`);
-      const data = await response.json();
-
-      console.log('💾 GOOGLE PLACES API: Place Details (completed)', {
-        status: data.status,
-        hasResult: !!data.result,
-        cost: '$0.017 per 1000 calls'
-      });
-
-      if (data.status !== 'OK') {
-        throw new Error(`Google Places Details API error: ${data.status}`);
+      // Use Google Places cache (handles API calls intelligently)
+      const googleData = await googlePlacesCache.getPlaceDetails(placeId);
+      if (!googleData) {
+        throw new Error(`Place not found: ${placeId}`);
       }
 
-      const place = await this.convertGoogleResultToPlace(data.result);
+      // Convert Google data to our Place format and cache locally
+      const place = await this.convertGoogleCacheToPlace(googleData);
       await placesCacheService.cachePlace(place);
 
       return this.convertPlaceToDetails(place);
@@ -459,6 +456,45 @@ export class PlacesService {
       bangkok_context: place.bangkok_context,
       // Additional details would be populated from Google Places Details API
     };
+  }
+
+  // Enrich PlaceDetails with Google Places cache data
+  private enrichPlaceDetailsWithGoogleData(placeDetails: PlaceDetails, googleData: any): PlaceDetails {
+    return {
+      ...placeDetails,
+      // Enrich with Google Places data
+      rating: googleData.rating || placeDetails.rating,
+      address: googleData.formatted_address || placeDetails.address,
+      phone_number: googleData.formatted_phone_number,
+      website: googleData.website,
+      opening_hours: googleData.opening_hours?.weekday_text || placeDetails.opening_hours,
+      photos: googleData.photos?.map((photo: any) => photo.photo_reference) || placeDetails.photos,
+      reviews: googleData.reviews || placeDetails.reviews,
+      types: googleData.types || placeDetails.types,
+    };
+  }
+
+  // Convert Google Places cache entry to our Place format
+  private async convertGoogleCacheToPlace(googleData: any): Promise<Place> {
+    const coordinates: [number, number] = googleData.geometry?.location ? 
+      [googleData.geometry.location.lng, googleData.geometry.location.lat] : 
+      [0, 0];
+
+    const place: Place = {
+      id: '', // Will be set by database
+      google_place_id: googleData.google_place_id,
+      name: googleData.name || 'Unknown Place',
+      address: googleData.formatted_address || '',
+      coordinates,
+      place_type: googleData.types ? googleData.types.join(',') : '',
+      price_level: googleData.price_level,
+      bangkok_context: {} as BangkokContext,
+    };
+
+    // Add Bangkok-specific context
+    place.bangkok_context = await this.categorizeBangkokPlace(place);
+
+    return place;
   }
 
   // Calculate distance between two points (Haversine formula)

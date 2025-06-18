@@ -88,13 +88,17 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
   const searchNearbyPlaces = async (location: Location.LocationObject) => {
     try {
       setError(null);
-      console.log('Searching for places near:', location.coords.latitude, location.coords.longitude);
-
       const radius = 500; // Fixed 500m radius
 
       // Check cache first
       const cachedResults = await checkInSearchCache.getCachedNearbySearch(location, radius);
       if (cachedResults) {
+        console.log('🗄️ CACHE HIT: Retrieved nearby places from check-in cache', {
+          location: `${location.coords.latitude},${location.coords.longitude}`,
+          radius: radius,
+          resultCount: cachedResults.length,
+          cost: '$0.000 - FREE!'
+        });
         setNearbyPlaces(cachedResults);
         return;
       }
@@ -106,8 +110,6 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
         throw new Error('Google Places API key not configured');
       }
 
-      // Step 1: Nearby Search (for businesses and commercial establishments)
-      console.log('Running nearby search...');
       const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json`;
       const nearbyParams = new URLSearchParams({
         location: `${location.coords.latitude},${location.coords.longitude}`,
@@ -115,20 +117,14 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
         key: GOOGLE_PLACES_API_KEY,
       });
 
-      console.log('🔍 GOOGLE PLACES API: Nearby Search', {
-        url: `${nearbyUrl}?${nearbyParams}`,
+      console.log('🟢 GOOGLE API CALL: Nearby Search for check-in locations', {
         location: `${location.coords.latitude},${location.coords.longitude}`,
-        radius: radius
+        radius: radius,
+        cost: '$0.032 per 1000 calls - PAID'
       });
       
       const nearbyResponse = await fetch(`${nearbyUrl}?${nearbyParams}`);
       const nearbyData = await nearbyResponse.json();
-      
-      console.log('💾 GOOGLE PLACES API: Nearby Search (completed)', {
-        status: nearbyData.status,
-        resultCount: nearbyData.results?.length || 0,
-        cost: '$0.032 per 1000 calls'
-      });
 
       if (nearbyData.status !== 'OK') {
         throw new Error(`Google Places API error: ${nearbyData.status}`);
@@ -162,8 +158,6 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
 
       // Sort by distance
       const finalPlaces = places.sort((a, b) => a.distance - b.distance);
-
-      console.log(`Found ${finalPlaces.length} places within 500m`);
       
       // Cache the results
       await checkInSearchCache.cacheNearbySearch(location, radius, finalPlaces);
@@ -264,6 +258,12 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
       // Check cache first
       const cachedResults = await checkInSearchCache.getCachedTextSearch(query, userLocation);
       if (cachedResults) {
+        console.log('🗄️ CACHE HIT: Retrieved text search from check-in cache', {
+          query: query.trim(),
+          location: `${userLocation.coords.latitude},${userLocation.coords.longitude}`,
+          resultCount: cachedResults.length,
+          cost: '$0.000 - FREE!'
+        });
         setSearchResults(cachedResults);
         setIsSearching(false);
         return;
@@ -283,22 +283,15 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
         key: GOOGLE_PLACES_API_KEY,
       });
 
-      console.log('🔍 GOOGLE PLACES API: Text Search', {
-        url: `${textSearchUrl}?${textSearchParams}`,
+      console.log('🟢 GOOGLE API CALL: Text Search for check-in locations', {
         query: query.trim(),
         location: `${userLocation.coords.latitude},${userLocation.coords.longitude}`,
-        radius: '1000m'
+        radius: '1000m',
+        cost: '$0.032 per 1000 calls - PAID'
       });
       
       const response = await fetch(`${textSearchUrl}?${textSearchParams}`);
       const data = await response.json();
-      
-      console.log('💾 GOOGLE PLACES API: Text Search (completed)', {
-        status: data.status,
-        resultCount: data.results?.length || 0,
-        query: query.trim(),
-        cost: '$0.032 per 1000 calls'
-      });
 
       if (data.status === 'OK' && data.results) {
         const results: NearbyPlaceResult[] = data.results.map((place: any) => {

@@ -95,7 +95,6 @@ export class CheckInSearchCache {
         return null;
       }
 
-      console.log(`📋 Using cached nearby search results (${parsed.places.length} places)`);
       return parsed.places;
     } catch (error) {
       console.warn('Failed to get cached nearby search results:', error);

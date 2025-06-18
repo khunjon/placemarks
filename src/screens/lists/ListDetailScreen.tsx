@@ -153,7 +153,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       }
 
       if (user && listId) {
-        console.log(`ListDetailScreen focused for list ${listId}, checking cache...`);
+  
         // Only reload if cache is invalid or missing
         ListDetailsCache.hasCache(listId, user.id).then(hasValidCache => {
           if (!hasValidCache) {
