@@ -27,7 +27,8 @@ export {
   CompanionType,
   MealType,
   TransportationMethod,
-  PrivacyLevel,
+  ListVisibility,
+  ListType,
   
   // Create/Update types
   CheckInCreate,
@@ -36,6 +37,11 @@ export {
   ListCreate,
   ListUpdate,
   ProfileUpdate, // Legacy alias
+  
+  // Curated list types
+  CuratedListCreate,
+  CuratedListUpdate,
+  CuratedListFilters,
 } from './entities';
 
 // Place-specific types (non-entity)

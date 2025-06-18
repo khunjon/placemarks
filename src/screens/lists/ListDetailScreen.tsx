@@ -181,7 +181,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
           setList(cachedData.list);
           setEditedName(cachedData.list.name);
           setEditedDescription(cachedData.list.description || '');
-          setIsPublic(cachedData.list.privacy_level === 'public');
+          setIsPublic(cachedData.list.visibility === 'public');
           setUserRatings(cachedData.userRatings);
           setLoading(false);
           return;
@@ -205,7 +205,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
         setList(currentList);
         setEditedName(currentList.name);
         setEditedDescription(currentList.description || '');
-        setIsPublic(currentList.privacy_level === 'public');
+        setIsPublic(currentList.visibility === 'public');
         
         // Load user ratings for places in this list
         const ratingsMap: Record<string, UserPlaceRating> = {};
@@ -255,7 +255,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       await enhancedListsService.updateList(list.id, {
         name: editedName.trim(),
         description: editedDescription.trim(),
-        privacy_level: isPublic ? 'public' : 'private',
+        visibility: isPublic ? 'public' : 'private',
       });
       
       // Invalidate caches since list was updated
@@ -654,7 +654,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                     setIsEditing(false);
                     setEditedName(list.name);
                     setEditedDescription(list.description || '');
-                    setIsPublic(list.privacy_level === 'public');
+                    setIsPublic(list.visibility === 'public');
                   }}
                   size="sm"
                 />
@@ -724,7 +724,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                   </View>
                 </View>
 
-                {list.privacy_level === 'public' && (
+                {list.visibility === 'public' && (
                   <View style={{
                     backgroundColor: Colors.neutral[100],
                     paddingHorizontal: Spacing.sm,

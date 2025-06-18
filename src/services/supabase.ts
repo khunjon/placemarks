@@ -322,12 +322,18 @@ export const listsService = {
         user_id: list.user_id,
         name: list.name,
         auto_generated: list.auto_generated,
-        privacy_level: list.privacy_level,
+        visibility: list.visibility || 'private', // Default to private if not set
         description: list.description,
         list_type: list.list_type,
         icon: list.icon,
         color: list.color,
         type: list.type,
+        is_curated: list.is_curated || false,
+        publisher_name: list.publisher_name,
+        publisher_logo_url: list.publisher_logo_url,
+        external_link: list.external_link,
+        location_scope: list.location_scope,
+        curator_priority: list.curator_priority,
         created_at: list.created_at,
       })
       .select()
@@ -341,12 +347,19 @@ export const listsService = {
       .update({
         name: updates.name,
         auto_generated: updates.auto_generated,
-        privacy_level: updates.privacy_level,
+
+        visibility: updates.visibility,
         description: updates.description,
         list_type: updates.list_type,
         icon: updates.icon,
         color: updates.color,
         type: updates.type,
+        is_curated: updates.is_curated,
+        publisher_name: updates.publisher_name,
+        publisher_logo_url: updates.publisher_logo_url,
+        external_link: updates.external_link,
+        location_scope: updates.location_scope,
+        curator_priority: updates.curator_priority,
       })
       .eq('id', id)
       .select()

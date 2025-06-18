@@ -178,7 +178,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
         user_id: user.id,
         name: listData.name,
         description: listData.description,
-        privacy_level: 'private', // Default to private
+        visibility: 'private', // Default to private
         icon: listData.icon,
         color: listData.color,
       });

@@ -55,7 +55,8 @@ export type AuthProvider = 'email' | 'google' | 'facebook' | 'apple';
 export type CompanionType = 'solo' | 'partner' | 'friends' | 'family' | 'business' | 'date';
 export type MealType = 'breakfast' | 'brunch' | 'lunch' | 'afternoon_snack' | 'dinner' | 'late_night' | 'drinks';
 export type TransportationMethod = 'walking' | 'bts' | 'mrt' | 'bus' | 'taxi' | 'grab' | 'motorcycle' | 'car' | 'boat';
-export type PrivacyLevel = 'private' | 'friends' | 'public';
+export type ListVisibility = 'private' | 'friends' | 'public' | 'curated';
+export type ListType = 'user' | 'auto' | 'curated';
 
 // Core entity interfaces matching Supabase schema exactly
 
@@ -122,15 +123,23 @@ export interface CheckIn extends BaseEntity {
  * List entity - matches lists table in Supabase
  */
 export interface List extends BaseEntity {
-  user_id: string;
+  user_id?: string; // Nullable for curated lists
   name: string;
   auto_generated: boolean;
-  privacy_level: PrivacyLevel;
+  visibility: ListVisibility; // Privacy control field
   description?: string;
   list_type?: string;
   icon?: string;
   color?: string;
-  type?: 'user' | 'auto';
+  type?: ListType;
+  is_default?: boolean;
+  // New curated list fields
+  publisher_name?: string;
+  publisher_logo_url?: string;
+  external_link?: string;
+  location_scope?: string;
+  is_curated: boolean;
+  curator_priority?: number;
 }
 
 /**
@@ -209,22 +218,78 @@ export interface UserUpdate {
 export interface ListCreate {
   name: string;
   auto_generated?: boolean;
-  privacy_level?: PrivacyLevel;
+  visibility?: ListVisibility; // Privacy control field
   description?: string;
   list_type?: string;
   icon?: string;
   color?: string;
-  type?: 'user' | 'auto';
+  type?: ListType;
+  is_default?: boolean;
+  // Curated list fields
+  publisher_name?: string;
+  publisher_logo_url?: string;
+  external_link?: string;
+  location_scope?: string;
+  is_curated?: boolean;
+  curator_priority?: number;
 }
 
 export interface ListUpdate {
   name?: string;
-  privacy_level?: PrivacyLevel;
+  visibility?: ListVisibility; // Privacy control field
   description?: string;
   list_type?: string;
   icon?: string;
   color?: string;
+  type?: ListType;
+  is_default?: boolean;
+  // Curated list fields
+  publisher_name?: string;
+  publisher_logo_url?: string;
+  external_link?: string;
+  location_scope?: string;
+  is_curated?: boolean;
+  curator_priority?: number;
 }
 
 // Legacy type aliases for backwards compatibility during migration
-export type ProfileUpdate = UserUpdate; 
+export type ProfileUpdate = UserUpdate;
+
+// Curated list specific interfaces
+export interface CuratedListCreate {
+  name: string;
+  description?: string;
+  publisher_name: string;
+  publisher_logo_url?: string;
+  external_link?: string;
+  location_scope?: string;
+  curator_priority?: number;
+  list_type?: string;
+  icon?: string;
+  color?: string;
+  visibility?: 'public' | 'curated'; // Curated lists should be public or curated
+  is_curated: true;
+  type: 'curated';
+}
+
+export interface CuratedListUpdate {
+  name?: string;
+  description?: string;
+  publisher_name?: string;
+  publisher_logo_url?: string;
+  external_link?: string;
+  location_scope?: string;
+  curator_priority?: number;
+  list_type?: string;
+  icon?: string;
+  color?: string;
+  visibility?: 'public' | 'curated';
+}
+
+// Helper type for filtering curated lists
+export interface CuratedListFilters {
+  location_scope?: string;
+  list_type?: string;
+  publisher_name?: string;
+  min_priority?: number;
+} 

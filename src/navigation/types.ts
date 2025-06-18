@@ -47,7 +47,7 @@ export type ListsStackParamList = {
   ListDetail: {
     listId: string;
     listName: string;
-    listType: 'user' | 'auto';
+    listType: 'user' | 'auto' | 'curated';
     isEditable?: boolean;
   };
   EditList: {
@@ -137,12 +137,18 @@ export interface ListNavigationData {
   id: string;
   name: string;
   description?: string;
-  type: 'user' | 'auto' | 'smart';
+  type: 'user' | 'auto' | 'smart' | 'curated';
   listType: 'favorites' | 'coffee' | 'date' | 'work' | 'want_to_try' | 'visited' | 'rated' | 'recent';
   placeCount: number;
   isEditable: boolean;
   icon?: string;
   color?: string;
+  // Curated list fields
+  publisher_name?: string;
+  publisher_logo_url?: string;
+  external_link?: string;
+  location_scope?: string;
+  curator_priority?: number;
 }
 
 // User data type for navigation

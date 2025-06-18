@@ -18,7 +18,7 @@ export interface EnhancedList extends List {
   list_type?: string;
   icon?: string;
   color?: string;
-  type?: 'user' | 'auto';
+  type?: 'user' | 'auto' | 'curated';
 }
 
 export interface ListPlace {
@@ -186,7 +186,7 @@ export class EnhancedListsService {
           user_id: list.user_id,
           name: list.name,
           is_default: list.is_default,
-          privacy_level: list.privacy_level,
+          visibility: list.visibility || 'private', // Default to private if not set
           auto_generated: list.auto_generated,
           created_at: list.created_at,
           description: list.description,
@@ -194,6 +194,12 @@ export class EnhancedListsService {
           icon: list.icon,
           color: list.color,
           type: list.type,
+          is_curated: list.is_curated || false,
+          publisher_name: list.publisher_name,
+          publisher_logo_url: list.publisher_logo_url,
+          external_link: list.external_link,
+          location_scope: list.location_scope,
+          curator_priority: list.curator_priority,
           places: places,
           place_count: places.length,
         });
@@ -213,7 +219,7 @@ export class EnhancedListsService {
     user_id: string;
     name: string;
     description?: string;
-    privacy_level?: 'private' | 'public';
+    visibility?: 'private' | 'public';
     icon?: string;
     color?: string;
   }): Promise<EnhancedList> {
@@ -224,7 +230,7 @@ export class EnhancedListsService {
           user_id: listData.user_id,
           name: listData.name,
           description: listData.description,
-          privacy_level: listData.privacy_level || 'private',
+          visibility: listData.visibility || 'private',
           icon: listData.icon || 'list',
           color: listData.color || '#6B7280',
           auto_generated: false,
@@ -256,7 +262,7 @@ export class EnhancedListsService {
         .update({
           name: updates.name,
           description: updates.description,
-          privacy_level: updates.privacy_level,
+          visibility: updates.visibility,
           icon: updates.icon,
           color: updates.color
         })
@@ -577,7 +583,7 @@ export class EnhancedListsService {
             name: config.name,
             description: config.description,
             auto_generated: true,
-            privacy_level: 'private',
+            visibility: 'private',
             icon: config.icon,
             color: config.color,
             type: 'auto'

@@ -339,7 +339,7 @@ export class ListDetailsCache {
    */
   static async updateListMetadataInCache(
     listId: string,
-    updates: Partial<Pick<ListWithPlaces, 'name' | 'description' | 'privacy_level' | 'icon' | 'color'>>,
+    updates: Partial<Pick<ListWithPlaces, 'name' | 'description' | 'visibility' | 'icon' | 'color'>>,
     userId: string
   ): Promise<void> {
     try {

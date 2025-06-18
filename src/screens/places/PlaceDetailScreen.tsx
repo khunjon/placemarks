@@ -479,10 +479,11 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
           name,
           icon,
           color,
-          privacy_level,
+          visibility,
           auto_generated,
           created_at,
-          type
+          type,
+          is_curated
         )
       `)
       .eq('place_id', placeId)
@@ -497,10 +498,11 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       name: item.lists.name,
       icon: item.lists.icon,
       color: item.lists.color,
-      privacy_level: item.lists.privacy_level,
+      visibility: item.lists.visibility,
       auto_generated: item.lists.auto_generated,
       created_at: item.lists.created_at,
-      type: item.lists.type
+      type: item.lists.type,
+      is_curated: item.lists.is_curated || false
     }));
   };
 
