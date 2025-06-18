@@ -210,19 +210,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
   // Debug session info (you can remove this later)
   const sessionInfo = getSessionInfo();
   
-  // Log session info for debugging (remove in production)
-  useEffect(() => {
-    if (__DEV__) {
-      console.log('📍 DecideScreen Session Info:', {
-        sessionMode: sessionInfo.sessionMode,
-        sessionLocationLoaded: sessionInfo.sessionLocationLoaded,
-        timeSinceSessionStart: Math.round(sessionInfo.timeSinceSessionStart / 1000 / 60), // minutes
-        allowsUpdate: sessionInfo.allowsUpdate,
-        currentLocation: location ? 'loaded' : 'none',
-        source: source,
-      });
-    }
-  }, [sessionInfo, location, source]);
+
 
   const formatDistance = (distanceKm: number) => {
     if (distanceKm < 1) {

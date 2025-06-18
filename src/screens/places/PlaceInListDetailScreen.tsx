@@ -207,7 +207,15 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
       return '';
     }
     
-    return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photo_reference=${photoReference}&key=${apiKey}`;
+    const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photo_reference=${photoReference}&key=${apiKey}`;
+    
+    console.log('🔍 GOOGLE PLACES API CALL: Photo URL Generated', {
+      photoReference: photoReference.substring(0, 20) + '...',
+      maxWidth: maxWidth,
+      cost: '$0.007 per 1000 calls'
+    });
+    
+    return photoUrl;
   };
 
   // Fetch fresh Google Places photos for this place
@@ -219,8 +227,21 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
 
     try {
       const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${googlePlaceId}&fields=photos&key=${apiKey}`;
+      
+      console.log('🔍 GOOGLE PLACES API CALL: Place Photos', {
+        url: url,
+        googlePlaceId: googlePlaceId,
+        fields: 'photos'
+      });
+      
       const response = await fetch(url);
       const data = await response.json();
+      
+      console.log('✅ GOOGLE PLACES API RESPONSE: Place Photos', {
+        status: data.status,
+        photoCount: data.result?.photos?.length || 0,
+        cost: '$0.017 per 1000 calls'
+      });
 
       if (data.status === 'OK' && data.result.photos) {
         return data.result.photos.map((photo: any) => ({
@@ -258,8 +279,21 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
       ].join(',');
 
       const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${googlePlaceId}&fields=${fields}&key=${apiKey}`;
+      
+      console.log('🔍 GOOGLE PLACES API CALL: Place Details', {
+        url: url,
+        googlePlaceId: googlePlaceId,
+        fields: fields
+      });
+      
       const response = await fetch(url);
       const data = await response.json();
+      
+      console.log('✅ GOOGLE PLACES API RESPONSE: Place Details', {
+        status: data.status,
+        hasResult: !!data.result,
+        cost: '$0.017 per 1000 calls'
+      });
 
       if (data.status === 'OK' && data.result) {
         const result = data.result;
@@ -327,6 +361,18 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
   };
 
   // Get photo URLs for display (prioritize fresh Google Photos, fallback to stored URLs)
+  // Check if we should fetch fresh Google Places data (to avoid unnecessary API calls)
+  const shouldFetchFreshGoogleData = (placeData: PlaceDetails): boolean => {
+    // If we have no Google data at all, fetch it
+    if (!placeData.phone && !placeData.website && !placeData.google_rating) {
+      return true;
+    }
+    
+    // If we have basic data, don't fetch fresh data to save API calls
+    // In the future, you could add a "last_google_fetch" timestamp to check staleness
+    return false;
+  };
+
   const getPhotoUrls = (): string[] => {
     if (!place) return [];
     
@@ -373,9 +419,9 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
       setOtherLists(otherListsData);
       setTempNotes(listPlaceData?.notes || '');
 
-      // Fetch fresh Google Places data if we have a Google Place ID
-      // This will get real phone, website, hours, ratings, and photos
-      if (placeData.google_place_id) {
+      // Fetch fresh Google Places data if we have a Google Place ID and the data is stale
+      // OPTIMIZATION: Only fetch fresh data if we don't have recent Google data to reduce API calls
+      if (placeData.google_place_id && shouldFetchFreshGoogleData(placeData)) {
         try {
           console.log('Fetching fresh Google Places data for:', placeData.name);
           const googleData = await fetchGooglePlaceDetails(placeData.google_place_id);

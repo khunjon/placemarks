@@ -182,8 +182,21 @@ export class PlacesService {
         params.append('type', type);
       }
 
+      console.log('🔍 GOOGLE PLACES API CALL: Nearby Search (PlacesService)', {
+        url: `${url}?${params}`,
+        location: `${location.latitude},${location.longitude}`,
+        radius: radius,
+        type: type || 'all'
+      });
+
       const response = await fetch(`${url}?${params}`);
       const data = await response.json();
+
+      console.log('✅ GOOGLE PLACES API RESPONSE: Nearby Search (PlacesService)', {
+        status: data.status,
+        resultCount: data.results?.length || 0,
+        cost: '$0.032 per 1000 calls'
+      });
 
       if (data.status !== 'OK') {
         throw new Error(`Google Places API error: ${data.status}`);
@@ -229,8 +242,20 @@ export class PlacesService {
         params.append('radius', '50000'); // 50km radius
       }
 
+      console.log('🔍 GOOGLE PLACES API CALL: Autocomplete', {
+        url: `${url}?${params}`,
+        query: query,
+        location: location ? `${location.latitude},${location.longitude}` : 'none'
+      });
+
       const response = await fetch(`${url}?${params}`);
       const data = await response.json();
+
+      console.log('✅ GOOGLE PLACES API RESPONSE: Autocomplete', {
+        status: data.status,
+        suggestionCount: data.predictions?.length || 0,
+        cost: '$0.00283 per 1000 calls'
+      });
 
       if (data.status !== 'OK') {
         throw new Error(`Google Places Autocomplete API error: ${data.status}`);
@@ -269,8 +294,20 @@ export class PlacesService {
         fields: 'place_id,name,formatted_address,geometry,types,price_level,rating,photos,opening_hours,formatted_phone_number,website,reviews',
       });
 
+      console.log('🔍 GOOGLE PLACES API CALL: Place Details (PlacesService)', {
+        url: `${url}?${params}`,
+        placeId: placeId,
+        fields: 'place_id,name,formatted_address,geometry,types,price_level,rating,photos,opening_hours,formatted_phone_number,website,reviews'
+      });
+
       const response = await fetch(`${url}?${params}`);
       const data = await response.json();
+
+      console.log('✅ GOOGLE PLACES API RESPONSE: Place Details (PlacesService)', {
+        status: data.status,
+        hasResult: !!data.result,
+        cost: '$0.017 per 1000 calls'
+      });
 
       if (data.status !== 'OK') {
         throw new Error(`Google Places Details API error: ${data.status}`);

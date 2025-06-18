@@ -575,8 +575,20 @@ export class CheckInsService {
     try {
       const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${this.GOOGLE_PLACES_API_KEY}&fields=place_id,name,formatted_address,address_components,geometry,types,price_level,rating,formatted_phone_number,website,opening_hours`;
 
+      console.log('🔍 GOOGLE PLACES API CALL: Place Details (CheckInsService)', {
+        url: url,
+        placeId: placeId,
+        fields: 'place_id,name,formatted_address,address_components,geometry,types,price_level,rating,formatted_phone_number,website,opening_hours'
+      });
+
       const response = await fetch(url);
       const data = await response.json();
+
+      console.log('✅ GOOGLE PLACES API RESPONSE: Place Details (CheckInsService)', {
+        status: data.status,
+        hasResult: !!data.result,
+        cost: '$0.017 per 1000 calls'
+      });
 
       if (data.status !== 'OK') {
         throw new Error(`Google Places API error: ${data.status}`);

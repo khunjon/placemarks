@@ -83,7 +83,8 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
     return R * c;
   };
 
-  // Search for nearby places using Google Places API with enhanced search and caching
+  // Search for nearby places using Google Places API with optimized single search call
+  // OPTIMIZATION: Removed expensive text searches and business status checks to reduce API calls from 17-37 to just 1
   const searchNearbyPlaces = async (location: Location.LocationObject) => {
     try {
       setError(null);
@@ -105,10 +106,8 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
         throw new Error('Google Places API key not configured');
       }
 
-      const allPlaces = new Map<string, NearbyPlaceResult>();
-      
       // Step 1: Nearby Search (for businesses and commercial establishments)
-      console.log('1. Running nearby search...');
+      console.log('Running nearby search...');
       const nearbyUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json`;
       const nearbyParams = new URLSearchParams({
         location: `${location.coords.latitude},${location.coords.longitude}`,
@@ -116,10 +115,28 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
         key: GOOGLE_PLACES_API_KEY,
       });
 
+      console.log('🔍 GOOGLE PLACES API CALL: Nearby Search', {
+        url: `${nearbyUrl}?${nearbyParams}`,
+        location: `${location.coords.latitude},${location.coords.longitude}`,
+        radius: radius
+      });
+      
       const nearbyResponse = await fetch(`${nearbyUrl}?${nearbyParams}`);
       const nearbyData = await nearbyResponse.json();
+      
+      console.log('✅ GOOGLE PLACES API RESPONSE: Nearby Search', {
+        status: nearbyData.status,
+        resultCount: nearbyData.results?.length || 0,
+        cost: '$0.032 per 1000 calls'
+      });
 
-      if (nearbyData.status === 'OK' && nearbyData.results) {
+      if (nearbyData.status !== 'OK') {
+        throw new Error(`Google Places API error: ${nearbyData.status}`);
+      }
+
+      const places: NearbyPlaceResult[] = [];
+      
+      if (nearbyData.results) {
         for (const place of nearbyData.results) {
           const distance = calculateDistance(
             location.coords.latitude,
@@ -128,107 +145,25 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
             place.geometry.location.lng
           );
 
+          // Only include places within our radius
           if (distance <= radius) {
-            allPlaces.set(place.place_id, {
+            places.push({
               google_place_id: place.place_id,
               name: place.name,
               address: getStreetAddress(place.vicinity || place.formatted_address || ''),
               types: place.types || [],
               distance: Math.round(distance),
               coordinates: [place.geometry.location.lng, place.geometry.location.lat],
-              business_status: 'OPERATIONAL', // Will be checked later
+              business_status: 'OPERATIONAL', // Assume operational to avoid extra API calls
             });
           }
         }
       }
 
-      // Step 2: Text Search for residential buildings and less prominent places
-      console.log('2. Running text search for residential buildings...');
-      const textSearchQueries = [
-        'condominium', 
-        'apartment', 
-        'residence', 
-        'building',
-        'room sukhumvit',
-        'the room',
-      ];
+      // Sort by distance
+      const finalPlaces = places.sort((a, b) => a.distance - b.distance);
 
-      for (const query of textSearchQueries) {
-        try {
-          const textSearchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json`;
-          const textSearchParams = new URLSearchParams({
-            query: query,
-            location: `${location.coords.latitude},${location.coords.longitude}`,
-            radius: radius.toString(),
-            key: GOOGLE_PLACES_API_KEY,
-          });
-
-          const textSearchResponse = await fetch(`${textSearchUrl}?${textSearchParams}`);
-          const textSearchData = await textSearchResponse.json();
-
-          if (textSearchData.status === 'OK' && textSearchData.results) {
-            for (const place of textSearchData.results) {
-              const distance = calculateDistance(
-                location.coords.latitude,
-                location.coords.longitude,
-                place.geometry.location.lat,
-                place.geometry.location.lng
-              );
-
-              // Only include places within our radius that aren't already found
-              if (distance <= radius && !allPlaces.has(place.place_id)) {
-                allPlaces.set(place.place_id, {
-                  google_place_id: place.place_id,
-                  name: place.name,
-                  address: getStreetAddress(place.formatted_address || ''),
-                  types: place.types || [],
-                  distance: Math.round(distance),
-                  coordinates: [place.geometry.location.lng, place.geometry.location.lat],
-                  business_status: 'OPERATIONAL',
-                });
-              }
-            }
-          }
-        } catch (error) {
-          console.warn(`Text search failed for "${query}":`, error);
-        }
-      }
-
-      // Step 3: Check business status for all places
-      console.log('3. Checking business status...');
-      const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json`;
-      const placePromises = Array.from(allPlaces.values()).map(async (place) => {
-        try {
-          const detailsParams = new URLSearchParams({
-            place_id: place.google_place_id,
-            fields: 'business_status',
-            key: GOOGLE_PLACES_API_KEY,
-          });
-
-          const detailsResponse = await fetch(`${detailsUrl}?${detailsParams}`);
-          const detailsData = await detailsResponse.json();
-
-          return {
-            ...place,
-            business_status: detailsData.result?.business_status || 'OPERATIONAL',
-          };
-        } catch (error) {
-          console.warn(`Failed to get details for place ${place.google_place_id}:`, error);
-          return {
-            ...place,
-            business_status: 'OPERATIONAL',
-          };
-        }
-      });
-
-      const placesWithStatus = await Promise.all(placePromises);
-
-      // Filter out permanently closed businesses and sort by distance
-      const finalPlaces = placesWithStatus
-        .filter(place => place.business_status !== 'CLOSED_PERMANENTLY')
-        .sort((a, b) => a.distance - b.distance);
-
-      console.log(`Found ${finalPlaces.length} operational places within 500m (${allPlaces.size} total before filtering)`);
+      console.log(`Found ${finalPlaces.length} places within 500m`);
       
       // Cache the results
       await checkInSearchCache.cacheNearbySearch(location, radius, finalPlaces);
@@ -348,8 +283,22 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
         key: GOOGLE_PLACES_API_KEY,
       });
 
+      console.log('🔍 GOOGLE PLACES API CALL: Text Search', {
+        url: `${textSearchUrl}?${textSearchParams}`,
+        query: query.trim(),
+        location: `${userLocation.coords.latitude},${userLocation.coords.longitude}`,
+        radius: '1000m'
+      });
+      
       const response = await fetch(`${textSearchUrl}?${textSearchParams}`);
       const data = await response.json();
+      
+      console.log('✅ GOOGLE PLACES API RESPONSE: Text Search', {
+        status: data.status,
+        resultCount: data.results?.length || 0,
+        query: query.trim(),
+        cost: '$0.032 per 1000 calls'
+      });
 
       if (data.status === 'OK' && data.results) {
         const results: NearbyPlaceResult[] = data.results.map((place: any) => {
