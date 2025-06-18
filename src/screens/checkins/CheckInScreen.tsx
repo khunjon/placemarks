@@ -27,13 +27,7 @@ export default function CheckInScreen({ navigation }: CheckInScreenProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Debug logging
-  useEffect(() => {
-    console.log('CheckInScreen - Auth state:', { 
-      user: user ? { id: user.id, email: user.email } : user, 
-      authLoading 
-    });
-  }, [user, authLoading]);
+
 
   // Load check-in history
   const loadCheckInHistory = useCallback(async () => {
