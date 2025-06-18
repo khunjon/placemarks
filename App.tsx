@@ -1,25 +1,118 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AuthProvider, useAuth } from './src/services/auth-context';
 import { Colors } from './src/constants/Colors';
 import BottomTabNavigator from './src/navigation/BottomTabNavigator';
 import { LoginScreen } from './src/screens/auth';
 import type { RootStackParamList } from './src/navigation/types';
+import { analyticsService } from './src/services/analytics';
+import { navigationTrackingService, NavigationTrackingUtils } from './src/services/navigationTracking';
+import { NAVIGATION_METHODS } from './src/constants/ScreenNames';
 import './global.css';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function AppNavigator() {
   const { user, loading } = useAuth();
+  const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
+  const routeNameRef = useRef<string | undefined>(undefined);
+  const previousStateRef = useRef<any>(undefined);
+
+  // Initialize analytics and navigation tracking when user state changes
+  useEffect(() => {
+    const initializeServices = async () => {
+      const amplitudeApiKey = process.env.EXPO_PUBLIC_AMPLITUDE_API_KEY;
+      
+      if (amplitudeApiKey) {
+        await analyticsService.initialize({
+          apiKey: amplitudeApiKey,
+          enableLogging: __DEV__,
+          trackSessionEvents: true,
+          trackAppLifecycleEvents: true,
+        });
+
+        // Initialize navigation tracking
+        if (navigationRef.current) {
+          navigationTrackingService.initialize(navigationRef.current);
+        }
+
+        // Identify user if logged in
+        if (user?.id) {
+          await analyticsService.identify(user.id, {
+            user_id: user.id,
+            email: user.email,
+            signup_date: user.created_at,
+            last_active_date: new Date().toISOString(),
+          });
+        }
+      } else if (__DEV__) {
+        console.warn('Amplitude API key not found. Analytics will not be initialized.');
+      }
+    };
+
+    initializeServices();
+  }, [user]);
+
+  // Navigation state change handler for automatic screen tracking
+  const handleNavigationStateChange = async (state: any) => {
+    if (!state) return;
+
+    const previousRouteName = routeNameRef.current;
+    const currentScreenName = NavigationTrackingUtils.getScreenNameFromState(state);
+    const routeParams = NavigationTrackingUtils.getRouteParamsFromState(state);
+    
+    if (!currentScreenName) return;
+
+    // Determine navigation method
+    const navigationMethod = NavigationTrackingUtils.getNavigationMethodFromStateChange(
+      previousStateRef.current,
+      state
+    );
+
+    // Track the screen change
+    await navigationTrackingService.trackScreenChange(
+      currentScreenName,
+      navigationMethod,
+      routeParams
+    );
+
+    // Save the current route name for next time
+    routeNameRef.current = currentScreenName;
+    previousStateRef.current = state;
+  };
+
+  // Handle navigation ready
+  const handleNavigationReady = () => {
+    if (navigationRef.current) {
+      const state = navigationRef.current.getRootState();
+      if (state) {
+        const currentScreenName = NavigationTrackingUtils.getScreenNameFromState(state);
+        if (currentScreenName) {
+          routeNameRef.current = currentScreenName;
+          previousStateRef.current = state;
+          
+          // Track initial screen
+          navigationTrackingService.trackScreenChange(
+            currentScreenName,
+            NAVIGATION_METHODS.INITIAL_LOAD
+          );
+        }
+      }
+    }
+  };
 
   if (loading) {
     return null; // You can add a loading screen here
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      ref={navigationRef}
+      onReady={handleNavigationReady}
+      onStateChange={handleNavigationStateChange}
+    >
       <Stack.Navigator
         screenOptions={{
           headerStyle: {

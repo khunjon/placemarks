@@ -127,14 +127,8 @@ class GooglePlacesCacheService {
             await this.updateAccessTracking(googlePlaceId);
             
             const cacheType = isExpired ? 'STALE CACHE' : 'CACHE HIT';
-            console.log(`🗄️ DATABASE ${cacheType}: Retrieved from database cache`, {
-              googlePlaceId: googlePlaceId.substring(0, 20) + '...',
-              name: cached.name,
-              cost: '$0.000 - FREE!',
-              accessCount: cached.access_count + 1,
-              cachedAt: cached.cached_at,
-              isStale: isExpired,
-              hasPhotoUrls: !!(cached.photo_urls && cached.photo_urls.length > 0)
+            console.log(`🗄️ DATABASE ${cacheType}: Using pre-generated photo URLs`, {
+              source: 'database_cache'
             });
             
             return cached;

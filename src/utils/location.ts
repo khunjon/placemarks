@@ -12,11 +12,10 @@ const performanceMonitor = {
   
   end(operation: string) {
     const duration = Date.now() - this.startTime;
-    if (duration > 2000) { // Log slow operations (over 2 seconds)
+    if (duration > 5000) { // Only log very slow operations (over 5 seconds)
       console.warn(`🐌 Slow location operation: ${operation} took ${duration}ms`);
-    } else {
-      console.log(`⚡ Fast location operation: ${operation} took ${duration}ms`);
     }
+    // Skip logging fast operations to reduce console noise
     return duration;
   }
 };

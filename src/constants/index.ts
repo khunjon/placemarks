@@ -5,6 +5,9 @@ export const APP_CONFIG = {
   scheme: 'placemarks',
 };
 
+// Screen Names for Analytics
+export * from './ScreenNames';
+
 // Bangkok-specific constants
 export const BANGKOK_CONFIG = {
   center: {

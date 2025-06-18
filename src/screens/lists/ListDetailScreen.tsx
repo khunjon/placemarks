@@ -160,7 +160,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
             console.log(`No valid cache for list ${listId}, reloading...`);
             loadListData();
           } else {
-            console.log(`Valid cache exists for list ${listId}, skipping reload`);
+            // Using cached list data
           }
         });
       }

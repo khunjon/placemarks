@@ -58,7 +58,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
       
-      console.log('Auth state change:', event, session?.user?.id);
+              // Auth state change handled
       setSession(session);
       
       if (session?.user) {
@@ -80,9 +80,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const loadUserProfile = async (userId: string) => {
     try {
-      console.log('Auth context: Loading user profile for:', userId);
+      // Loading user profile
       const userProfile = await authService.getCurrentUser();
-      console.log('Auth context: User profile loaded:', userProfile?.full_name);
+      // User profile loaded successfully
       setUser(userProfile);
     } catch (error) {
       console.error('Error loading user profile:', error);
@@ -152,9 +152,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (!user) return { error: new Error('No user logged in') };
     
     try {
-      console.log('Auth context: Starting profile update...');
+      // Starting profile update
       await authService.updateProfile(updates);
-      console.log('Auth context: Profile updated successfully');
+      // Profile updated successfully
       
       // Update local user state immediately instead of reloading
       setUser(prevUser => {
@@ -167,7 +167,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         };
       });
       
-      console.log('Auth context: Profile update complete');
+      // Profile update complete
       return { error: null };
     } catch (error: any) {
       console.error('Auth context: Profile update error:', error);

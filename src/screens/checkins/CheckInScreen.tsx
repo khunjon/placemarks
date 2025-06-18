@@ -40,7 +40,7 @@ export default function CheckInScreen({ navigation }: CheckInScreenProps) {
       setError(null);
 
       const history = await checkInsService.getUserCheckInsByDate(user.id);
-      console.log('Check-in history loaded:', history.length, 'date groups');
+      // Check-in history loaded successfully
       setCheckInHistory(history);
     } catch (err) {
       console.error('Error loading check-in history:', err);

@@ -104,4 +104,26 @@ export type {
   PlaceAvailabilityConfig,
   PlaceAvailabilityResult,
   PlaceCountResult
-} from '../services/placeAvailability'; 
+} from '../services/placeAvailability';
+
+// Analytics types
+export {
+  BaseAnalyticsEvent,
+  ScreenViewedEvent,
+  UserIdentifiedEvent,
+  PlaceAddedToListEvent,
+  PlaceViewedEvent,
+  ListCreatedEvent,
+  ListViewedEvent,
+  ListSharedEvent,
+  CheckInCreatedEvent,
+  CheckInViewedEvent,
+  SearchPerformedEvent,
+  ErrorOccurredEvent,
+  PerformanceEvent,
+  AnalyticsEvent,
+  AnalyticsEventName,
+  UserProperties,
+  AnalyticsConfig,
+  IAnalyticsService
+} from './analytics'; 
