@@ -27,8 +27,7 @@ src/screens/
 │   └── index.ts            # Exports all list screens
 ├── places/                 # Place-related screens
 │   ├── PlacesSearchScreen.tsx
-│   ├── PlaceDetailsScreen.tsx
-│   ├── PlaceInListDetailScreen.tsx
+│   ├── PlaceDetailScreen.tsx
 │   └── index.ts            # Exports all place screens
 ├── profile/                # User profile & settings
 │   ├── ProfileScreen.tsx

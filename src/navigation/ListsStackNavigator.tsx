@@ -13,8 +13,7 @@ import {
   AddPlaceToListScreen
 } from '../screens/lists';
 import {
-  PlaceDetailsScreen,
-  PlaceInListDetailScreen
+  PlaceDetailScreen
 } from '../screens/places';
 
 // Wrapper component for CreateList screen to avoid inline function
@@ -101,20 +100,13 @@ export default function ListsStackNavigator() {
         }}
       />
       
-      <Stack.Screen 
-        name="PlaceDetails" 
-        component={PlaceDetailsScreen}
-        options={({ route }) => ({
-          title: route.params.placeName,
-          headerShown: true,
-        })}
-      />
+      {/* PlaceDetails screen removed - redundant with PlaceInListDetail */}
       
       <Stack.Screen 
         name="PlaceInListDetail" 
-        component={PlaceInListDetailScreen}
+        component={PlaceDetailScreen}
         options={{
-          headerShown: false, // PlaceInListDetailScreen has its own header
+          headerShown: false, // PlaceDetailScreen has its own header
           animation: 'slide_from_right',
         }}
       />

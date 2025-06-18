@@ -10,7 +10,7 @@ import {
   CheckInDetailScreen,
   CheckInFormScreen
 } from '../screens/checkins';
-import { PlaceDetailsScreen } from '../screens/places';
+// Note: PlaceDetailsScreen removed - check-in search results will be handled differently
 
 const Stack = createNativeStackNavigator<CheckInStackParamList>();
 
@@ -58,14 +58,7 @@ export default function CheckInStackNavigator() {
         }}
       />
       
-      <Stack.Screen 
-        name="PlaceDetails" 
-        component={PlaceDetailsScreen}
-        options={({ route }) => ({
-          title: route.params.placeName,
-          headerShown: true,
-        })}
-      />
+      {/* PlaceDetails screen removed - check-in search results will navigate directly to CheckInForm */}
       
       <Stack.Screen 
         name="CheckInForm" 

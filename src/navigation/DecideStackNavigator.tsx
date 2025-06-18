@@ -6,7 +6,7 @@ import { DecideStackParamList, DecideStackScreenProps } from './types';
 // Import screens
 import DecideScreen from '../screens/DecideScreen';
 import { ListDetailScreen } from '../screens/lists';
-import { PlaceDetailsScreen } from '../screens/places';
+import { PlaceDetailScreen } from '../screens/places';
 
 const Stack = createNativeStackNavigator<DecideStackParamList>();
 
@@ -69,11 +69,11 @@ export default function DecideStackNavigator() {
       />
       
       <Stack.Screen 
-        name="PlaceDetails" 
-        component={PlaceDetailsScreen}
-        options={({ route }) => ({
-          title: route.params.placeName,
-          headerShown: true,
+        name="PlaceInListDetail" 
+        component={PlaceDetailScreen}
+        options={() => ({
+          title: 'Place Details',
+          headerShown: false, // PlaceDetailScreen has its own header
         })}
       />
     </Stack.Navigator>

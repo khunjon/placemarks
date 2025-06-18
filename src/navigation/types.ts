@@ -17,11 +17,7 @@ export type CheckInStackParamList = {
     checkInId: string;
     placeName: string;
   };
-  PlaceDetails: {
-    placeId: string;
-    placeName: string;
-    source?: 'checkin' | 'search' | 'nearby';
-  };
+  // PlaceDetails screen removed - check-in search results navigate directly to CheckInForm
   CheckInForm: {
     placeId: string;
     placeName: string;
@@ -37,9 +33,10 @@ export type DecideStackParamList = {
     listName: string;
     listType: 'user' | 'smart';
   };
-  PlaceDetails: {
+  PlaceInListDetail: {
     placeId: string;
-    placeName: string;
+    listId: string;
+    listName: string;
     source?: 'list' | 'suggestion';
   };
 };
@@ -65,11 +62,7 @@ export type ListsStackParamList = {
     listId: string;
     listName: string;
   };
-  PlaceDetails: {
-    placeId: string;
-    placeName: string;
-    source?: 'list';
-  };
+  // PlaceDetails removed - redundant with PlaceInListDetail
   PlaceInListDetail: {
     placeId: string;
     listId: string;

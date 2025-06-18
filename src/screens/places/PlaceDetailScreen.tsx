@@ -63,7 +63,7 @@ import type { ListsStackScreenProps } from '../../navigation/types';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-type PlaceInListDetailScreenProps = ListsStackScreenProps<'PlaceInListDetail'>;
+type PlaceDetailScreenProps = ListsStackScreenProps<'PlaceInListDetail'>;
 
 interface GooglePhotoReference {
   photo_reference: string;
@@ -91,8 +91,11 @@ interface PlaceDetails {
   place_types?: string[];
 }
 
-export default function PlaceInListDetailScreen({ navigation, route }: PlaceInListDetailScreenProps) {
+export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScreenProps) {
   const { placeId, listId, listName } = route.params;
+  
+  // Handle cases where this screen is used outside of list context (e.g., from check-in search)
+  const isInListContext = Boolean(listId && listName);
   const { user } = useAuth();
   
   // Refs for keyboard handling and tracking initial mount
