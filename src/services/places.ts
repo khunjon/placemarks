@@ -281,7 +281,7 @@ export class PlacesService {
   }
 
   // Get detailed place information
-  async getPlaceDetails(placeId: string): Promise<PlaceDetails> {
+  async getPlaceDetails(placeId: string, forRecommendations = false): Promise<PlaceDetails> {
     try {
       // First check local places cache
       const cachedPlace = await placesCacheService.getCachedPlace(placeId);
@@ -292,8 +292,8 @@ export class PlacesService {
           cost: '$0.000 - FREE!'
         });
         
-        // Enrich with Google Places data if available
-        const googleData = await googlePlacesCache.getPlaceDetails(placeId);
+        // Enrich with Google Places data if available (use soft expiry for recommendations)
+        const googleData = await googlePlacesCache.getPlaceDetails(placeId, false, forRecommendations);
         if (googleData) {
           return this.enrichPlaceDetailsWithGoogleData(
             this.convertPlaceToDetails(cachedPlace),
@@ -303,8 +303,8 @@ export class PlacesService {
         return this.convertPlaceToDetails(cachedPlace);
       }
 
-      // Use Google Places cache (handles API calls intelligently)
-      const googleData = await googlePlacesCache.getPlaceDetails(placeId);
+      // Use Google Places cache (handles API calls intelligently, use soft expiry for recommendations)
+      const googleData = await googlePlacesCache.getPlaceDetails(placeId, false, forRecommendations);
       if (!googleData) {
         throw new Error(`Place not found: ${placeId}`);
       }

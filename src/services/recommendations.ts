@@ -12,6 +12,7 @@ import {
   RecommendationType
 } from '../types/recommendations';
 import { Location, getDistanceBetweenCoordinates } from './cityContext';
+import { googlePlacesCache } from './googlePlacesCache';
 
 // Time-based configuration for different periods of the day
 const TIME_CONFIG: TimeBasedConfig = {
