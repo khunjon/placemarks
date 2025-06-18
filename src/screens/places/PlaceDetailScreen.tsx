@@ -54,7 +54,8 @@ import Toast from '../../components/ui/Toast';
 
 import { enhancedListsService, ListPlace, EnhancedList } from '../../services/listsService';
 import { ListDetailsCache } from '../../services/listDetailsCache';
-import { googlePhotoCache } from '../../services/googlePhotoCache';
+
+import { googlePlacesCache } from '../../services/googlePlacesCache';
 import { checkInUtils, CheckIn } from '../../services/checkInsService';
 import { userRatingsService, UserPlaceRating } from '../../services/userRatingsService';
 import { useAuth } from '../../services/auth-context';
@@ -204,7 +205,6 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   // Generate Google Places photo URL from photo reference
   // This converts a Google Places API photo reference to an actual image URL
   // Format: https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=REFERENCE&key=API_KEY
-  // Generate Google photo URL with global caching to prevent duplicate API calls
   const getGooglePhotoUrl = useCallback((photoReference: string, maxWidth: number = 800): string => {
     const apiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '';
     if (!apiKey) {
@@ -212,22 +212,10 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       return '';
     }
     
-    // Check global cache first to prevent duplicate URL generation
-    const cachedUrl = googlePhotoCache.getPhotoUrl(photoReference, maxWidth);
-    if (cachedUrl) {
-      console.log('💾 GOOGLE PLACES API: Photo URL (cached)', {
-        photoReference: photoReference.substring(0, 20) + '...',
-        maxWidth: maxWidth,
-        cost: '$0.000 - cached!'
-      });
-      return cachedUrl;
-    }
-    
-    // Generate new URL and cache it
+    // Generate photo URL (no caching needed since this is a rare fallback)
     const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photo_reference=${photoReference}&key=${apiKey}`;
-    googlePhotoCache.setPhotoUrl(photoReference, photoUrl, maxWidth);
     
-    console.log('🔍 GOOGLE PLACES API: Photo URL Generated', {
+    console.log('🟢 GOOGLE PLACES API: Photo URL Generated', {
       photoReference: photoReference.substring(0, 20) + '...',
       maxWidth: maxWidth,
       cost: '$0.007 per 1000 calls'
@@ -236,180 +224,57 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
     return photoUrl;
   }, []);
 
-  // Fetch fresh Google Places photos for this place
-  const fetchGooglePlacesPhotos = async (googlePlaceId: string): Promise<GooglePhotoReference[]> => {
-    const apiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '';
-    if (!apiKey || !googlePlaceId) {
-      return [];
-    }
-
-    try {
-      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${googlePlaceId}&fields=photos&key=${apiKey}`;
-      
-      console.log('🔍 GOOGLE PLACES API CALL: Place Photos', {
-        url: url,
-        googlePlaceId: googlePlaceId,
-        fields: 'photos'
-      });
-      
-      const response = await fetch(url);
-      const data = await response.json();
-      
-      console.log('✅ GOOGLE PLACES API RESPONSE: Place Photos', {
-        status: data.status,
-        photoCount: data.result?.photos?.length || 0,
-        cost: '$0.017 per 1000 calls'
-      });
-
-      if (data.status === 'OK' && data.result.photos) {
-        return data.result.photos.map((photo: any) => ({
-          photo_reference: photo.photo_reference,
-          height: photo.height,
-          width: photo.width,
-          html_attributions: photo.html_attributions || []
-        }));
-      }
-    } catch (error) {
-      console.error('Error fetching Google Places photos:', error);
-    }
-
-    return [];
-  };
-
-  // Fetch complete place details from Google Places API
-  const fetchGooglePlaceDetails = async (googlePlaceId: string) => {
-    const apiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '';
-    if (!apiKey || !googlePlaceId) {
-      return null;
-    }
-
-    try {
-      const fields = [
-        'name',
-        'formatted_address', 
-        'formatted_phone_number',
-        'website',
-        'rating',
-        'price_level',
-        'opening_hours',
-        'photos',
-        'types'
-      ].join(',');
-
-      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${googlePlaceId}&fields=${fields}&key=${apiKey}`;
-      
-      console.log('🔍 GOOGLE PLACES API CALL: Place Details', {
-        url: url,
-        googlePlaceId: googlePlaceId,
-        fields: fields
-      });
-      
-      const response = await fetch(url);
-      const data = await response.json();
-      
-      console.log('✅ GOOGLE PLACES API RESPONSE: Place Details', {
-        status: data.status,
-        hasResult: !!data.result,
-        cost: '$0.017 per 1000 calls'
-      });
-
-      if (data.status === 'OK' && data.result) {
-        const result = data.result;
-        
-        // Parse opening hours into our format
-        let hoursOpen: any = null;
-        if (result.opening_hours?.periods) {
-          hoursOpen = {} as any;
-          const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-          
-          // Initialize all days as closed
-          dayNames.forEach(day => {
-            hoursOpen[day] = 'closed';
-          });
-          
-          // Process periods
-          result.opening_hours.periods.forEach((period: any) => {
-            if (period.open && period.close) {
-              const dayIndex = period.open.day;
-              const dayName = dayNames[dayIndex];
-              const openTime = period.open.time.substring(0, 2) + ':' + period.open.time.substring(2);
-              const closeTime = period.close.time.substring(0, 2) + ':' + period.close.time.substring(2);
-              
-              hoursOpen[dayName] = {
-                open: openTime,
-                close: closeTime
-              };
-            } else if (period.open && !period.close) {
-              // 24 hour operation
-              const dayIndex = period.open.day;
-              const dayName = dayNames[dayIndex];
-              hoursOpen[dayName] = {
-                open: '00:00',
-                close: '23:59'
-              };
-            }
-          });
-        }
-
-        // Parse photos
-        const photoReferences = result.photos ? result.photos.map((photo: any) => ({
-          photo_reference: photo.photo_reference,
-          height: photo.height,
-          width: photo.width,
-          html_attributions: photo.html_attributions || []
-        })) : [];
-
-        return {
-          name: result.name,
-          address: result.formatted_address,
-          phone: result.formatted_phone_number || null,
-          website: result.website || null,
-          google_rating: result.rating || null,
-          price_level: result.price_level || null,
-          hours_open: hoursOpen,
-          photo_references: photoReferences,
-          place_types: result.types || []
-        };
-      }
-    } catch (error) {
-      console.error('Error fetching Google Place details:', error);
-    }
-
-    return null;
-  };
+  // Note: Direct Google Places API calls have been replaced with googlePlacesCache service
+  // This provides intelligent caching and reduces API costs
 
   // Get photo URLs for display (prioritize fresh Google Photos, fallback to stored URLs)
   // Check if we should fetch fresh Google Places data (to avoid unnecessary API calls)
   const shouldFetchFreshGoogleData = (placeData: PlaceDetails): boolean => {
-    // If we have no Google data at all, fetch it
+    // Always fetch if we have no Google data at all
     if (!placeData.phone && !placeData.website && !placeData.google_rating) {
       return true;
     }
     
-    // If we have basic data, don't fetch fresh data to save API calls
-    // In the future, you could add a "last_google_fetch" timestamp to check staleness
+    // Also fetch if we have basic data but no photo URLs (to get pre-generated URLs from cache)
+    if (!placeData.photos_urls || placeData.photos_urls.length === 0) {
+      return true;
+    }
+    
+    // Skip if we have both basic data AND photo URLs
     return false;
   };
 
   const getPhotoUrls = (): string[] => {
     if (!place) return [];
     
-    // First, try to use Google Places photo references (if we have fresh ones)
+    // Prioritize pre-generated URLs from database (no API calls needed)
+    if (place.photos_urls && place.photos_urls.length > 0) {
+      console.log('🗄️ DATABASE PHOTO URLS: Using pre-generated photo URLs', {
+        photoCount: place.photos_urls.length,
+        cost: '$0.000 - FREE!',
+        source: 'database_cache'
+      });
+      return place.photos_urls;
+    }
+    
+    // Fallback: Generate URLs from photo references (should rarely happen now)
     if (place.photo_references && place.photo_references.length > 0) {
-      // Only use photo references if they look valid (not the sample ones we added)
       const validReferences = place.photo_references.filter(ref => 
         ref.photo_reference && !ref.photo_reference.startsWith('ATplDJ')
       );
       
       if (validReferences.length > 0) {
-        // COST OPTIMIZATION: Limit to first 1 photo since UI only shows 1 photo anyway
+        console.log('⚠️ FALLBACK: Generating photo URLs from references', {
+          photoCount: validReferences.length,
+          reason: 'No pre-generated URLs found',
+          recommendation: 'This should rarely happen with new cache system'
+        });
         const limitedReferences = validReferences.slice(0, 1);
         return limitedReferences.map(ref => getGooglePhotoUrl(ref.photo_reference));
       }
     }
     
-    // Fallback to stored URLs (legacy or temporary)
-    return place.photos_urls || [];
+    return [];
   };
 
   // OPTIMIZATION: Memoize photo URLs to prevent regeneration on every render
@@ -443,36 +308,55 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       setTempNotes(listPlaceData?.notes || '');
 
       // Fetch fresh Google Places data if we have a Google Place ID and the data is stale
-      // OPTIMIZATION: Only fetch fresh data if we don't have recent Google data to reduce API calls
+      // OPTIMIZATION: Use googlePlacesCache to avoid unnecessary API calls
       if (placeData.google_place_id && shouldFetchFreshGoogleData(placeData)) {
         try {
-          console.log('Fetching fresh Google Places data for:', placeData.name);
-          const googleData = await fetchGooglePlaceDetails(placeData.google_place_id);
+          console.log('Fetching Google Places data for:', placeData.name);
+          const googleData = await googlePlacesCache.getPlaceDetails(placeData.google_place_id);
           
           if (googleData) {
+            // Convert Google Places cache format to our format
+            const convertedData = {
+              phone: googleData.formatted_phone_number || null,
+              website: googleData.website || null,
+              google_rating: googleData.rating || null,
+              price_level: googleData.price_level || null,
+              hours_open: googleData.opening_hours || null,
+              photo_references: googleData.photos ? googleData.photos.map((photo: any) => ({
+                photo_reference: photo.photo_reference,
+                height: photo.height,
+                width: photo.width,
+                html_attributions: photo.html_attributions || []
+              })) : [],
+              photo_urls: googleData.photo_urls || [], // Use pre-generated URLs
+              place_types: googleData.types || []
+            };
+
             // Update the place state with fresh Google data
             const updatedPlace = {
               ...placeData,
-              phone: googleData.phone || placeData.phone,
-              website: googleData.website || placeData.website,
-              google_rating: googleData.google_rating || placeData.google_rating,
-              price_level: googleData.price_level || placeData.price_level,
-              hours_open: googleData.hours_open || placeData.hours_open,
-              photo_references: googleData.photo_references.length > 0 ? googleData.photo_references : placeData.photo_references,
-              place_types: googleData.place_types.length > 0 ? googleData.place_types : placeData.place_types
+              phone: convertedData.phone || placeData.phone,
+              website: convertedData.website || placeData.website,
+              google_rating: convertedData.google_rating || placeData.google_rating,
+              price_level: convertedData.price_level || placeData.price_level,
+              hours_open: convertedData.hours_open || placeData.hours_open,
+              photo_references: convertedData.photo_references.length > 0 ? convertedData.photo_references : placeData.photo_references,
+              photos_urls: convertedData.photo_urls.length > 0 ? convertedData.photo_urls : placeData.photos_urls, // Use pre-generated URLs
+              place_types: convertedData.place_types.length > 0 ? convertedData.place_types : placeData.place_types
             };
             
             setPlace(updatedPlace);
             
             // Update the database with fresh Google Places data
             const updateData: any = {};
-            if (googleData.phone) updateData.phone = googleData.phone;
-            if (googleData.website) updateData.website = googleData.website;
-            if (googleData.google_rating) updateData.google_rating = googleData.google_rating.toString();
-            if (googleData.price_level) updateData.price_level = googleData.price_level;
-            if (googleData.hours_open) updateData.hours_open = googleData.hours_open;
-            if (googleData.photo_references.length > 0) updateData.photo_references = googleData.photo_references;
-            if (googleData.place_types.length > 0) updateData.google_types = googleData.place_types;
+            if (convertedData.phone) updateData.phone = convertedData.phone;
+            if (convertedData.website) updateData.website = convertedData.website;
+            if (convertedData.google_rating) updateData.google_rating = convertedData.google_rating.toString();
+            if (convertedData.price_level) updateData.price_level = convertedData.price_level;
+            if (convertedData.hours_open) updateData.hours_open = convertedData.hours_open;
+            if (convertedData.photo_references.length > 0) updateData.photo_references = convertedData.photo_references;
+            if (convertedData.photo_urls.length > 0) updateData.photos_urls = convertedData.photo_urls; // Store pre-generated URLs
+            if (convertedData.place_types.length > 0) updateData.google_types = convertedData.place_types;
             
             if (Object.keys(updateData).length > 0) {
               const { error } = await supabase

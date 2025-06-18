@@ -15,6 +15,7 @@ export interface GooglePlacesCacheEntry {
   opening_hours?: any;
   current_opening_hours?: any;
   photos?: any;
+  photo_urls?: string[]; // Pre-generated photo URLs
   reviews?: any;
   business_status?: string;
   place_id?: string;
@@ -64,7 +65,7 @@ export interface GooglePlacesApiResponse {
 }
 
 class GooglePlacesCacheService {
-  private readonly GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+  private readonly GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY;
   private readonly DEFAULT_FIELDS = [
     'place_id',
     'name',
@@ -98,12 +99,13 @@ class GooglePlacesCacheService {
           // Update access tracking
           await this.updateAccessTracking(googlePlaceId);
           
-          console.log('🗄️ CACHE HIT: Retrieved from database cache', {
+          console.log('🗄️ DATABASE CACHE HIT: Retrieved from database cache', {
             googlePlaceId: googlePlaceId.substring(0, 20) + '...',
             name: cached.name,
             cost: '$0.000 - FREE!',
             accessCount: cached.access_count + 1,
-            cachedAt: cached.cached_at
+            cachedAt: cached.cached_at,
+            hasPhotoUrls: !!(cached.photo_urls && cached.photo_urls.length > 0)
           });
           
           return cached;
@@ -125,7 +127,8 @@ class GooglePlacesCacheService {
         cost: '$0.017 per 1000 calls - PAID',
         hasPhotos: !!googleData.result.photos?.length,
         rating: googleData.result.rating,
-        nowCached: true
+        nowCached: true,
+        photoUrlsGenerated: cachedEntry.photo_urls?.length || 0
       });
 
       return cachedEntry;
@@ -266,6 +269,21 @@ class GooglePlacesCacheService {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
+    // Generate photo URLs from photo references (if available)
+    const photoUrls: string[] = [];
+    if (result.photos && result.photos.length > 0 && this.GOOGLE_PLACES_API_KEY) {
+      for (const photo of result.photos) {
+        const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${photo.photo_reference}&key=${this.GOOGLE_PLACES_API_KEY}`;
+        photoUrls.push(photoUrl);
+      }
+      
+      console.log('🔗 PHOTO URLS GENERATED: Pre-generated photo URLs for database storage', {
+        photoCount: photoUrls.length,
+        googlePlaceId: result.place_id.substring(0, 20) + '...',
+        benefit: 'No URL generation needed on future loads'
+      });
+    }
+
     const cacheEntry = {
       google_place_id: result.place_id,
       name: result.name,
@@ -281,6 +299,7 @@ class GooglePlacesCacheService {
       opening_hours: result.opening_hours,
       current_opening_hours: result.current_opening_hours,
       photos: result.photos,
+      photo_urls: photoUrls, // Store pre-generated URLs
       reviews: result.reviews?.slice(0, 5), // Limit to 5 reviews
       business_status: result.business_status,
       place_id: result.place_id,
