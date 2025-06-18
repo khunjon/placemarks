@@ -41,6 +41,7 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
   const [isSearching, setIsSearching] = useState(false);
   const [activeTab, setActiveTab] = useState<'nearby' | 'search'>('nearby');
   const [showCacheStats, setShowCacheStats] = useState(false);
+  const [lastSearchedQuery, setLastSearchedQuery] = useState('');
 
 
 
@@ -249,11 +250,24 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
     }
   };
 
-  // Manual search for places with caching
+  // Manual search for places with caching and smart similarity detection
   const searchPlaces = async (query: string) => {
     if (!query.trim() || !userLocation) return;
 
+    // Skip search if query is too similar to the last searched query
+    if (lastSearchedQuery && query.length >= lastSearchedQuery.length && 
+        query.startsWith(lastSearchedQuery) && query.length - lastSearchedQuery.length <= 2) {
+      console.log('⏭️ SEARCH SKIPPED: Query too similar to previous search', {
+        previousQuery: lastSearchedQuery,
+        currentQuery: query,
+        reason: 'Likely same results - avoiding unnecessary API call'
+      });
+      return;
+    }
+
     setIsSearching(true);
+    setLastSearchedQuery(query);
+    
     try {
       // Check cache first
       const cachedResults = await checkInSearchCache.getCachedTextSearch(query, userLocation);
@@ -333,17 +347,29 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
     setSearchQuery(text);
     if (text.trim().length < 3) {
       setSearchResults([]);
+      setLastSearchedQuery(''); // Reset similarity tracking when clearing
     }
   };
 
-  // Debounced search effect
+  // Enhanced debounced search effect
   useEffect(() => {
-    if (searchQuery.trim().length >= 3) {
+    const trimmedQuery = searchQuery.trim();
+    
+    if (trimmedQuery.length >= 3) {
       const timeoutId = setTimeout(() => {
-        searchPlaces(searchQuery);
-      }, 500);
+        searchPlaces(trimmedQuery);
+      }, 800); // Increased from 500ms to 800ms for better debouncing
       return () => clearTimeout(timeoutId);
+    } else if (trimmedQuery.length === 0) {
+      // Clear results immediately when query is empty
+      setSearchResults([]);
+      setIsSearching(false);
     }
+    // Don't search for queries with 1-2 characters
+
+    return () => {
+      // Cleanup timeout on unmount or query change
+    };
   }, [searchQuery]);
 
   // Render place item
@@ -575,7 +601,7 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
               {searchQuery.length > 0 && searchQuery.length < 3 && (
                 <View style={{ marginBottom: Spacing.lg }}>
                   <SecondaryText style={{ textAlign: 'center' }}>
-                    Type at least 3 characters to search
+                    Type {3 - searchQuery.length} more character{3 - searchQuery.length > 1 ? 's' : ''} to search...
                   </SecondaryText>
                 </View>
               )}

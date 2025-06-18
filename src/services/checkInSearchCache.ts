@@ -37,6 +37,10 @@ export class CheckInSearchCache {
   private readonly CACHE_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
   private readonly MAX_CACHE_ENTRIES = 50;
   private readonly LOCATION_THRESHOLD_METERS = 100; // Consider locations within 100m as the same
+  
+  // In-memory cache for faster access to recent searches
+  private memoryCache: Map<string, { places: NearbyPlaceResult[]; timestamp: number }> = new Map();
+  private readonly MEMORY_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   /**
    * Cache nearby search results
@@ -103,7 +107,7 @@ export class CheckInSearchCache {
   }
 
   /**
-   * Cache text search results
+   * Cache text search results in both memory and storage
    */
   async cacheTextSearch(
     query: string,
@@ -112,6 +116,24 @@ export class CheckInSearchCache {
   ): Promise<void> {
     try {
       const cacheKey = this.getTextSearchCacheKey(query, location.coords.latitude, location.coords.longitude);
+      
+      // Store in memory cache for fast access
+      this.memoryCache.set(cacheKey, {
+        places,
+        timestamp: Date.now()
+      });
+
+      // Clean up memory cache if it gets too large
+      if (this.memoryCache.size > 20) {
+        const now = Date.now();
+        for (const [key, value] of this.memoryCache.entries()) {
+          if (now - value.timestamp > this.MEMORY_CACHE_DURATION) {
+            this.memoryCache.delete(key);
+          }
+        }
+      }
+
+      // Store in AsyncStorage for persistence
       const cacheData: TextSearchCacheResult = {
         query: query.toLowerCase().trim(),
         location: {
@@ -130,7 +152,7 @@ export class CheckInSearchCache {
   }
 
   /**
-   * Get cached text search results
+   * Get cached text search results with smart matching
    */
   async getCachedTextSearch(
     query: string,
@@ -138,22 +160,56 @@ export class CheckInSearchCache {
   ): Promise<NearbyPlaceResult[] | null> {
     try {
       const cacheKey = this.getTextSearchCacheKey(query, location.coords.latitude, location.coords.longitude);
+      
+      // First check memory cache for exact match
+      const memoryResult = this.memoryCache.get(cacheKey);
+      if (memoryResult && (Date.now() - memoryResult.timestamp) < this.MEMORY_CACHE_DURATION) {
+        console.log('🗄️ MEMORY CACHE HIT: Retrieved text search from memory cache', {
+          query: query.trim(),
+          resultCount: memoryResult.places.length,
+          cost: '$0.000 - FREE!',
+          cacheAge: `${Math.round((Date.now() - memoryResult.timestamp) / 1000)}s ago`
+        });
+        return memoryResult.places;
+      }
+
+      // Check AsyncStorage for exact match
       const cachedData = await AsyncStorage.getItem(cacheKey);
+      if (cachedData) {
+        const parsed: TextSearchCacheResult = JSON.parse(cachedData);
 
-      if (!cachedData) {
-        return null;
+        // Check if cache is still valid
+        if (Date.now() - parsed.timestamp > this.CACHE_EXPIRY_MS) {
+          await AsyncStorage.removeItem(cacheKey);
+        } else {
+          // Add to memory cache for faster future access
+          this.memoryCache.set(cacheKey, {
+            places: parsed.places,
+            timestamp: Date.now()
+          });
+          
+          console.log('🗄️ STORAGE CACHE HIT: Retrieved text search from AsyncStorage cache', {
+            query: query.trim(),
+            resultCount: parsed.places.length,
+            cost: '$0.000 - FREE!',
+            cacheAge: `${Math.round((Date.now() - parsed.timestamp) / 1000)}s ago`
+          });
+          return parsed.places;
+        }
       }
 
-      const parsed: TextSearchCacheResult = JSON.parse(cachedData);
-
-      // Check if cache is still valid
-      if (Date.now() - parsed.timestamp > this.CACHE_EXPIRY_MS) {
-        await AsyncStorage.removeItem(cacheKey);
-        return null;
+      // Try to find similar cached queries (smart cache matching)
+      const similarResult = await this.findSimilarTextSearch(query, location);
+      if (similarResult) {
+        // Cache this query too for faster future access
+        this.memoryCache.set(cacheKey, {
+          places: similarResult,
+          timestamp: Date.now()
+        });
+        return similarResult;
       }
 
-      console.log(`📋 Using cached text search results for "${query}" (${parsed.places.length} places)`);
-      return parsed.places;
+      return null;
     } catch (error) {
       console.warn('Failed to get cached text search results:', error);
       return null;
@@ -303,6 +359,95 @@ export class CheckInSearchCache {
       return null;
     } catch (error) {
       console.warn('Failed to find nearby cache:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Find similar text search in cache (e.g., "Coffee" results for "Coffee Shop")
+   */
+  private async findSimilarTextSearch(
+    query: string,
+    location: Location.LocationObject
+  ): Promise<NearbyPlaceResult[] | null> {
+    try {
+      const normalizedQuery = query.toLowerCase().trim();
+      
+      // First check memory cache for similar queries
+      for (const [cacheKey, cachedData] of this.memoryCache.entries()) {
+        if ((Date.now() - cachedData.timestamp) < this.MEMORY_CACHE_DURATION) {
+          const keyParts = cacheKey.split('_');
+          if (keyParts.length >= 4 && keyParts[0] === 'checkin' && keyParts[1] === 'text') {
+            const cachedQuery = keyParts[2].replace(/_/g, ' ');
+            
+            // Check if current query starts with cached query and is similar
+            if (normalizedQuery.startsWith(cachedQuery) && 
+                cachedQuery.length >= 3 && 
+                normalizedQuery.length - cachedQuery.length <= 3) {
+              
+              console.log('🗄️ SMART MEMORY CACHE: Using similar cached query', {
+                originalQuery: query,
+                cachedQuery: cachedQuery,
+                resultCount: cachedData.places.length,
+                cost: '$0.000 - FREE!',
+                reason: 'Similar query likely has same results'
+              });
+              
+              return cachedData.places;
+            }
+          }
+        }
+      }
+
+      // Check AsyncStorage for similar queries
+      const keys = await AsyncStorage.getAllKeys();
+      const textCacheKeys = keys.filter(key => key.startsWith('checkin_text_'));
+
+      for (const key of textCacheKeys) {
+        try {
+          const data = await AsyncStorage.getItem(key);
+          if (!data) continue;
+
+          const parsed: TextSearchCacheResult = JSON.parse(data);
+          
+          // Check if cache is still valid
+          if (Date.now() - parsed.timestamp > this.CACHE_EXPIRY_MS) {
+            continue;
+          }
+
+          // Check if location is similar
+          const distance = this.calculateDistance(
+            location.coords.latitude, location.coords.longitude,
+            parsed.location.latitude, parsed.location.longitude
+          );
+
+          if (distance <= this.LOCATION_THRESHOLD_METERS) {
+            const cachedQuery = parsed.query.toLowerCase();
+            
+            // Check if current query starts with cached query and is similar
+            if (normalizedQuery.startsWith(cachedQuery) && 
+                cachedQuery.length >= 3 && 
+                normalizedQuery.length - cachedQuery.length <= 3) {
+              
+              console.log('🗄️ SMART STORAGE CACHE: Using similar cached query', {
+                originalQuery: query,
+                cachedQuery: cachedQuery,
+                resultCount: parsed.places.length,
+                cost: '$0.000 - FREE!',
+                reason: 'Similar query likely has same results'
+              });
+              
+              return parsed.places;
+            }
+          }
+        } catch (error) {
+          // Skip invalid entries
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.warn('Failed to find similar text search:', error);
       return null;
     }
   }
