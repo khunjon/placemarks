@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   View, 
   ScrollView, 
@@ -54,6 +54,7 @@ import Toast from '../../components/ui/Toast';
 
 import { enhancedListsService, ListPlace, EnhancedList } from '../../services/listsService';
 import { ListDetailsCache } from '../../services/listDetailsCache';
+import { googlePhotoCache } from '../../services/googlePhotoCache';
 import { checkInUtils, CheckIn } from '../../services/checkInsService';
 import { userRatingsService, UserPlaceRating } from '../../services/userRatingsService';
 import { useAuth } from '../../services/auth-context';
@@ -200,23 +201,37 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
   // Generate Google Places photo URL from photo reference
   // This converts a Google Places API photo reference to an actual image URL
   // Format: https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=REFERENCE&key=API_KEY
-  const getGooglePhotoUrl = (photoReference: string, maxWidth: number = 800): string => {
+  // Generate Google photo URL with global caching to prevent duplicate API calls
+  const getGooglePhotoUrl = useCallback((photoReference: string, maxWidth: number = 800): string => {
     const apiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '';
     if (!apiKey) {
       console.warn('Google Places API key not configured');
       return '';
     }
     
-    const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photo_reference=${photoReference}&key=${apiKey}`;
+    // Check global cache first to prevent duplicate URL generation
+    const cachedUrl = googlePhotoCache.getPhotoUrl(photoReference, maxWidth);
+    if (cachedUrl) {
+      console.log('💾 GOOGLE PLACES API: Photo URL (cached)', {
+        photoReference: photoReference.substring(0, 20) + '...',
+        maxWidth: maxWidth,
+        cost: '$0.000 - cached!'
+      });
+      return cachedUrl;
+    }
     
-    console.log('🔍 GOOGLE PLACES API CALL: Photo URL Generated', {
+    // Generate new URL and cache it
+    const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photo_reference=${photoReference}&key=${apiKey}`;
+    googlePhotoCache.setPhotoUrl(photoReference, photoUrl, maxWidth);
+    
+    console.log('🔍 GOOGLE PLACES API: Photo URL Generated', {
       photoReference: photoReference.substring(0, 20) + '...',
       maxWidth: maxWidth,
       cost: '$0.007 per 1000 calls'
     });
     
     return photoUrl;
-  };
+  }, []);
 
   // Fetch fresh Google Places photos for this place
   const fetchGooglePlacesPhotos = async (googlePlaceId: string): Promise<GooglePhotoReference[]> => {
@@ -384,13 +399,18 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
       );
       
       if (validReferences.length > 0) {
-        return validReferences.map(ref => getGooglePhotoUrl(ref.photo_reference));
+        // COST OPTIMIZATION: Limit to first 1 photo since UI only shows 1 photo anyway
+        const limitedReferences = validReferences.slice(0, 1);
+        return limitedReferences.map(ref => getGooglePhotoUrl(ref.photo_reference));
       }
     }
     
     // Fallback to stored URLs (legacy or temporary)
     return place.photos_urls || [];
   };
+
+  // OPTIMIZATION: Memoize photo URLs to prevent regeneration on every render
+  const photoUrls = useMemo(() => getPhotoUrls(), [place?.photo_references, place?.photos_urls]);
 
   const loadPlaceDetails = async () => {
     if (!user?.id) return;
@@ -513,7 +533,6 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
 
   // Fetch list-specific place details
   const fetchListPlaceDetails = async (listId: string, placeId: string): Promise<ListPlace> => {
-    console.log('Fetching list place details:', { listId, placeId });
     
     const { data, error } = await supabase
       .from('list_places')
@@ -524,8 +543,6 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
 
     if (error) throw error;
     if (!data) throw new Error('Place not found in list');
-
-    console.log('Fetched list place data:', data);
 
     return {
       list_id: data.list_id,
@@ -777,30 +794,27 @@ export default function PlaceInListDetailScreen({ navigation, route }: PlaceInLi
           {/* Photos are fetched from Google Places API using photo references stored in the database.
               If no valid photo references exist, we fall back to stored URLs.
               Fresh photos are automatically fetched when viewing a place for the first time. */}
-          {(() => {
-            const photoUrls = getPhotoUrls();
-            return photoUrls.length > 0 && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                pagingEnabled
-                style={{ height: 200 }}
-              >
-                {photoUrls.map((photo, index) => (
-                  <Image
-                    key={index}
-                    source={{ uri: photo }}
-                    style={{
-                      width: screenWidth,
-                      height: 200,
-                      backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground
-                    }}
-                    resizeMode="cover"
-                  />
-                ))}
-              </ScrollView>
-            );
-          })()}
+          {photoUrls.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              pagingEnabled
+              style={{ height: 200 }}
+            >
+              {photoUrls.map((photo: string, index: number) => (
+                <Image
+                  key={index}
+                  source={{ uri: photo }}
+                  style={{
+                    width: screenWidth,
+                    height: 200,
+                    backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground
+                  }}
+                  resizeMode="cover"
+                />
+              ))}
+            </ScrollView>
+          )}
 
           <View style={{ padding: Spacing.lg }}>
             {/* Place Header */}

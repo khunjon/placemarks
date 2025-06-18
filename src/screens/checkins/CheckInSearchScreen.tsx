@@ -115,7 +115,7 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
         key: GOOGLE_PLACES_API_KEY,
       });
 
-      console.log('🔍 GOOGLE PLACES API CALL: Nearby Search', {
+      console.log('🔍 GOOGLE PLACES API: Nearby Search', {
         url: `${nearbyUrl}?${nearbyParams}`,
         location: `${location.coords.latitude},${location.coords.longitude}`,
         radius: radius
@@ -124,7 +124,7 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
       const nearbyResponse = await fetch(`${nearbyUrl}?${nearbyParams}`);
       const nearbyData = await nearbyResponse.json();
       
-      console.log('✅ GOOGLE PLACES API RESPONSE: Nearby Search', {
+      console.log('💾 GOOGLE PLACES API: Nearby Search (completed)', {
         status: nearbyData.status,
         resultCount: nearbyData.results?.length || 0,
         cost: '$0.032 per 1000 calls'
@@ -283,7 +283,7 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
         key: GOOGLE_PLACES_API_KEY,
       });
 
-      console.log('🔍 GOOGLE PLACES API CALL: Text Search', {
+      console.log('🔍 GOOGLE PLACES API: Text Search', {
         url: `${textSearchUrl}?${textSearchParams}`,
         query: query.trim(),
         location: `${userLocation.coords.latitude},${userLocation.coords.longitude}`,
@@ -293,7 +293,7 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
       const response = await fetch(`${textSearchUrl}?${textSearchParams}`);
       const data = await response.json();
       
-      console.log('✅ GOOGLE PLACES API RESPONSE: Text Search', {
+      console.log('💾 GOOGLE PLACES API: Text Search (completed)', {
         status: data.status,
         resultCount: data.results?.length || 0,
         query: query.trim(),

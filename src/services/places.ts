@@ -182,7 +182,7 @@ export class PlacesService {
         params.append('type', type);
       }
 
-      console.log('🔍 GOOGLE PLACES API CALL: Nearby Search (PlacesService)', {
+      console.log('🔍 GOOGLE PLACES API: Nearby Search (PlacesService)', {
         url: `${url}?${params}`,
         location: `${location.latitude},${location.longitude}`,
         radius: radius,
@@ -192,7 +192,7 @@ export class PlacesService {
       const response = await fetch(`${url}?${params}`);
       const data = await response.json();
 
-      console.log('✅ GOOGLE PLACES API RESPONSE: Nearby Search (PlacesService)', {
+      console.log('💾 GOOGLE PLACES API: Nearby Search (completed)', {
         status: data.status,
         resultCount: data.results?.length || 0,
         cost: '$0.032 per 1000 calls'
@@ -242,7 +242,7 @@ export class PlacesService {
         params.append('radius', '50000'); // 50km radius
       }
 
-      console.log('🔍 GOOGLE PLACES API CALL: Autocomplete', {
+      console.log('🔍 GOOGLE PLACES API: Autocomplete', {
         url: `${url}?${params}`,
         query: query,
         location: location ? `${location.latitude},${location.longitude}` : 'none'
@@ -251,7 +251,7 @@ export class PlacesService {
       const response = await fetch(`${url}?${params}`);
       const data = await response.json();
 
-      console.log('✅ GOOGLE PLACES API RESPONSE: Autocomplete', {
+      console.log('💾 GOOGLE PLACES API: Autocomplete (completed)', {
         status: data.status,
         suggestionCount: data.predictions?.length || 0,
         cost: '$0.00283 per 1000 calls'
@@ -294,7 +294,7 @@ export class PlacesService {
         fields: 'place_id,name,formatted_address,geometry,types,price_level,rating,photos,opening_hours,formatted_phone_number,website,reviews',
       });
 
-      console.log('🔍 GOOGLE PLACES API CALL: Place Details (PlacesService)', {
+      console.log('🔍 GOOGLE PLACES API: Place Details (PlacesService)', {
         url: `${url}?${params}`,
         placeId: placeId,
         fields: 'place_id,name,formatted_address,geometry,types,price_level,rating,photos,opening_hours,formatted_phone_number,website,reviews'
@@ -303,7 +303,7 @@ export class PlacesService {
       const response = await fetch(`${url}?${params}`);
       const data = await response.json();
 
-      console.log('✅ GOOGLE PLACES API RESPONSE: Place Details (PlacesService)', {
+      console.log('💾 GOOGLE PLACES API: Place Details (completed)', {
         status: data.status,
         hasResult: !!data.result,
         cost: '$0.017 per 1000 calls'

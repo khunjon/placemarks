@@ -177,7 +177,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       if (!forceRefresh) {
         const cachedData = await ListDetailsCache.getCachedListDetails(listId, user.id);
         if (cachedData) {
-          console.log(`Loading list details from cache for list ${listId}...`);
+      
           setList(cachedData.list);
           setEditedName(cachedData.list.name);
           setEditedDescription(cachedData.list.description || '');
@@ -189,7 +189,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       }
       
       // Load fresh data from API
-      console.log(`Loading list details from API for list ${listId}...`);
+  
       
       // Add timeout for slow connections
       const timeoutPromise = new Promise((_, reject) => 

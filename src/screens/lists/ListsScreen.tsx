@@ -87,7 +87,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       if (!forceRefresh) {
         const cachedData = await ListsCache.getCachedLists(user.id);
         if (cachedData) {
-          console.log('Loading lists from cache...');
+      
           setUserLists(cachedData.userLists);
           setSmartLists(cachedData.smartLists);
           setLoading(false);
@@ -96,7 +96,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       }
       
       // Load fresh data from API
-      console.log('Loading lists from API...');
+  
       await Promise.all([
         loadUserLists(),
         loadSmartLists()

@@ -38,7 +38,7 @@ export default function CheckInScreen({ navigation }: CheckInScreenProps) {
 
     try {
       setError(null);
-      console.log('Loading check-in history for user:', user.id);
+
       const history = await checkInsService.getUserCheckInsByDate(user.id);
       console.log('Check-in history loaded:', history.length, 'date groups');
       setCheckInHistory(history);
@@ -71,7 +71,7 @@ export default function CheckInScreen({ navigation }: CheckInScreenProps) {
     
     if (user) {
       // User is authenticated, load history
-      console.log('User authenticated, loading check-in history');
+
       loadCheckInHistory();
     }
   }, [user, authLoading, loadCheckInHistory]);
