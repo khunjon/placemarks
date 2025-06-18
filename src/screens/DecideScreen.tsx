@@ -458,8 +458,12 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
                       alignItems: 'center',
                     }}
                     onPress={() => {
-                      // Navigate to place details - you can implement this later
-                      console.log('Navigate to place:', place.name);
+                      navigation.navigate('PlaceInListDetail', {
+                        placeId: place.google_place_id,
+                        listId: 'recommendations', // Virtual list ID for recommendations
+                        listName: 'Recommended For You',
+                        source: 'suggestion'
+                      });
                     }}
                   >
                     {/* Category Icon */}

@@ -286,33 +286,52 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
     try {
       setLoading(true);
       
-      // Load place details, list context, and related data in parallel
-      const [placeData, listPlaceData, checkInsData, otherListsData] = await Promise.all([
-        // Get place details
-        fetchPlaceDetails(placeId),
-        
-        // Get place details within this list
-        fetchListPlaceDetails(listId, placeId),
-        
-        // Get check-in history for this place
-        fetchCheckInsForPlace(user.id, placeId),
-        
-        // Get other lists containing this place
-        fetchOtherListsContainingPlace(user.id, placeId, listId)
-      ]);
+      // Check if this is a recommendations context (virtual list)
+      const isRecommendationsContext = listId === 'recommendations';
       
-      setPlace(placeData);
-      setListPlace(listPlaceData);
-      setCheckIns(checkInsData);
-      setOtherLists(otherListsData);
-      setTempNotes(listPlaceData?.notes || '');
+      if (isRecommendationsContext) {
+        // For recommendations, we expect a Google Place ID and should fetch from google_places_cache
+        const [placeData, checkInsData] = await Promise.all([
+          // Get place details from google_places_cache using the Google Place ID
+          fetchRecommendedPlaceDetails(placeId),
+          
+          // Get check-in history for this place (by Google Place ID)
+          fetchCheckInsForRecommendedPlace(user.id, placeId)
+        ]);
+        
+        setPlace(placeData);
+        setListPlace(null); // No list context for recommendations
+        setCheckIns(checkInsData);
+        setOtherLists([]); // No other lists for recommendations
+        setTempNotes('');
+      } else {
+        // Load place details, list context, and related data in parallel
+        const [placeData, listPlaceData, checkInsData, otherListsData] = await Promise.all([
+          // Get place details
+          fetchPlaceDetails(placeId),
+          
+          // Get place details within this list
+          fetchListPlaceDetails(listId, placeId),
+          
+          // Get check-in history for this place
+          fetchCheckInsForPlace(user.id, placeId),
+          
+          // Get other lists containing this place
+          fetchOtherListsContainingPlace(user.id, placeId, listId)
+        ]);
+        
+        setPlace(placeData);
+        setListPlace(listPlaceData);
+        setCheckIns(checkInsData);
+        setOtherLists(otherListsData);
+        setTempNotes(listPlaceData?.notes || '');
+      }
 
-      // Fetch fresh Google Places data if we have a Google Place ID and the data is stale
-      // OPTIMIZATION: Use googlePlacesCache to avoid unnecessary API calls
-      if (placeData.google_place_id && shouldFetchFreshGoogleData(placeData)) {
+      // For non-recommendations context, fetch fresh Google Places data if needed
+      if (!isRecommendationsContext && place?.google_place_id && shouldFetchFreshGoogleData(place)) {
         try {
-          console.log('Fetching Google Places data for:', placeData.name);
-          const googleData = await googlePlacesCache.getPlaceDetails(placeData.google_place_id);
+          console.log('Fetching Google Places data for:', place.name);
+          const googleData = await googlePlacesCache.getPlaceDetails(place.google_place_id!);
           
           if (googleData) {
             // Convert Google Places cache format to our format
@@ -334,15 +353,15 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
 
             // Update the place state with fresh Google data
             const updatedPlace = {
-              ...placeData,
-              phone: convertedData.phone || placeData.phone,
-              website: convertedData.website || placeData.website,
-              google_rating: convertedData.google_rating || placeData.google_rating,
-              price_level: convertedData.price_level || placeData.price_level,
-              hours_open: convertedData.hours_open || placeData.hours_open,
-              photo_references: convertedData.photo_references.length > 0 ? convertedData.photo_references : placeData.photo_references,
-              photos_urls: convertedData.photo_urls.length > 0 ? convertedData.photo_urls : placeData.photos_urls, // Use pre-generated URLs
-              place_types: convertedData.place_types.length > 0 ? convertedData.place_types : placeData.place_types
+              ...place,
+              phone: convertedData.phone || place.phone,
+              website: convertedData.website || place.website,
+              google_rating: convertedData.google_rating || place.google_rating,
+              price_level: convertedData.price_level || place.price_level,
+              hours_open: convertedData.hours_open || place.hours_open,
+              photo_references: convertedData.photo_references.length > 0 ? convertedData.photo_references : place.photo_references,
+              photos_urls: convertedData.photo_urls.length > 0 ? convertedData.photo_urls : place.photos_urls, // Use pre-generated URLs
+              place_types: convertedData.place_types.length > 0 ? convertedData.place_types : place.place_types
             };
             
             setPlace(updatedPlace);
@@ -382,6 +401,61 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
     } finally {
       setLoading(false);
     }
+  };
+
+  // Fetch place details from google_places_cache for recommendations
+  const fetchRecommendedPlaceDetails = async (googlePlaceId: string): Promise<PlaceDetails> => {
+    const { data, error } = await supabase
+      .from('google_places_cache')
+      .select('*')
+      .eq('google_place_id', googlePlaceId)
+      .single();
+
+    if (error) throw error;
+    if (!data) throw new Error('Recommended place not found');
+
+    // Extract coordinates from PostGIS geometry
+    const coordinates = data.geometry?.location ? {
+      latitude: data.geometry.location.lat,
+      longitude: data.geometry.location.lng
+    } : {
+      latitude: 13.7367, // Default Bangkok coordinates
+      longitude: 100.5412
+    };
+
+    return {
+      id: data.google_place_id, // Use Google Place ID as the ID for recommendations
+      name: data.name,
+      address: data.formatted_address || '',
+      coordinates,
+      google_place_id: data.google_place_id,
+      google_rating: data.rating,
+      price_level: data.price_level,
+      phone: data.formatted_phone_number,
+      website: data.website,
+      hours_open: data.opening_hours || {},
+      photos_urls: data.photo_urls || [],
+      photo_references: [], // Not needed for cached data
+      place_types: data.types || []
+    };
+  };
+
+  // Fetch check-ins for recommended place (by Google Place ID)
+  const fetchCheckInsForRecommendedPlace = async (userId: string, googlePlaceId: string): Promise<CheckIn[]> => {
+    // First, try to find if this Google Place ID has been added to any user's places
+    const { data: placeData } = await supabase
+      .from('places')
+      .select('id')
+      .eq('google_place_id', googlePlaceId)
+      .single();
+
+    if (!placeData) {
+      // No corresponding place in database, so no check-ins
+      return [];
+    }
+
+    // Fetch check-ins using the database place ID
+    return fetchCheckInsForPlace(userId, placeData.id);
   };
 
   // Fetch place details from database
@@ -619,12 +693,15 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
     );
   }
 
-  if (!place || !listPlace) {
+  // For recommendations context, we don't need listPlace
+  const isRecommendationsContext = listId === 'recommendations';
+  
+  if (!place || (!isRecommendationsContext && !listPlace)) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: DarkTheme.colors.semantic.systemBackground }}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: Spacing.lg }}>
           <Body color="secondary" style={{ textAlign: 'center' }}>
-            Place not found or no longer in this list
+            {!place ? 'Place not found' : 'Place no longer in this list'}
           </Body>
           <SecondaryButton
             title="Go Back"
@@ -731,7 +808,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                       </View>
                     )}
                     
-                    {listPlace.personal_rating && (
+                    {listPlace?.personal_rating && (
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Body style={{ fontSize: 16, marginRight: Spacing.xs }}>
                           {listPlace.personal_rating >= 4 ? '👍' : listPlace.personal_rating <= 2 ? '👎' : '😐'}
@@ -796,79 +873,81 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
               )}
             </ElevatedCard>
 
-            {/* Your Notes */}
-            <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md }}>
-                <Title3>Your Notes</Title3>
-                <TouchableOpacity onPress={() => setEditingNotes(!editingNotes)}>
-                  <Edit3 size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
-                </TouchableOpacity>
-              </View>
-              
-              {editingNotes ? (
-                <View>
-                  <TextInput
+            {/* Your Notes - Only show for list context, not recommendations */}
+            {!isRecommendationsContext && listPlace && (
+              <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md }}>
+                  <Title3>Your Notes</Title3>
+                  <TouchableOpacity onPress={() => setEditingNotes(!editingNotes)}>
+                    <Edit3 size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                  </TouchableOpacity>
+                </View>
+                
+                {editingNotes ? (
+                  <View>
+                    <TextInput
+                      style={{
+                        backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+                        borderRadius: DarkTheme.borderRadius.sm,
+                        padding: Spacing.sm,
+                        marginBottom: Spacing.sm,
+                        minHeight: 80,
+                        color: DarkTheme.colors.semantic.label,
+                        fontSize: 16,
+                        textAlignVertical: 'top',
+                      }}
+                      multiline
+                      autoFocus
+                      placeholder="Add your notes about this place..."
+                      placeholderTextColor={DarkTheme.colors.semantic.tertiaryLabel}
+                      value={tempNotes}
+                      onChangeText={setTempNotes}
+                      onFocus={handleTextInputFocus}
+                      ref={textInputRef}
+                    />
+                    <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+                      <GhostButton
+                        title="Cancel"
+                        onPress={() => {
+                          setTempNotes(listPlace.notes || '');
+                          setEditingNotes(false);
+                        }}
+                        size="sm"
+                        style={{ flex: 1 }}
+                      />
+                      <PrimaryButton
+                        title="Save"
+                        onPress={handleUpdateNotes}
+                        size="sm"
+                        style={{ flex: 1 }}
+                      />
+                    </View>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => setEditingNotes(true)}
                     style={{
                       backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
                       borderRadius: DarkTheme.borderRadius.sm,
                       padding: Spacing.sm,
-                      marginBottom: Spacing.sm,
-                      minHeight: 80,
-                      color: DarkTheme.colors.semantic.label,
-                      fontSize: 16,
-                      textAlignVertical: 'top',
+                      minHeight: 60,
+                      justifyContent: 'center',
                     }}
-                    multiline
-                    autoFocus
-                    placeholder="Add your notes about this place..."
-                    placeholderTextColor={DarkTheme.colors.semantic.tertiaryLabel}
-                    value={tempNotes}
-                    onChangeText={setTempNotes}
-                    onFocus={handleTextInputFocus}
-                    ref={textInputRef}
-                  />
-                  <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-                    <GhostButton
-                      title="Cancel"
-                      onPress={() => {
-                        setTempNotes(listPlace.notes || '');
-                        setEditingNotes(false);
-                      }}
-                      size="sm"
-                      style={{ flex: 1 }}
-                    />
-                    <PrimaryButton
-                      title="Save"
-                      onPress={handleUpdateNotes}
-                      size="sm"
-                      style={{ flex: 1 }}
-                    />
-                  </View>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  onPress={() => setEditingNotes(true)}
-                  style={{
-                    backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
-                    borderRadius: DarkTheme.borderRadius.sm,
-                    padding: Spacing.sm,
-                    minHeight: 60,
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Body color={listPlace.notes ? 'primary' : 'secondary'}>
-                    {listPlace.notes || 'Tap to add notes about this place...'}
-                  </Body>
-                </TouchableOpacity>
-              )}
-            </ElevatedCard>
+                  >
+                    <Body color={listPlace.notes ? 'primary' : 'secondary'}>
+                      {listPlace.notes || 'Tap to add notes about this place...'}
+                    </Body>
+                  </TouchableOpacity>
+                )}
+              </ElevatedCard>
+            )}
 
             {/* Check-in History */}
             {checkIns.length > 0 && (
               <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md }}>
                   <Title3>Recent Check-ins</Title3>
-                  {(listPlace.visit_count || 0) > 0 && (
+                  {(listPlace?.visit_count || 0) > 0 && (
                     <View style={{ 
                       marginLeft: Spacing.sm,
                       backgroundColor: DarkTheme.colors.accent.green + '20',
@@ -881,7 +960,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                         fontWeight: '600',
                         fontSize: 12
                       }}>
-                        {listPlace.visit_count} {listPlace.visit_count === 1 ? 'visit' : 'visits'}
+                        {listPlace!.visit_count} {listPlace!.visit_count === 1 ? 'visit' : 'visits'}
                       </Body>
                     </View>
                   )}

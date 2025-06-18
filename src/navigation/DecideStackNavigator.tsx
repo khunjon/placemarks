@@ -31,6 +31,25 @@ function ListDetailScreenWrapper({ navigation, route }: DecideStackScreenProps<'
   );
 }
 
+// Wrapper component to adapt DecideStack navigation props to ListsStack props for PlaceDetailScreen
+function PlaceDetailScreenWrapper({ navigation, route }: DecideStackScreenProps<'PlaceInListDetail'>) {
+  // Convert DecideStack params to ListsStack params format
+  const adaptedRoute = {
+    ...route,
+    params: {
+      ...route.params,
+    }
+  };
+
+  // Type assertion is safe here because we're adapting the props
+  return (
+    <PlaceDetailScreen 
+      navigation={navigation as any} 
+      route={adaptedRoute as any} 
+    />
+  );
+}
+
 export default function DecideStackNavigator() {
   return (
     <Stack.Navigator
@@ -70,9 +89,9 @@ export default function DecideStackNavigator() {
       
       <Stack.Screen 
         name="PlaceInListDetail" 
-        component={PlaceDetailScreen}
-        options={() => ({
-          title: 'Place Details',
+        component={PlaceDetailScreenWrapper}
+        options={({ route }) => ({
+          title: route.params.listName || 'Place Details',
           headerShown: false, // PlaceDetailScreen has its own header
         })}
       />
