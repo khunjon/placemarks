@@ -249,11 +249,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
     
     // Prioritize pre-generated URLs from database (no API calls needed)
     if (place.photos_urls && place.photos_urls.length > 0) {
-      console.log('🗄️ DATABASE PHOTO URLS: Using pre-generated photo URLs', {
-        photoCount: place.photos_urls.length,
-        cost: '$0.000 - FREE!',
-        source: 'database_cache'
-      });
+      console.log('🗄️ PlaceDetails rendered from database cache');
       return place.photos_urls;
     }
     
@@ -330,7 +326,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       // For non-recommendations context, fetch fresh Google Places data if needed
       if (!isRecommendationsContext && place?.google_place_id && shouldFetchFreshGoogleData(place)) {
         try {
-          console.log('Fetching Google Places data for:', place.name);
+          console.log('🟢 GOOGLE PLACES API: Fetching fresh data for:', place.name);
           const googleData = await googlePlacesCache.getPlaceDetails(place.google_place_id!);
           
           if (googleData) {
@@ -405,6 +401,8 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
 
   // Fetch place details from google_places_cache for recommendations
   const fetchRecommendedPlaceDetails = async (googlePlaceId: string): Promise<PlaceDetails> => {
+    console.log('🗄️ Loading recommended place from cache:', googlePlaceId);
+    
     const { data, error } = await supabase
       .from('google_places_cache')
       .select('*')
