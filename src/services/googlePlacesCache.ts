@@ -301,11 +301,7 @@ class GooglePlacesCacheService {
         photoUrls.push(photoUrl);
       }
       
-      console.log('🔗 PHOTO URLS GENERATED: Pre-generated photo URLs for database storage', {
-        photoCount: photoUrls.length,
-        googlePlaceId: result.place_id.substring(0, 20) + '...',
-        benefit: 'No URL generation needed on future loads'
-      });
+
     }
 
     const cacheEntry = {
