@@ -8,9 +8,11 @@ export interface BaseAnalyticsEvent {
 // Screen tracking events
 export interface ScreenViewedEvent extends BaseAnalyticsEvent {
   screen_name: string;
+  screen_title?: string;
   screen_class?: string;
   previous_screen?: string;
   time_on_previous_screen?: number;
+  navigation_method?: string;
 }
 
 // User events
@@ -178,7 +180,7 @@ export interface IAnalyticsService {
   initialize(config: AnalyticsConfig): Promise<void>;
   identify(userId: string, userProperties?: UserProperties): Promise<void>;
   track<T extends AnalyticsEvent>(eventName: AnalyticsEventName, eventProperties: T): Promise<void>;
-  trackScreen(screenName: string, properties?: Partial<ScreenViewedEvent>): Promise<void>;
+  trackScreen(screenName: string, navigationMethod?: string, params?: Record<string, any>): Promise<void>;
   setUserProperties(properties: Partial<UserProperties>): Promise<void>;
   flush(): Promise<void>;
   reset(): Promise<void>;

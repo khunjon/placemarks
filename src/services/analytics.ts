@@ -2,6 +2,7 @@ import { init, track, identify, setUserId, Identify, flush, reset } from '@ampli
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { NavigationContainerRef } from '@react-navigation/native';
 import {
   AnalyticsConfig,
   AnalyticsEvent,
@@ -11,14 +12,29 @@ import {
   ScreenViewedEvent,
   BaseAnalyticsEvent
 } from '../types/analytics';
+import { 
+  ScreenName, 
+  NavigationMethod, 
+  NAVIGATION_METHODS,
+  getScreenNameFromRoute,
+  getScreenTitle 
+} from '../constants/ScreenNames';
+
+interface ScreenSession {
+  screenName: ScreenName;
+  startTime: number;
+  previousScreen?: ScreenName;
+  navigationMethod: NavigationMethod;
+  params?: Record<string, any>;
+}
 
 class AnalyticsService implements IAnalyticsService {
   private initialized = false;
   private config: AnalyticsConfig | null = null;
-  private currentScreen: string | null = null;
-  private screenStartTime: number | null = null;
+  private currentSession: ScreenSession | null = null;
   private sessionId: string | null = null;
   private enableLogging = false;
+  private navigationRef: NavigationContainerRef<any> | null = null;
 
   /**
    * Initialize the Analytics service
@@ -138,11 +154,20 @@ class AnalyticsService implements IAnalyticsService {
   }
 
   /**
-   * Track screen views with automatic timing
+   * Initialize navigation tracking
+   */
+  initializeNavigation(navigationRef: NavigationContainerRef<any>): void {
+    this.navigationRef = navigationRef;
+    this.log('Navigation tracking initialized');
+  }
+
+  /**
+   * Track screen changes with simplified logic
    */
   async trackScreen(
-    screenName: string, 
-    properties?: Partial<ScreenViewedEvent>
+    screenName: ScreenName, 
+    navigationMethod: NavigationMethod = NAVIGATION_METHODS.PROGRAMMATIC,
+    params?: Record<string, any>
   ): Promise<void> {
     if (!this.isInitialized()) {
       this.logError('Analytics not initialized');
@@ -153,31 +178,63 @@ class AnalyticsService implements IAnalyticsService {
       const now = Date.now();
       let timeOnPreviousScreen: number | undefined;
 
-      // Calculate time on previous screen
-      if (this.currentScreen && this.screenStartTime) {
-        timeOnPreviousScreen = now - this.screenStartTime;
+      // Calculate time on previous screen if exists
+      if (this.currentSession) {
+        timeOnPreviousScreen = now - this.currentSession.startTime;
       }
 
-      // Track the screen view
-      await this.track(AnalyticsEventName.SCREEN_VIEWED, {
+      // Create new session
+      const newSession: ScreenSession = {
+        screenName,
+        startTime: now,
+        previousScreen: this.currentSession?.screenName,
+        navigationMethod,
+        params,
+      };
+
+      // Track the screen view event
+      const eventProperties: ScreenViewedEvent = {
         screen_name: screenName,
+        screen_title: getScreenTitle(screenName),
         screen_class: screenName,
-        previous_screen: this.currentScreen || undefined,
+        previous_screen: this.currentSession?.screenName,
         time_on_previous_screen: timeOnPreviousScreen,
+        navigation_method: navigationMethod,
         timestamp: now,
-        session_id: this.sessionId,
-        ...properties,
-      } as ScreenViewedEvent);
+        session_id: this.sessionId || '',
+        ...this.extractRelevantParams(params),
+      };
 
-      // Update current screen tracking
-      this.currentScreen = screenName;
-      this.screenStartTime = now;
+      await this.track(AnalyticsEventName.SCREEN_VIEWED, eventProperties);
 
-      // Don't log here since track() already logs the event
+      // Update current session
+      this.currentSession = newSession;
 
     } catch (error) {
       this.logError(`Failed to track screen: ${screenName}`, error);
     }
+  }
+
+  /**
+   * Extract relevant parameters for analytics (avoiding sensitive data)
+   */
+  private extractRelevantParams(params?: Record<string, any>): Record<string, any> {
+    if (!params) return {};
+
+    const relevantKeys = [
+      'listId', 'listName', 'listType',
+      'placeId', 'placeName', 'placeType', 
+      'checkInId', 'source', 'achievementId'
+    ];
+
+    const extracted: Record<string, any> = {};
+    relevantKeys.forEach(key => {
+      if (params[key] !== undefined) {
+        extracted[key] = params[key];
+      }
+    });
+
+    return extracted;
   }
 
   /**
@@ -232,13 +289,95 @@ class AnalyticsService implements IAnalyticsService {
 
     try {
       reset();
-      this.currentScreen = null;
-      this.screenStartTime = null;
+      this.currentSession = null;
       await this.initializeSession(); // Generate new session ID
       this.log('Analytics reset');
     } catch (error) {
       this.logError('Failed to reset analytics', error);
     }
+  }
+
+  /**
+   * Get current screen name
+   */
+  getCurrentScreenName(): ScreenName | null {
+    return this.currentSession?.screenName || null;
+  }
+
+  /**
+   * Get current session ID for helper functions
+   */
+  get currentSessionId(): string | null {
+    return this.sessionId;
+  }
+
+  /**
+   * Parse navigation state to extract screen name and params
+   */
+  parseNavigationState(state: any): { screenName: ScreenName | null; params?: Record<string, any> } {
+    if (!state) return { screenName: null };
+
+    // Get the current route
+    const route = state.routes[state.index];
+    if (!route) return { screenName: null };
+
+    // Handle nested navigation
+    if (route.state) {
+      // This is a nested navigator, get the active screen from it
+      const nestedRoute = route.state.routes[route.state.index];
+      if (nestedRoute) {
+        // Check if the nested route also has nested state (like stack inside tab)
+        if (nestedRoute.state) {
+          const deepNestedRoute = nestedRoute.state.routes[nestedRoute.state.index];
+          if (deepNestedRoute) {
+            // We have a deep nested structure: MainTabs -> ListsStack -> ListDetail
+            const screenName = getScreenNameFromRoute(deepNestedRoute.name, nestedRoute.name);
+            return { 
+              screenName, 
+              params: { ...route.params, ...nestedRoute.params, ...deepNestedRoute.params }
+            };
+          }
+        }
+        
+        // Single level nesting
+        const screenName = getScreenNameFromRoute(nestedRoute.name, route.name);
+        return { 
+          screenName, 
+          params: { ...route.params, ...nestedRoute.params }
+        };
+      }
+    }
+
+    // Root level routes
+    const screenName = getScreenNameFromRoute(route.name);
+    return { screenName, params: route.params };
+  }
+
+  /**
+   * Determine navigation method from state change
+   */
+  getNavigationMethod(previousState: any, currentState: any): NavigationMethod {
+    if (!previousState) {
+      return NAVIGATION_METHODS.INITIAL_LOAD;
+    }
+
+    // Check if it's a tab change
+    if (previousState.index !== currentState.index && 
+        previousState.routes.length === currentState.routes.length) {
+      return NAVIGATION_METHODS.TAB_PRESS;
+    }
+
+    // Check if it's a back navigation
+    if (currentState.routes.length < previousState.routes.length) {
+      return NAVIGATION_METHODS.BACK_BUTTON;
+    }
+
+    // Check if it's a forward navigation
+    if (currentState.routes.length > previousState.routes.length) {
+      return NAVIGATION_METHODS.PUSH;
+    }
+
+    return NAVIGATION_METHODS.PROGRAMMATIC;
   }
 
   /**
@@ -286,7 +425,7 @@ class AnalyticsService implements IAnalyticsService {
       error_type: context?.errorType ?? 'unknown',
       error_message: errorMessage,
       error_code: context?.errorCode,
-      screen_name: context?.screenName ?? this.currentScreen,
+      screen_name: context?.screenName ?? this.getCurrentScreenName(),
       action_attempted: context?.actionAttempted,
       stack_trace: stackTrace,
       timestamp: Date.now(),
@@ -320,30 +459,46 @@ class AnalyticsService implements IAnalyticsService {
   private log(message: string, data?: any): void {
     if (this.enableLogging) {
       if (message.includes('Event tracked:')) {
-        // Use chart emoji for event tracking and abbreviate
         const eventName = message.split('Event tracked: ')[1];
-        // Show key info for screen views, just event name for others
+        
         if (eventName === 'screen_viewed') {
           const screenName = data?.screen_name;
-          if (screenName && typeof screenName === 'string') {
-            console.log(`📊 ${eventName}: ${screenName}`);
-          } else {
-            // If screen_name is still an object, just show the event name
-            console.log(`📊 ${eventName}`);
+          const navigationMethod = data?.navigation_method;
+          const timeSpent = data?.time_on_previous_screen;
+          
+          let logMessage = `🧭 Screen: ${screenName}`;
+          if (navigationMethod && navigationMethod !== 'programmatic') {
+            logMessage += ` (${navigationMethod})`;
           }
-        } else if (eventName === 'performance') {
-          // Skip performance logs to reduce noise
-          return;
-        } else if (eventName === 'user_identified') {
-          // Skip user_identified logs to reduce noise
+          if (timeSpent && timeSpent > 1000) {
+            logMessage += ` | Prev: ${Math.round(timeSpent / 1000)}s`;
+          }
+          
+          console.log(logMessage);
+        } else if (eventName === 'performance' || eventName === 'user_identified') {
+          // Skip these to reduce noise but keep them tracked
           return;
         } else {
-          console.log(`📊 ${eventName}`);
+          // Show other events with context
+          const eventContext = this.getEventContext(data);
+          console.log(`📊 ${eventName}${eventContext}`);
         }
       } else {
         console.log(`📈 ${message}`);
       }
     }
+  }
+
+  private getEventContext(data?: any): string {
+    if (!data) return '';
+    
+    const contextParts: string[] = [];
+    
+    if (data.list_name) contextParts.push(`list: ${data.list_name}`);
+    if (data.place_name) contextParts.push(`place: ${data.place_name}`);
+    if (data.screen_name) contextParts.push(`screen: ${data.screen_name}`);
+    
+    return contextParts.length > 0 ? ` | ${contextParts.join(', ')}` : '';
   }
 
   private logError(message: string, error?: any): void {
@@ -375,7 +530,8 @@ export const AnalyticsHelpers = {
       creation_source: creationSource,
       initial_place_count: initialPlaceCount,
       timestamp: Date.now(),
-    } as any);
+      session_id: analyticsService.currentSessionId || undefined,
+    });
   },
 
   /**
@@ -395,7 +551,8 @@ export const AnalyticsHelpers = {
       place_name: placeName,
       source,
       timestamp: Date.now(),
-    } as any);
+      session_id: analyticsService.currentSessionId || undefined,
+    });
   },
 
   /**
@@ -423,7 +580,8 @@ export const AnalyticsHelpers = {
       checkin_source: options.source ?? 'manual',
       location_accuracy: options.locationAccuracy,
       timestamp: Date.now(),
-    } as any);
+      session_id: analyticsService.currentSessionId || undefined,
+    });
   },
 };
 

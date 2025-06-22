@@ -8,7 +8,6 @@ import BottomTabNavigator from './src/navigation/BottomTabNavigator';
 import { LoginScreen } from './src/screens/auth';
 import type { RootStackParamList } from './src/navigation/types';
 import { analyticsService } from './src/services/analytics';
-import { navigationTrackingService, NavigationTrackingUtils } from './src/services/navigationTracking';
 import { NAVIGATION_METHODS } from './src/constants/ScreenNames';
 import './global.css';
 
@@ -35,7 +34,7 @@ function AppNavigator() {
 
         // Initialize navigation tracking
         if (navigationRef.current) {
-          navigationTrackingService.initialize(navigationRef.current);
+          analyticsService.initializeNavigation(navigationRef.current);
         }
 
         // Identify user if logged in
@@ -59,27 +58,20 @@ function AppNavigator() {
   const handleNavigationStateChange = async (state: any) => {
     if (!state) return;
 
-    const previousRouteName = routeNameRef.current;
-    const currentScreenName = NavigationTrackingUtils.getScreenNameFromState(state);
-    const routeParams = NavigationTrackingUtils.getRouteParamsFromState(state);
-    
-    if (!currentScreenName) return;
+    const { screenName, params } = analyticsService.parseNavigationState(state);
+    if (!screenName) return;
 
     // Determine navigation method
-    const navigationMethod = NavigationTrackingUtils.getNavigationMethodFromStateChange(
+    const navigationMethod = analyticsService.getNavigationMethod(
       previousStateRef.current,
       state
     );
 
     // Track the screen change
-    await navigationTrackingService.trackScreenChange(
-      currentScreenName,
-      navigationMethod,
-      routeParams
-    );
+    await analyticsService.trackScreen(screenName, navigationMethod, params);
 
     // Save the current route name for next time
-    routeNameRef.current = currentScreenName;
+    routeNameRef.current = screenName;
     previousStateRef.current = state;
   };
 
@@ -88,16 +80,13 @@ function AppNavigator() {
     if (navigationRef.current) {
       const state = navigationRef.current.getRootState();
       if (state) {
-        const currentScreenName = NavigationTrackingUtils.getScreenNameFromState(state);
-        if (currentScreenName) {
-          routeNameRef.current = currentScreenName;
+        const { screenName } = analyticsService.parseNavigationState(state);
+        if (screenName) {
+          routeNameRef.current = screenName;
           previousStateRef.current = state;
           
           // Track initial screen
-          navigationTrackingService.trackScreenChange(
-            currentScreenName,
-            NAVIGATION_METHODS.INITIAL_LOAD
-          );
+          analyticsService.trackScreen(screenName, NAVIGATION_METHODS.INITIAL_LOAD);
         }
       }
     }

@@ -2,7 +2,6 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { analyticsService, AnalyticsHelpers } from '../services/analytics';
 import { AnalyticsEventName, UserProperties } from '../types/analytics';
-import { navigationTrackingService } from '../services/navigationTracking';
 import { NAVIGATION_METHODS, type ScreenName } from '../constants/ScreenNames';
 
 /**
@@ -21,8 +20,8 @@ export function useAnalytics(screenName?: ScreenName, enableManualTracking = fal
       if (enableManualTracking && screenName && !hasTrackedScreen.current) {
         screenStartTime.current = Date.now();
         
-        // Use navigation tracking service for consistency
-        navigationTrackingService.trackCurrentScreen(
+        // Use analytics service for screen tracking
+        analyticsService.trackScreen(
           screenName,
           NAVIGATION_METHODS.PROGRAMMATIC
         );
@@ -47,20 +46,13 @@ export function useAnalytics(screenName?: ScreenName, enableManualTracking = fal
     trackError: analyticsService.trackError.bind(analyticsService),
     trackPerformance: analyticsService.trackPerformance.bind(analyticsService),
     
-    // Navigation tracking methods
-    trackCurrentScreen: navigationTrackingService.trackCurrentScreen.bind(navigationTrackingService),
-    trackTabPress: navigationTrackingService.trackTabPress.bind(navigationTrackingService),
-    trackBackNavigation: navigationTrackingService.trackBackNavigation.bind(navigationTrackingService),
-    trackModalPresentation: navigationTrackingService.trackModalPresentation.bind(navigationTrackingService),
-    
     // Helper methods for common events
     trackListCreated: AnalyticsHelpers.trackListCreated,
     trackPlaceAddedToList: AnalyticsHelpers.trackPlaceAddedToList,
     trackCheckInCreated: AnalyticsHelpers.trackCheckInCreated,
     
     // Navigation state methods
-    getCurrentScreenName: navigationTrackingService.getCurrentScreenName.bind(navigationTrackingService),
-    getScreenUsageStats: navigationTrackingService.getScreenUsageStats.bind(navigationTrackingService),
+    getCurrentScreenName: analyticsService.getCurrentScreenName.bind(analyticsService),
     
     // Utility methods
     isInitialized: analyticsService.isInitialized.bind(analyticsService),
@@ -172,7 +164,8 @@ export function useSearchAnalytics() {
         selected_result_index: selectedResultIndex,
         search_source: source,
         timestamp: Date.now(),
-      } as any);
+        session_id: analyticsService.currentSessionId || undefined,
+      });
     },
     []
   );
@@ -199,7 +192,8 @@ export function useUserJourneyAnalytics() {
         place_count: placeCount,
         view_duration: viewDuration,
         timestamp: Date.now(),
-      } as any);
+        session_id: analyticsService.currentSessionId || undefined,
+      });
     },
     []
   );
@@ -219,7 +213,8 @@ export function useUserJourneyAnalytics() {
         source,
         view_duration: viewDuration,
         timestamp: Date.now(),
-      } as any);
+        session_id: analyticsService.currentSessionId || undefined,
+      });
     },
     []
   );
@@ -237,7 +232,8 @@ export function useUserJourneyAnalytics() {
         is_own_checkin: isOwnCheckin,
         view_source: viewSource,
         timestamp: Date.now(),
-      } as any);
+        session_id: analyticsService.currentSessionId || undefined,
+      });
     },
     []
   );
