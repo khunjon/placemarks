@@ -274,7 +274,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   };
 
   // OPTIMIZATION: Memoize photo URLs to prevent regeneration on every render
-  const photoUrls = useMemo(() => getPhotoUrls(), [place?.photo_references, place?.photos_urls]);
+  const photoUrls = useMemo(() => getPhotoUrls(), [place?.photo_references, place?.photos_urls, place?.google_place_id]);
 
   const loadPlaceDetails = async () => {
     if (!user?.id) return;
@@ -321,73 +321,130 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
         setCheckIns(checkInsData);
         setOtherLists(otherListsData);
         setTempNotes(listPlaceData?.notes || '');
-      }
-
-      // For non-recommendations context, fetch fresh Google Places data if needed
-      if (!isRecommendationsContext && place?.google_place_id && shouldFetchFreshGoogleData(place)) {
-        try {
-          console.log('🟢 GOOGLE PLACES API: Fetching fresh data for:', place.name);
-          const googleData = await googlePlacesCache.getPlaceDetails(place.google_place_id!);
-          
-          if (googleData) {
-            // Convert Google Places cache format to our format
-            const convertedData = {
-              phone: googleData.formatted_phone_number || null,
-              website: googleData.website || null,
-              google_rating: googleData.rating || null,
-              price_level: googleData.price_level || null,
-              hours_open: googleData.opening_hours || null,
-              photo_references: googleData.photos ? googleData.photos.map((photo: any) => ({
-                photo_reference: photo.photo_reference,
-                height: photo.height,
-                width: photo.width,
-                html_attributions: photo.html_attributions || []
-              })) : [],
-              photo_urls: googleData.photo_urls || [], // Use pre-generated URLs
-              place_types: googleData.types || []
-            };
-
-            // Update the place state with fresh Google data
-            const updatedPlace = {
-              ...place,
-              phone: convertedData.phone || place.phone,
-              website: convertedData.website || place.website,
-              google_rating: convertedData.google_rating || place.google_rating,
-              price_level: convertedData.price_level || place.price_level,
-              hours_open: convertedData.hours_open || place.hours_open,
-              photo_references: convertedData.photo_references.length > 0 ? convertedData.photo_references : place.photo_references,
-              photos_urls: convertedData.photo_urls.length > 0 ? convertedData.photo_urls : place.photos_urls, // Use pre-generated URLs
-              place_types: convertedData.place_types.length > 0 ? convertedData.place_types : place.place_types
-            };
+        
+        // Check if we can enhance the fetched place data with Google Places cache
+        if (placeData?.google_place_id) {
+          try {
+            // Always check the Google Places cache for photo URLs, even if we have basic data
+            const googleData = await googlePlacesCache.getCachedPlace(placeData.google_place_id);
             
-            setPlace(updatedPlace);
-            
-            // Update the database with fresh Google Places data
-            const updateData: any = {};
-            if (convertedData.phone) updateData.phone = convertedData.phone;
-            if (convertedData.website) updateData.website = convertedData.website;
-            if (convertedData.google_rating) updateData.google_rating = convertedData.google_rating.toString();
-            if (convertedData.price_level) updateData.price_level = convertedData.price_level;
-            if (convertedData.hours_open) updateData.hours_open = convertedData.hours_open;
-            if (convertedData.photo_references.length > 0) updateData.photo_references = convertedData.photo_references;
-            if (convertedData.photo_urls.length > 0) updateData.photos_urls = convertedData.photo_urls; // Store pre-generated URLs
-            if (convertedData.place_types.length > 0) updateData.google_types = convertedData.place_types;
-            
-            if (Object.keys(updateData).length > 0) {
-              const { error } = await supabase
-                .from('places')
-                .update(updateData)
-                .eq('id', placeId);
+            if (googleData && googleData.photo_urls && googleData.photo_urls.length > 0) {
+              // If we have cached photo URLs but our place doesn't, update it
+              if (!placeData.photos_urls || placeData.photos_urls.length === 0) {
+                console.log('🗄️ PHOTO ENHANCEMENT: Adding cached photo URLs to place data', {
+                  placeId: placeData.id,
+                  name: placeData.name,
+                  photoCount: googleData.photo_urls.length,
+                  source: 'google_places_cache'
+                });
                 
-              if (error) {
-                console.warn('Failed to update place with Google data:', error);
-              } else {
-                console.log('Successfully updated place with fresh Google data');
+                // Update the place state with cached photo URLs
+                const updatedPlace = {
+                  ...placeData,
+                  photos_urls: googleData.photo_urls,
+                  // Also update any other missing Google data
+                  phone: googleData.formatted_phone_number || placeData.phone,
+                  website: googleData.website || placeData.website,
+                  google_rating: googleData.rating || placeData.google_rating,
+                  price_level: googleData.price_level || placeData.price_level,
+                  hours_open: googleData.opening_hours || placeData.hours_open,
+                  photo_references: googleData.photos || placeData.photo_references,
+                  place_types: googleData.types || placeData.place_types
+                };
+                
+                setPlace(updatedPlace);
+                
+                // Update the database with the photo URLs to avoid this lookup next time
+                const updateData: any = {
+                  photos_urls: googleData.photo_urls
+                };
+                
+                // Also update other missing fields
+                if (googleData.formatted_phone_number && !placeData.phone) updateData.phone = googleData.formatted_phone_number;
+                if (googleData.website && !placeData.website) updateData.website = googleData.website;
+                if (googleData.rating && !placeData.google_rating) updateData.google_rating = googleData.rating.toString();
+                if (googleData.price_level && !placeData.price_level) updateData.price_level = googleData.price_level;
+                if (googleData.opening_hours && !placeData.hours_open) updateData.hours_open = googleData.opening_hours;
+                if (googleData.photos && (!placeData.photo_references || placeData.photo_references.length === 0)) updateData.photo_references = googleData.photos;
+                if (googleData.types && (!placeData.place_types || placeData.place_types.length === 0)) updateData.google_types = googleData.types;
+                
+                const { error } = await supabase
+                  .from('places')
+                  .update(updateData)
+                  .eq('id', placeId);
+                  
+                if (error) {
+                  console.warn('Failed to update place with cached Google data:', error);
+                } else {
+                  console.log('Successfully enhanced place with cached Google data');
+                }
+              }
+            } else if (shouldFetchFreshGoogleData(placeData)) {
+              // Only fetch fresh data if we don't have cached data and we need it
+              console.log('🟢 GOOGLE PLACES API: Fetching fresh data for:', placeData.name);
+              const freshGoogleData = await googlePlacesCache.getPlaceDetails(placeData.google_place_id);
+              
+              if (freshGoogleData) {
+                // Convert Google Places cache format to our format
+                const convertedData = {
+                  phone: freshGoogleData.formatted_phone_number || null,
+                  website: freshGoogleData.website || null,
+                  google_rating: freshGoogleData.rating || null,
+                  price_level: freshGoogleData.price_level || null,
+                  hours_open: freshGoogleData.opening_hours || null,
+                  photo_references: freshGoogleData.photos ? freshGoogleData.photos.map((photo: any) => ({
+                    photo_reference: photo.photo_reference,
+                    height: photo.height,
+                    width: photo.width,
+                    html_attributions: photo.html_attributions || []
+                  })) : [],
+                  photo_urls: freshGoogleData.photo_urls || [], // Use pre-generated URLs
+                  place_types: freshGoogleData.types || []
+                };
+
+                // Update the place state with fresh Google data
+                const updatedPlace = {
+                  ...placeData,
+                  phone: convertedData.phone || placeData.phone,
+                  website: convertedData.website || placeData.website,
+                  google_rating: convertedData.google_rating || placeData.google_rating,
+                  price_level: convertedData.price_level || placeData.price_level,
+                  hours_open: convertedData.hours_open || placeData.hours_open,
+                  photo_references: convertedData.photo_references.length > 0 ? convertedData.photo_references : placeData.photo_references,
+                  photos_urls: convertedData.photo_urls.length > 0 ? convertedData.photo_urls : placeData.photos_urls, // Use pre-generated URLs
+                  place_types: convertedData.place_types.length > 0 ? convertedData.place_types : placeData.place_types
+                };
+                
+                setPlace(updatedPlace);
+                
+                // Update the database with fresh Google Places data
+                const updateData: any = {};
+                if (convertedData.phone) updateData.phone = convertedData.phone;
+                if (convertedData.website) updateData.website = convertedData.website;
+                if (convertedData.google_rating) updateData.google_rating = convertedData.google_rating.toString();
+                if (convertedData.price_level) updateData.price_level = convertedData.price_level;
+                if (convertedData.hours_open) updateData.hours_open = convertedData.hours_open;
+                if (convertedData.photo_references.length > 0) updateData.photo_references = convertedData.photo_references;
+                if (convertedData.photo_urls.length > 0) updateData.photos_urls = convertedData.photo_urls; // Store pre-generated URLs
+                if (convertedData.place_types.length > 0) updateData.google_types = convertedData.place_types;
+                
+                if (Object.keys(updateData).length > 0) {
+                  const { error } = await supabase
+                    .from('places')
+                    .update(updateData)
+                    .eq('id', placeId);
+                    
+                  if (error) {
+                    console.warn('Failed to update place with Google data:', error);
+                  } else {
+                    console.log('Successfully updated place with fresh Google data');
+                  }
+                }
               }
             }
+          } catch (error) {
+            console.warn('Failed to enhance place with Google Places data:', error);
           }
-        } catch (error) {
-          console.warn('Failed to fetch fresh Google Places data:', error);
         }
       }
       

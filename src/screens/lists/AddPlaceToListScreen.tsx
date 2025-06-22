@@ -33,7 +33,7 @@ import {
   PlaceError,
   PlaceSearchResult,
 } from '../../services/listsService';
-import { ListsCache } from '../../services/listsCache';
+import { cacheManager } from '../../services/cacheManager';
 import { ListDetailsCache } from '../../services/listDetailsCache';
 import { checkInUtils } from '../../services/checkInsService';
 import Toast from '../../components/ui/Toast';
@@ -146,6 +146,12 @@ export default function AddPlaceToListScreen({
   const performSearch = async (query: string) => {
     if (!user?.id) return;
 
+    // Prevent concurrent searches
+    if (isSearching) {
+      console.log('⏭️ SEARCH SKIPPED: Already searching', { currentQuery: query });
+      return;
+    }
+
     // Skip search if query is too similar to the last searched query
     if (lastSearchedQuery && query.length >= lastSearchedQuery.length && 
         query.startsWith(lastSearchedQuery) && query.length - lastSearchedQuery.length <= 2) {
@@ -162,10 +168,26 @@ export default function AddPlaceToListScreen({
       setHasSearched(true);
       setLastSearchedQuery(query);
 
+      console.log('🔍 STARTING SEARCH: Beginning place search', {
+        query: query,
+        queryLength: query.length,
+        timestamp: new Date().toISOString()
+      });
+
       const results = await enhancedListsService.searchPlacesForList(query);
       setSearchResults(results);
+
+      console.log('✅ SEARCH COMPLETE: Place search finished successfully', {
+        query: query,
+        resultCount: results.length,
+        timestamp: new Date().toISOString()
+      });
     } catch (error) {
-      console.error('Search error:', error);
+      console.error('❌ SEARCH ERROR: Place search failed', {
+        query: query,
+        error: error,
+        timestamp: new Date().toISOString()
+      });
       showToast('Failed to search for places. Please try again.', 'error');
     } finally {
       setIsSearching(false);
@@ -174,6 +196,9 @@ export default function AddPlaceToListScreen({
 
   const handleAddPlace = async (place: SearchResult) => {
     if (!user?.id || !listId) return;
+
+    // Prevent concurrent add operations for the same place
+    if (place.isAdding) return;
 
     // Dismiss keyboard when adding a place
     Keyboard.dismiss();
@@ -219,7 +244,7 @@ export default function AddPlaceToListScreen({
       
       // Invalidate caches since a place was added to a list
       if (user?.id) {
-        await ListsCache.invalidateCache();
+        await cacheManager.lists.invalidate();
         await ListDetailsCache.invalidateListCache(listId);
       }
       
@@ -411,6 +436,9 @@ export default function AddPlaceToListScreen({
             }}
             returnKeyType="search"
             onSubmitEditing={() => Keyboard.dismiss()}
+            autoCorrect={false}
+            autoCapitalize="none"
+            spellCheck={false}
           />
           {isSearching && (
             <ActivityIndicator size="small" color={Colors.primary[500]} />

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import * as Location from 'expo-location';
 import { LocationCoords } from '../types/navigation';
 import { locationUtils } from '../utils/location';
-import { LocationCache } from '../services/locationCache';
+import { cacheManager } from '../services/cacheManager';
 import { locationService } from '../services/locationService';
 
 export interface LocationState {
@@ -109,7 +109,7 @@ export function useLocation(options: UseLocationOptions = {}) {
         
         // Apply fallback if enabled
         if (fallbackToBangkok) {
-          await LocationCache.saveLocation(BANGKOK_CENTER, 'fallback');
+          await cacheManager.location.store(BANGKOK_CENTER, 'fallback');
           setState(prev => ({
             ...prev,
             location: BANGKOK_CENTER,
@@ -146,7 +146,7 @@ export function useLocation(options: UseLocationOptions = {}) {
       
       // Apply fallback on error
       if (fallbackToBangkok) {
-        await LocationCache.saveLocation(BANGKOK_CENTER, 'fallback');
+        await cacheManager.location.store(BANGKOK_CENTER, 'fallback');
         setState(prev => ({
           ...prev,
           location: BANGKOK_CENTER,
@@ -232,7 +232,7 @@ export function useLocation(options: UseLocationOptions = {}) {
 
       // If no location and fallback is enabled
       if (fallbackToBangkok) {
-        await LocationCache.saveLocation(BANGKOK_CENTER, 'fallback');
+        await cacheManager.location.store(BANGKOK_CENTER, 'fallback');
         setState(prev => ({
           ...prev,
           location: BANGKOK_CENTER,
@@ -284,7 +284,7 @@ export function useLocation(options: UseLocationOptions = {}) {
       // Try offline fallback
       if (enableOfflineFallback) {
         try {
-          const lastKnown = await LocationCache.getLastKnownLocation();
+          const lastKnown = await cacheManager.location.getLastKnown();
           if (lastKnown.location) {
             setState(prev => ({
               ...prev,
@@ -309,7 +309,7 @@ export function useLocation(options: UseLocationOptions = {}) {
       // Apply final fallback
       if (fallbackToBangkok) {
         try {
-          await LocationCache.saveLocation(BANGKOK_CENTER, 'fallback');
+          await cacheManager.location.store(BANGKOK_CENTER, 'fallback');
           setState(prev => ({
             ...prev,
             location: BANGKOK_CENTER,
@@ -395,7 +395,7 @@ export function useLocation(options: UseLocationOptions = {}) {
     if (!enableCaching) return;
 
     try {
-      const cachedLocation = await LocationCache.getCachedLocation();
+      const cachedLocation = await cacheManager.location.get();
       if (cachedLocation) {
         setState(prev => ({
           ...prev,
@@ -408,7 +408,7 @@ export function useLocation(options: UseLocationOptions = {}) {
       
       if (enableOfflineFallback) {
         // Try to get last known location for offline use
-        const lastKnown = await LocationCache.getLastKnownLocation();
+        const lastKnown = await cacheManager.location.getLastKnown();
         if (lastKnown.location) {
           setState(prev => ({
             ...prev,
@@ -460,7 +460,7 @@ export function useLocation(options: UseLocationOptions = {}) {
         } else if (autoRequest && fallbackToBangkok && !state.location) {
           // Set fallback immediately if no permission and no cached location
           try {
-            await LocationCache.saveLocation(BANGKOK_CENTER, 'fallback');
+            await cacheManager.location.store(BANGKOK_CENTER, 'fallback');
             setState(prev => ({
               ...prev,
               location: BANGKOK_CENTER,
@@ -530,7 +530,7 @@ export function useLocation(options: UseLocationOptions = {}) {
   // Get cache status for debugging
   const getCacheStatus = useCallback(async () => {
     try {
-      return await LocationCache.getCacheStatus();
+      return await cacheManager.location.getStatus();
     } catch (error) {
       console.warn('Failed to get cache status:', error);
       return {

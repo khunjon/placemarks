@@ -15,7 +15,7 @@ import {
 import { MapsService } from '../../services/maps';
 import { placesService } from '../../services/places';
 import { checkInUtils } from '../../services/checkInsService';
-import { checkInSearchCache } from '../../services/checkInSearchCache';
+import { cacheManager } from '../../services/cacheManager';
 import type { CheckInStackScreenProps } from '../../navigation/types';
 
 type CheckInSearchScreenProps = CheckInStackScreenProps<'CheckInSearch'>;
@@ -92,7 +92,7 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
       const radius = 500; // Fixed 500m radius
 
       // Check cache first
-      const cachedResults = await checkInSearchCache.getCachedNearbySearch(location, radius);
+      const cachedResults = await cacheManager.search.getNearby(location, radius);
       if (cachedResults) {
         console.log('🗄️ CACHE HIT: Retrieved nearby places from check-in cache', {
           location: `${location.coords.latitude},${location.coords.longitude}`,
@@ -161,7 +161,7 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
       const finalPlaces = places.sort((a, b) => a.distance - b.distance);
       
       // Cache the results
-      await checkInSearchCache.cacheNearbySearch(location, radius, finalPlaces);
+      await cacheManager.search.storeNearby(location, radius, finalPlaces);
       
       setNearbyPlaces(finalPlaces);
 
@@ -226,7 +226,7 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
   // Clear cache and retry
   const handleClearCacheAndRetry = async () => {
     try {
-      await checkInSearchCache.clearCache();
+      await cacheManager.search.clear();
       loadNearbyPlaces();
     } catch (error) {
       console.error('Error clearing cache:', error);
@@ -236,7 +236,7 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
   // Show cache stats (for debugging)
   const showCacheStatsInfo = async () => {
     try {
-      const stats = await checkInSearchCache.getCacheStats();
+      const stats = await cacheManager.search.getStats();
       Alert.alert(
         'Cache Statistics',
         `Nearby searches: ${stats.nearbySearches}\nText searches: ${stats.textSearches}\nTotal size: ${stats.totalSizeKB}KB\nOldest: ${stats.oldestEntry?.toLocaleString() || 'None'}\nNewest: ${stats.newestEntry?.toLocaleString() || 'None'}`,
@@ -270,7 +270,7 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
     
     try {
       // Check cache first
-      const cachedResults = await checkInSearchCache.getCachedTextSearch(query, userLocation);
+      const cachedResults = await cacheManager.search.getText(query, userLocation);
       if (cachedResults) {
         console.log('🗄️ CACHE HIT: Retrieved text search from check-in cache', {
           query: query.trim(),
@@ -328,7 +328,7 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
         }).sort((a: NearbyPlaceResult, b: NearbyPlaceResult) => a.distance - b.distance);
 
         // Cache the results
-        await checkInSearchCache.cacheTextSearch(query, userLocation, results);
+        await cacheManager.search.storeText(query, userLocation, results);
         
         setSearchResults(results);
       } else {

@@ -1,6 +1,6 @@
 import { LocationCoords } from '../types/navigation';
 import { locationUtils } from '../utils/location';
-import { LocationCache } from './locationCache';
+import { cacheManager } from './cacheManager';
 
 interface LocationServiceState {
   currentLocation: LocationCoords | null;
@@ -168,7 +168,7 @@ class LocationService {
         this.updateLocation(locationResult.location, locationResult.source as 'gps' | 'network');
         
         // Save to cache
-        await LocationCache.saveLocation(locationResult.location, locationResult.source as 'gps' | 'network');
+        await cacheManager.location.store(locationResult.location, locationResult.source as 'gps' | 'network');
       } else {
         console.log(`⏭️ LocationService: Retry ${this.state.retryAttempts} failed, will try again later`);
       }
@@ -200,7 +200,7 @@ class LocationService {
       if (locationResult.location && locationResult.source !== 'fallback') {
         console.log('✅ LocationService: Force retry successful!');
         this.updateLocation(locationResult.location, locationResult.source as 'gps' | 'network');
-        await LocationCache.saveLocation(locationResult.location, locationResult.source as 'gps' | 'network');
+        await cacheManager.location.store(locationResult.location, locationResult.source as 'gps' | 'network');
         return true;
       }
 

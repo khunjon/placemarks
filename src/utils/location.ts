@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
 import { LocationCoords, MapRegion } from '../types/navigation';
-import { LocationCache } from '../services/locationCache';
+import { cacheManager } from '../services/cacheManager';
 
 // Performance monitoring for location updates
 const performanceMonitor = {
@@ -96,7 +96,7 @@ export const locationUtils = {
     try {
       // Check cache first if not forcing refresh
       if (!forceRefresh && useCache) {
-        const cachedLocation = await LocationCache.getCachedLocation();
+        const cachedLocation = await cacheManager.location.get();
         if (cachedLocation) {
           performanceMonitor.end('getLocationWithCache (cache hit)');
           return {
@@ -122,7 +122,7 @@ export const locationUtils = {
       
       if (!isOnline && enableOfflineFallback) {
         // Use last known location if offline
-        const lastKnown = await LocationCache.getLastKnownLocation();
+        const lastKnown = await cacheManager.location.getLastKnown();
         if (lastKnown.location) {
           return {
             location: lastKnown.location,
@@ -131,7 +131,7 @@ export const locationUtils = {
         }
         
         // Fall back to Bangkok if no cached location
-        await LocationCache.saveLocation(DEFAULT_LOCATION, 'fallback');
+        await cacheManager.location.store(DEFAULT_LOCATION, 'fallback');
         return {
           location: DEFAULT_LOCATION,
           source: 'fallback',
@@ -162,7 +162,7 @@ export const locationUtils = {
       
       if (locationResult.location) {
         // Cache the new location
-        await LocationCache.saveLocation(locationResult.location, 'gps');
+        await cacheManager.location.store(locationResult.location, 'gps');
         performanceMonitor.end('getLocationWithCache (GPS success)');
         return {
           location: locationResult.location,
@@ -180,7 +180,7 @@ export const locationUtils = {
           
           const networkLocation = await Promise.race([networkLocationPromise, networkLocationTimeout]);
           if (networkLocation) {
-            await LocationCache.saveLocation(networkLocation, 'network');
+            await cacheManager.location.store(networkLocation, 'network');
             performanceMonitor.end('getLocationWithCache (network success)');
             return {
               location: networkLocation,
@@ -194,7 +194,7 @@ export const locationUtils = {
 
       // If all else fails, use offline fallback
       if (enableOfflineFallback) {
-        const lastKnown = await LocationCache.getLastKnownLocation();
+        const lastKnown = await cacheManager.location.getLastKnown();
         if (lastKnown.location) {
           performanceMonitor.end('getLocationWithCache (offline fallback)');
           return {
@@ -205,7 +205,7 @@ export const locationUtils = {
       }
 
       // Final fallback to Bangkok
-      await LocationCache.saveLocation(DEFAULT_LOCATION, 'fallback');
+      await cacheManager.location.store(DEFAULT_LOCATION, 'fallback');
       performanceMonitor.end('getLocationWithCache (Bangkok fallback)');
       return {
         location: DEFAULT_LOCATION,
@@ -219,7 +219,7 @@ export const locationUtils = {
       // Try offline fallback
       if (enableOfflineFallback) {
         try {
-          const lastKnown = await LocationCache.getLastKnownLocation();
+          const lastKnown = await cacheManager.location.getLastKnown();
           if (lastKnown.location) {
             performanceMonitor.end('getLocationWithCache (error + offline fallback)');
             return {
@@ -233,7 +233,7 @@ export const locationUtils = {
       }
 
       // Final fallback
-      await LocationCache.saveLocation(DEFAULT_LOCATION, 'fallback');
+      await cacheManager.location.store(DEFAULT_LOCATION, 'fallback');
       performanceMonitor.end('getLocationWithCache (error + Bangkok fallback)');
       return {
         location: DEFAULT_LOCATION,

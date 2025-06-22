@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { placesService } from './places';
-import { googlePlacesCache } from './googlePlacesCache';
+import { cacheManager } from './cacheManager';
 import { Place, BangkokContext } from '../types';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -571,7 +571,7 @@ export class CheckInsService {
   private async fetchGooglePlaceDetails(placeId: string): Promise<GooglePlaceDetailsResult> {
     try {
       // Use Google Places cache instead of direct API call
-      const cachedData = await googlePlacesCache.getPlaceDetails(placeId);
+      const cachedData = await cacheManager.googlePlaces.get(placeId);
       
       if (!cachedData) {
         throw new CheckInError('Place not found', 'PLACE_NOT_FOUND');

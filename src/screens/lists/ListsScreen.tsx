@@ -28,7 +28,7 @@ import {
   ListError,
   PlaceError 
 } from '../../services/listsService';
-import { ListsCache } from '../../services/listsCache';
+import { cacheManager } from '../../services/cacheManager';
 import type { ListsStackScreenProps } from '../../navigation/types';
 
 type ListsScreenProps = ListsStackScreenProps<'Lists'>;
@@ -65,7 +65,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       if (user) {
         console.log('ListsScreen focused, checking cache...');
         // Only reload if cache is invalid or missing
-        ListsCache.hasCache(user.id).then(hasValidCache => {
+        cacheManager.lists.hasCache(user.id).then(hasValidCache => {
           if (!hasValidCache) {
             console.log('No valid cache, reloading lists...');
             loadAllLists();
@@ -85,7 +85,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       
       // Try to load from cache first (unless forcing refresh)
       if (!forceRefresh) {
-        const cachedData = await ListsCache.getCachedLists(user.id);
+        const cachedData = await cacheManager.lists.get(user.id);
         if (cachedData) {
       
           setUserLists(cachedData.userLists);
@@ -121,7 +121,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       setUserLists(lists);
       
       // Save to cache
-      await ListsCache.saveLists(lists, smartLists, user.id);
+      await cacheManager.lists.store(lists, smartLists, user.id);
     } catch (error) {
       console.error('Error loading user lists:', error);
       if (error instanceof ListError) {
@@ -213,7 +213,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
               
               // Update cache optimistically
               if (user?.id) {
-                await ListsCache.removeListFromCache(listId, user.id);
+                await cacheManager.lists.removeList(listId, user.id);
               }
               
               await loadUserLists();

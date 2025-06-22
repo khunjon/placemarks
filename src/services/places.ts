@@ -1,6 +1,5 @@
 import { Place, PlaceDetails, PlaceSuggestion, Location, PlaceSearchParams, BangkokContext } from '../types';
-import { placesCacheService } from './placesCache';
-import { googlePlacesCache } from './googlePlacesCache';
+import { cacheManager } from './cacheManager';
 import { Database } from '../types/supabase';
 
 interface GooglePlaceResult {
@@ -75,7 +74,7 @@ export class PlacesService {
   async searchNearbyPlaces(location: Location, radius: number, type?: string): Promise<Place[]> {
     try {
       // First check cache for recent searches in this area
-      const cachedPlaces = await placesCacheService.getCachedNearbyPlaces(location, radius, type);
+      const cachedPlaces = await cacheManager.places.getNearby(location, radius, type);
       if (cachedPlaces.length > 0) {
         console.log('🗄️ CACHE HIT: Retrieved nearby places from local cache', {
           location: `${location.latitude},${location.longitude}`,
@@ -124,7 +123,7 @@ export class PlacesService {
       for (const result of data.results) {
         const place = await this.convertGoogleResultToPlace(result);
         places.push(place);
-        await placesCacheService.cachePlace(place);
+        await cacheManager.places.store(place);
       }
 
       return places;
@@ -137,19 +136,34 @@ export class PlacesService {
   // Autocomplete with cached suggestions
   async getPlaceAutocomplete(query: string, location?: Location): Promise<PlaceSuggestion[]> {
     try {
-      if (query.length < 2) {
+      // Add input validation and debugging
+      if (!query || typeof query !== 'string') {
+        console.error('❌ INVALID QUERY: Invalid autocomplete query', { query, type: typeof query });
+        throw new Error('Invalid query provided to autocomplete');
+      }
+
+      const sanitizedQuery = query.trim();
+      if (sanitizedQuery.length < 2) {
+        console.log('🔍 SHORT QUERY: Query too short for autocomplete', { query: sanitizedQuery, length: sanitizedQuery.length });
         return [];
       }
 
+      console.log('🔍 AUTOCOMPLETE REQUEST: Processing query', {
+        originalQuery: query,
+        sanitizedQuery: sanitizedQuery,
+        queryLength: sanitizedQuery.length,
+        stackTrace: new Error().stack?.split('\n').slice(1, 4).join(' <- ')
+      });
+
       // Check cache for recent autocomplete results
-      const cachedSuggestions = await this.getCachedAutocomplete(query);
+      const cachedSuggestions = await this.getCachedAutocomplete(sanitizedQuery);
       if (cachedSuggestions.length > 0) {
         return cachedSuggestions;
       }
 
       const url = `${this.baseUrl}/autocomplete/json`;
       const params = new URLSearchParams({
-        input: query,
+        input: sanitizedQuery,
         key: this.apiKey,
         components: 'country:th', // Restrict to Thailand
       });
@@ -160,7 +174,7 @@ export class PlacesService {
       }
 
       console.log('🟢 GOOGLE API CALL: Autocomplete from Google Places API', {
-        query: query,
+        query: sanitizedQuery,
         location: location ? `${location.latitude},${location.longitude}` : 'none',
         cost: '$0.00283 per 1000 calls - PAID'
       });
@@ -169,6 +183,12 @@ export class PlacesService {
       const data = await response.json();
 
       if (data.status !== 'OK') {
+        console.error('❌ GOOGLE API ERROR:', {
+          status: data.status,
+          query: sanitizedQuery,
+          error_message: data.error_message || 'No error message provided',
+          available_alternatives: data.available_alternatives || 'None'
+        });
         throw new Error(`Google Places Autocomplete API error: ${data.status}`);
       }
 
@@ -180,7 +200,7 @@ export class PlacesService {
       }));
 
       // Cache the autocomplete results
-      await this.cacheAutocomplete(query, suggestions);
+      await this.cacheAutocomplete(sanitizedQuery, suggestions);
 
       return suggestions;
     } catch (error) {
@@ -193,7 +213,7 @@ export class PlacesService {
   async getPlaceDetails(placeId: string, forRecommendations = false): Promise<PlaceDetails> {
     try {
       // First check local places cache
-      const cachedPlace = await placesCacheService.getCachedPlace(placeId);
+      const cachedPlace = await cacheManager.places.get(placeId);
       if (cachedPlace) {
         console.log('🗄️ CACHE HIT: Retrieved place from local places cache', {
           placeId: placeId.substring(0, 20) + '...',
@@ -202,7 +222,7 @@ export class PlacesService {
         });
         
         // Enrich with Google Places data if available (use soft expiry for recommendations)
-        const googleData = await googlePlacesCache.getPlaceDetails(placeId, false, forRecommendations);
+        const googleData = await cacheManager.googlePlaces.get(placeId, false, forRecommendations);
         if (googleData) {
           return this.enrichPlaceDetailsWithGoogleData(
             this.convertPlaceToDetails(cachedPlace),
@@ -213,14 +233,14 @@ export class PlacesService {
       }
 
       // Use Google Places cache (handles API calls intelligently, use soft expiry for recommendations)
-      const googleData = await googlePlacesCache.getPlaceDetails(placeId, false, forRecommendations);
+      const googleData = await cacheManager.googlePlaces.get(placeId, false, forRecommendations);
       if (!googleData) {
         throw new Error(`Place not found: ${placeId}`);
       }
 
       // Convert Google data to our Place format and cache locally
       const place = await this.convertGoogleCacheToPlace(googleData);
-      await placesCacheService.cachePlace(place);
+      await cacheManager.places.store(place);
 
       return this.convertPlaceToDetails(place);
     } catch (error) {
@@ -313,12 +333,12 @@ export class PlacesService {
 
   // Get cache statistics (delegated to cache service)
   async getCacheStats() {
-    return placesCacheService.getCacheStats();
+    return cacheManager.places.getStats();
   }
 
   // Clear expired cache entries (delegated to cache service)
   async clearExpiredCache() {
-    return placesCacheService.clearExpiredCache();
+    return cacheManager.places.clearExpired();
   }
 
   // Cache autocomplete results with intelligent key matching
