@@ -87,7 +87,8 @@ SELECT
   p.website AS place_website,
   p.hours_open,
   p.photos_urls AS place_photos,
-  p.bangkok_context,
+  p.city_context,
+  p.bangkok_context, -- Legacy field
   p.coordinates AS place_coordinates
 FROM check_ins ci
 JOIN places p ON ci.place_id = p.id;

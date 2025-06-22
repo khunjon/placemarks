@@ -17,7 +17,8 @@ export {
   
   // Context interfaces
   UserPreferences,
-  BangkokContext,
+  CityContext,
+  BangkokContext, // Legacy - deprecated
   CheckInContext,
   WeatherContext,
   

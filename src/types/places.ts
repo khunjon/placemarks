@@ -1,4 +1,4 @@
-import { BangkokContext, Place } from './entities';
+import { BangkokContext, CityContext, Place } from './entities';
 
 // Place-specific types that are not core entities
 export interface PlaceSuggestion {
@@ -22,7 +22,8 @@ export interface PlaceDetails {
   photos?: string[];
   reviews?: PlaceReview[];
   types?: string[];
-  bangkok_context?: BangkokContext;
+  city_context?: CityContext;
+  bangkok_context?: BangkokContext; // Legacy field
 }
 
 export interface PlaceReview {

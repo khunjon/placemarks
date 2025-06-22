@@ -1,6 +1,7 @@
-import { Place, PlaceDetails, PlaceSuggestion, Location, PlaceSearchParams, BangkokContext } from '../types';
+import { Place, PlaceDetails, PlaceSuggestion, Location, PlaceSearchParams, BangkokContext, CityContext } from '../types';
 import { cacheManager } from './cacheManager';
 import { Database } from '../types/supabase';
+import { cityCategorizer } from './cityCategorizer';
 
 interface GooglePlaceResult {
   place_id: string;
@@ -249,86 +250,15 @@ export class PlacesService {
     }
   }
 
-  // Bangkok-specific categorization
+  // Multi-city place categorization (new method)
+  async categorizePlace(place: Place, cityCode?: string): Promise<CityContext> {
+    return cityCategorizer.categorizePlace(place, cityCode);
+  }
+
+  // Bangkok-specific categorization (legacy method for backward compatibility)
+  // @deprecated Use categorizePlace() instead
   async categorizeBangkokPlace(place: Place): Promise<BangkokContext> {
-    const context: BangkokContext = {
-      environment: 'indoor',
-      location_type: 'building',
-      bts_proximity: 'none',
-      air_conditioning: true,
-      noise_level: 'moderate',
-      price_tier: 'casual',
-    };
-
-    // Analyze place type and location for Bangkok context
-    const types = place.place_type?.split(',') || [];
-    
-    // Determine environment
-    if (types.some(type => ['park', 'tourist_attraction', 'amusement_park'].includes(type))) {
-      context.environment = 'outdoor';
-    } else if (types.some(type => ['restaurant', 'cafe', 'shopping_mall'].includes(type))) {
-      context.environment = 'indoor';
-    } else {
-      context.environment = 'mixed';
-    }
-
-    // Determine location type
-    if (types.includes('shopping_mall')) {
-      context.location_type = 'mall';
-    } else if (types.some(type => ['market', 'food'].includes(type))) {
-      context.location_type = 'market';
-    } else if (types.some(type => ['restaurant', 'cafe', 'store'].includes(type))) {
-      context.location_type = 'street';
-    }
-
-    // Determine BTS proximity (simplified - in real app would use BTS station data)
-    const bangkokCenter = { lat: 13.7563, lng: 100.5018 };
-    const distance = this.calculateDistance(
-      place.coordinates[1], place.coordinates[0],
-      bangkokCenter.lat, bangkokCenter.lng
-    );
-
-    if (distance < 1) {
-      context.bts_proximity = 'walking';
-    } else if (distance < 3) {
-      context.bts_proximity = 'near';
-    } else if (distance < 10) {
-      context.bts_proximity = 'far';
-    }
-
-    // Determine price tier based on Google's price_level
-    if (place.price_level) {
-      switch (place.price_level) {
-        case 1:
-          context.price_tier = 'street';
-          break;
-        case 2:
-          context.price_tier = 'casual';
-          break;
-        case 3:
-          context.price_tier = 'mid';
-          break;
-        case 4:
-          context.price_tier = 'upscale';
-          break;
-        default:
-          context.price_tier = 'casual';
-      }
-    }
-
-    // Determine noise level based on location type
-    if (context.location_type === 'mall') {
-      context.noise_level = 'moderate';
-    } else if (context.location_type === 'market') {
-      context.noise_level = 'loud';
-    } else if (context.environment === 'outdoor') {
-      context.noise_level = 'quiet';
-    }
-
-    // Air conditioning assumption
-    context.air_conditioning = context.environment === 'indoor' || context.location_type === 'mall';
-
-    return context;
+    return cityCategorizer.categorizeBangkokPlace(place);
   }
 
   // Get cache statistics (delegated to cache service)
@@ -413,10 +343,11 @@ export class PlacesService {
       coordinates: [result.geometry.location.lng, result.geometry.location.lat],
       place_type: result.types.join(','),
       price_level: result.price_level,
-      bangkok_context: {} as BangkokContext,
     };
 
-    // Add Bangkok-specific context
+    // Add city context (default to Bangkok)
+    place.city_context = await this.categorizePlace(place, 'BKK');
+    // Legacy Bangkok context for backward compatibility
     place.bangkok_context = await this.categorizeBangkokPlace(place);
 
     return place;
@@ -432,7 +363,8 @@ export class PlacesService {
       coordinates: place.coordinates,
       price_level: place.price_level,
       types: place.place_type ? place.place_type.split(',') : [],
-      bangkok_context: place.bangkok_context,
+      city_context: place.city_context,
+      bangkok_context: place.bangkok_context, // Legacy field
       // Additional details would be populated from Google Places Details API
     };
   }
@@ -467,10 +399,11 @@ export class PlacesService {
       coordinates,
       place_type: googleData.types ? googleData.types.join(',') : '',
       price_level: googleData.price_level,
-      bangkok_context: {} as BangkokContext,
     };
 
-    // Add Bangkok-specific context
+    // Add city context (default to Bangkok)
+    place.city_context = await this.categorizePlace(place, 'BKK');
+    // Legacy Bangkok context for backward compatibility
     place.bangkok_context = await this.categorizeBangkokPlace(place);
 
     return place;

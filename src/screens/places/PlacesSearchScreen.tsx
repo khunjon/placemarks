@@ -102,9 +102,20 @@ export default function PlacesSearchScreen() {
   };
 
   const handlePlacePress = (place: Place) => {
+    const cityContext = place.city_context;
+    const bangkokContext = place.bangkok_context;
+    
+    let contextInfo = '\n\nNo context available';
+    
+    if (cityContext) {
+      contextInfo = `\n\nContext:\n• Environment: ${cityContext.environment}\n• Transport: ${cityContext.transport_proximity?.distance || 'N/A'}\n• Price: ${cityContext.price_context.tier}\n• AC: ${cityContext.air_conditioning ? 'Yes' : 'No'}\n• Noise: ${cityContext.noise_level}`;
+    } else if (bangkokContext) {
+      contextInfo = `\n\nBangkok Context:\n• Environment: ${bangkokContext.environment}\n• BTS: ${bangkokContext.bts_proximity}\n• Price: ${bangkokContext.price_tier}\n• AC: ${bangkokContext.air_conditioning ? 'Yes' : 'No'}\n• Noise: ${bangkokContext.noise_level}`;
+    }
+    
     Alert.alert(
       place.name,
-      `${place.address}\n\nBangkok Context:\n• Environment: ${place.bangkok_context.environment}\n• BTS: ${place.bangkok_context.bts_proximity}\n• Price: ${place.bangkok_context.price_tier}\n• AC: ${place.bangkok_context.air_conditioning ? 'Yes' : 'No'}\n• Noise: ${place.bangkok_context.noise_level}`,
+      `${place.address}${contextInfo}`,
       [{ text: 'OK' }]
     );
   };

@@ -12,7 +12,7 @@ Created `src/types/entities/index.ts` as the single source of truth for all core
 
 - **BaseEntity**: Common interface that all entities extend with `id`, `created_at`, and `updated_at`
 - **User**: User profiles and authentication data
-- **Place**: Location data with coordinates and Bangkok context
+- **Place**: Location data with coordinates and city context
 - **CheckIn**: User check-ins at places with rich context
 - **List**: User-created lists of places
 - **ListPlace**: Junction table for list-place relationships
@@ -22,7 +22,8 @@ Created `src/types/entities/index.ts` as the single source of truth for all core
 ### 2. Context Interfaces
 
 Consolidated context interfaces:
-- **BangkokContext**: Bangkok-specific place context
+- **CityContext**: Multi-city place context system (replaces BangkokContext)
+- **BangkokContext**: Legacy Bangkok-specific context (deprecated)
 - **CheckInContext**: Check-in specific context
 - **WeatherContext**: Weather conditions during check-ins
 

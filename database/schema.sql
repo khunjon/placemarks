@@ -21,7 +21,7 @@ CREATE TABLE places (
   coordinates POINT NOT NULL,
   place_type TEXT,
   price_level INTEGER,
-  bangkok_context JSONB DEFAULT '{}',
+  bangkok_context JSONB DEFAULT '{}', -- TODO: migrate to city_context JSONB
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

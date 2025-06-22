@@ -32,6 +32,7 @@ export {
   Place, 
   CheckIn, 
   List, 
-  BangkokContext, 
+  CityContext,
+  BangkokContext, // Legacy - deprecated
   CheckInContext 
 } from './entities'; 

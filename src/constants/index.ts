@@ -89,4 +89,7 @@ export const UI_CONFIG = {
     lg: 12,
     xl: 16,
   },
-}; 
+};
+
+// City configurations
+export * from '../config/cities'; 

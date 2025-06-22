@@ -18,7 +18,30 @@ export interface UserPreferences {
   activity_types: string[];
 }
 
-// Bangkok-specific context interfaces
+// Multi-city context interface for scalable city support
+export interface CityContext {
+  city_code: string; // 'BKK', 'TYO', 'NYC', 'LON', etc.
+  environment: 'indoor' | 'outdoor' | 'mixed';
+  location_type: string; // City-specific location types
+  noise_level: 'quiet' | 'moderate' | 'loud';
+  air_conditioning?: boolean;
+  transport_proximity?: {
+    system: string; // 'BTS', 'MRT', 'JR', 'Subway', etc.
+    distance: 'walking' | 'near' | 'far' | 'none';
+    stations?: string[];
+  };
+  price_context: {
+    tier: string; // City-specific price tier
+    local_scale: string[]; // Ordered array of price descriptors for this city
+  };
+  local_characteristics: Record<string, any>; // Flexible city-specific metadata
+  crowd_level?: 'empty' | 'few' | 'moderate' | 'busy' | 'packed';
+  wifi_available?: boolean;
+  parking_available?: boolean;
+}
+
+// Legacy Bangkok context interface - deprecated, use CityContext instead
+// @deprecated Use CityContext with city_code: 'BKK' instead
 export interface BangkokContext {
   environment: 'indoor' | 'outdoor' | 'mixed';
   location_type: 'mall' | 'street' | 'building' | 'market' | 'rooftop' | 'riverside';
@@ -83,7 +106,9 @@ export interface Place extends BaseEntity {
   google_types?: string[];
   primary_type?: string;
   price_level?: number;
-  bangkok_context: BangkokContext;
+  city_context?: CityContext;
+  // Legacy field - deprecated, use city_context instead
+  bangkok_context?: BangkokContext;
 }
 
 /**

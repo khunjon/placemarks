@@ -171,6 +171,7 @@ export class EnhancedListsService {
                   google_types: row.google_types,
                   primary_type: row.primary_type,
                   price_level: row.price_level,
+                  city_context: row.city_context,
                   bangkok_context: row.bangkok_context,
                   google_rating: row.google_rating,
                   phone: row.place_phone,

@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { placesService } from './places';
 import { cacheManager } from './cacheManager';
-import { Place, BangkokContext } from '../types';
+import { Place, BangkokContext, CityContext } from '../types';
 import * as ImagePicker from 'expo-image-picker';
 
 // Thumbs rating system type
@@ -32,7 +32,8 @@ export interface CheckInPlace {
   place_type: string;
   price_level?: number;
   district?: string; // Extracted from Google Places API address components
-  bangkok_context?: BangkokContext;
+  city_context?: CityContext;
+  bangkok_context?: BangkokContext; // Legacy field
 }
 
 // Google Places API address component interface

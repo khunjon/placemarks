@@ -55,6 +55,7 @@ export class PlacesCacheService {
         coordinates: [place.longitude || 0, place.latitude || 0],
         place_type: place.place_type,
         price_level: place.price_level,
+        city_context: place.city_context,
         bangkok_context: place.bangkok_context,
       };
     } catch (error) {
