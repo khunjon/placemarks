@@ -287,22 +287,26 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       
       if (isRecommendationsContext) {
         // For recommendations, we expect a Google Place ID and should fetch from google_places_cache
-        const [placeData, checkInsData] = await Promise.all([
+        const [placeData, checkInsData, userRatingData] = await Promise.all([
           // Get place details from google_places_cache using the Google Place ID
           fetchRecommendedPlaceDetails(placeId),
           
           // Get check-in history for this place (by Google Place ID)
-          fetchCheckInsForRecommendedPlace(user.id, placeId)
+          fetchCheckInsForRecommendedPlace(user.id, placeId),
+          
+          // Get user's universal rating (use Google Place ID as place ID for recommendations)
+          userRatingsService.getUserRating(user.id, placeId)
         ]);
         
         setPlace(placeData);
         setListPlace(null); // No list context for recommendations
         setCheckIns(checkInsData);
         setOtherLists([]); // No other lists for recommendations
+        setUserRating(userRatingData);
         setTempNotes('');
       } else {
         // Load place details, list context, and related data in parallel
-        const [placeData, listPlaceData, checkInsData, otherListsData] = await Promise.all([
+        const [placeData, listPlaceData, checkInsData, otherListsData, userRatingData] = await Promise.all([
           // Get place details
           fetchPlaceDetails(placeId),
           
@@ -313,13 +317,17 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
           fetchCheckInsForPlace(user.id, placeId),
           
           // Get other lists containing this place
-          fetchOtherListsContainingPlace(user.id, placeId, listId)
+          fetchOtherListsContainingPlace(user.id, placeId, listId),
+          
+          // Get user's universal rating for this place
+          userRatingsService.getUserRating(user.id, placeId)
         ]);
         
         setPlace(placeData);
         setListPlace(listPlaceData);
         setCheckIns(checkInsData);
         setOtherLists(otherListsData);
+        setUserRating(userRatingData);
         setTempNotes(listPlaceData?.notes || '');
         
         // Check if we can enhance the fetched place data with Google Places cache
@@ -515,6 +523,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
 
   // Fetch place details from database
   const fetchPlaceDetails = async (placeId: string): Promise<PlaceDetails> => {
+    // First get the basic place data
     const { data, error } = await supabase
       .from('places')
       .select('*')
@@ -524,11 +533,29 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
     if (error) throw error;
     if (!data) throw new Error('Place not found');
 
-    // For now, use default coordinates - PostGIS coordinate extraction would need a custom RPC function
-    const coordinates = {
-      latitude: 13.7367,
+    // Get coordinates using RPC function
+    let coordinates = {
+      latitude: 13.7367, // Default Bangkok coordinates
       longitude: 100.5412
     };
+
+    try {
+      const { data: coordData, error: coordError } = await supabase
+        .rpc('get_place_coordinates', { place_uuid: placeId });
+
+      if (!coordError && coordData && coordData.length > 0) {
+        const coord = coordData[0];
+        if (coord.latitude && coord.longitude) {
+          coordinates = {
+            latitude: coord.latitude,
+            longitude: coord.longitude
+          };
+        }
+      }
+    } catch (coordError) {
+      console.warn('Failed to get coordinates for place:', coordError);
+      // Continue with default coordinates
+    }
 
     return {
       id: data.id,
@@ -662,19 +689,24 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
     }
   };
 
-  const handleUpdateRating = async (rating: number) => {
-    if (!user?.id) return;
+  const handleUpdateRating = async (ratingType: 'thumbs_up' | 'neutral' | 'thumbs_down') => {
+    if (!user?.id || !place?.id) return;
     
     try {
-      const { error } = await supabase
-        .from('list_places')
-        .update({ personal_rating: rating })
-        .eq('list_id', listId)
-        .eq('place_id', placeId);
-
-      if (error) throw error;
+      // Convert rating type to numerical value
+      const ratingValue = ratingType === 'thumbs_up' ? 5 : ratingType === 'thumbs_down' ? 1 : 3;
       
-      setListPlace(prev => prev ? { ...prev, personal_rating: rating } : null);
+      // Use the actual place ID for regular lists, or the Google Place ID for recommendations
+      const actualPlaceId = isRecommendationsContext ? placeId : place.id;
+      
+      const updatedRating = await userRatingsService.setUserRating(
+        user.id,
+        actualPlaceId,
+        ratingType,
+        ratingValue
+      );
+      
+      setUserRating(updatedRating);
       showToast('Rating updated');
     } catch (error) {
       console.error('Error updating rating:', error);
@@ -683,12 +715,28 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   };
 
   const handleGetDirections = () => {
-    if (!place?.coordinates) return;
+    if (!place?.name && !place?.address) return;
     
-    const { latitude, longitude } = place.coordinates;
-    const url = `https://maps.apple.com/?daddr=${latitude},${longitude}`;
+    let url;
     
-    Linking.openURL(url).catch(() => {
+    // Use Google Place ID if available (most accurate)
+    if (place.google_place_id) {
+      const encodedName = encodeURIComponent(place.name);
+      url = `https://www.google.com/maps/dir/?api=1&destination=${encodedName}&destination_place_id=${place.google_place_id}`;
+    } else {
+      // Combine place name with address for better accuracy
+      const destination = place.name && place.address 
+        ? `${place.name} ${place.address}`
+        : place.address || place.name;
+      const encodedDestination = encodeURIComponent(destination);
+      url = `https://www.google.com/maps/dir/?api=1&destination=${encodedDestination}`;
+    }
+    
+    console.log('Opening directions for:', place.name);
+    console.log('Directions URL:', url);
+    
+    Linking.openURL(url).catch((error) => {
+      console.error('Failed to open directions:', error);
       showToast('Unable to open directions', 'error');
     });
   };
@@ -705,6 +753,14 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   const formatHours = (hours: any) => {
     if (!hours) return 'Hours not available';
     
+    // Handle Google Places API format
+    if (hours.weekday_text && Array.isArray(hours.weekday_text)) {
+      const today = new Date().getDay();
+      const todayText = hours.weekday_text[today === 0 ? 6 : today - 1]; // Convert Sunday=0 to Saturday=6
+      return todayText || 'Hours not available';
+    }
+    
+    // Handle custom format
     const today = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
     const todayHours = hours[today];
     
@@ -712,7 +768,15 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       return 'Closed today';
     }
     
-    return `Open today: ${todayHours.open} - ${todayHours.close}`;
+    if (typeof todayHours === 'string') {
+      return todayHours;
+    }
+    
+    if (todayHours.open && todayHours.close) {
+      return `Open today: ${todayHours.open} - ${todayHours.close}`;
+    }
+    
+    return 'Hours not available';
   };
 
   const renderStars = (rating: number, size: number = 16) => {
@@ -738,6 +802,15 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   const getPriceLevel = (level?: number) => {
     if (!level) return '';
     return '$'.repeat(Math.min(level, 4));
+  };
+
+  const extractDomain = (url: string) => {
+    try {
+      const domain = new URL(url).hostname;
+      return domain.replace('www.', '');
+    } catch {
+      return url;
+    }
   };
 
   if (loading) {
@@ -844,34 +917,38 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                 <View style={{ flex: 1 }}>
                   <Title1 style={{ marginBottom: Spacing.xs }}>{place.name}</Title1>
                   
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}>
-                    <MapPin size={16} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
-                    <Body color="secondary" style={{ marginLeft: Spacing.xs, flex: 1 }}>
+                  <TouchableOpacity 
+                    style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}
+                    onPress={() => {
+                      let url;
+                      
+                      // Use Google Place ID if available (most accurate)
+                      if (place.google_place_id) {
+                        const encodedName = encodeURIComponent(place.name);
+                        url = `https://www.google.com/maps/search/?api=1&query=${encodedName}&query_place_id=${place.google_place_id}`;
+                      } else {
+                        // Combine place name with address for better accuracy
+                        const query = `${place.name} ${place.address}`;
+                        const encodedQuery = encodeURIComponent(query);
+                        url = `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
+                      }
+                      
+                      console.log('Opening maps for:', place.name);
+                      console.log('Maps URL:', url);
+                      
+                      Linking.openURL(url).catch((error) => {
+                        console.error('Failed to open maps:', error);
+                        showToast('Unable to open maps', 'error');
+                      });
+                    }}
+                  >
+                    <MapPin size={14} color={DarkTheme.colors.semantic.tertiaryLabel} strokeWidth={2} />
+                    <SecondaryText style={{ marginLeft: Spacing.xs, flex: 1, fontSize: 13 }}>
                       {place.address}
-                    </Body>
-                  </View>
+                    </SecondaryText>
+                  </TouchableOpacity>
 
-                  {/* Ratings Row */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.lg }}>
-                    {place.google_rating && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <View style={{ marginRight: Spacing.xs }}>
-                          {renderStars(place.google_rating)}
-                        </View>
-                        <Body style={{ fontWeight: '600' }}>{place.google_rating}</Body>
-                        <SecondaryText style={{ marginLeft: Spacing.xs }}>Google</SecondaryText>
-                      </View>
-                    )}
-                    
-                    {listPlace?.personal_rating && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Body style={{ fontSize: 16, marginRight: Spacing.xs }}>
-                          {listPlace.personal_rating >= 4 ? '👍' : listPlace.personal_rating <= 2 ? '👎' : '😐'}
-                        </Body>
-                        <SecondaryText>Your rating</SecondaryText>
-                      </View>
-                    )}
-                  </View>
+
                 </View>
                 
                 {place.price_level && (
@@ -921,18 +998,123 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                 >
                   <Globe size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
                   <Body style={{ marginLeft: Spacing.sm, color: DarkTheme.colors.accent.blue }}>
-                    Visit website
+                    {extractDomain(place.website)}
                   </Body>
                   <ExternalLink size={14} color={DarkTheme.colors.accent.blue} strokeWidth={2} style={{ marginLeft: Spacing.xs }} />
                 </TouchableOpacity>
               )}
             </ElevatedCard>
 
-            {/* Your Notes - Only show for list context, not recommendations */}
+            {/* Ratings */}
+            {(place.google_rating || userRating) && (
+              <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
+                <Title3 style={{ marginBottom: Spacing.md }}>Ratings</Title3>
+                
+                <View style={{ gap: Spacing.md }}>
+                  {/* Google Rating */}
+                  {place.google_rating && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          backgroundColor: DarkTheme.colors.accent.blue + '20',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: Spacing.sm,
+                        }}>
+                          <Body style={{ color: DarkTheme.colors.accent.blue, fontWeight: '600', fontSize: 12 }}>G</Body>
+                        </View>
+                        <View>
+                          <Body>Google Rating</Body>
+                          <SecondaryText style={{ fontSize: 12 }}>Based on user reviews</SecondaryText>
+                        </View>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        {renderStars(place.google_rating, 18)}
+                        <Body style={{ marginLeft: Spacing.sm, fontWeight: '600' }}>{place.google_rating}</Body>
+                      </View>
+                    </View>
+                  )}
+
+                                    {/* Rating Selection - Always show all three options */}
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}>
+                      <Body>Your Rating</Body>
+                      <SecondaryText style={{ marginLeft: Spacing.sm, fontSize: 12 }}>Personal preference</SecondaryText>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+                      {/* Thumbs Up */}
+                      <TouchableOpacity 
+                        onPress={() => handleUpdateRating('thumbs_up')}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: userRating?.rating_type === 'thumbs_up' 
+                            ? DarkTheme.colors.accent.green + '40' 
+                            : DarkTheme.colors.semantic.tertiarySystemBackground,
+                          paddingVertical: Spacing.sm,
+                          borderRadius: DarkTheme.borderRadius.sm,
+                          borderWidth: userRating?.rating_type === 'thumbs_up' ? 2 : 0,
+                          borderColor: userRating?.rating_type === 'thumbs_up' ? DarkTheme.colors.accent.green : 'transparent',
+                        }}
+                      >
+                        <Body style={{ fontSize: 20 }}>👍</Body>
+                      </TouchableOpacity>
+
+                      {/* Neutral */}
+                      <TouchableOpacity 
+                        onPress={() => handleUpdateRating('neutral')}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: userRating?.rating_type === 'neutral' 
+                            ? DarkTheme.colors.semantic.secondaryLabel + '40' 
+                            : DarkTheme.colors.semantic.tertiarySystemBackground,
+                          paddingVertical: Spacing.sm,
+                          borderRadius: DarkTheme.borderRadius.sm,
+                          borderWidth: userRating?.rating_type === 'neutral' ? 2 : 0,
+                          borderColor: userRating?.rating_type === 'neutral' ? DarkTheme.colors.semantic.secondaryLabel : 'transparent',
+                        }}
+                      >
+                        <Body style={{ fontSize: 20 }}>😐</Body>
+                      </TouchableOpacity>
+
+                      {/* Thumbs Down */}
+                      <TouchableOpacity 
+                        onPress={() => handleUpdateRating('thumbs_down')}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: userRating?.rating_type === 'thumbs_down' 
+                            ? DarkTheme.colors.accent.red + '40' 
+                            : DarkTheme.colors.semantic.tertiarySystemBackground,
+                          paddingVertical: Spacing.sm,
+                          borderRadius: DarkTheme.borderRadius.sm,
+                          borderWidth: userRating?.rating_type === 'thumbs_down' ? 2 : 0,
+                          borderColor: userRating?.rating_type === 'thumbs_down' ? DarkTheme.colors.accent.red : 'transparent',
+                        }}
+                      >
+                        <Body style={{ fontSize: 20 }}>👎</Body>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </ElevatedCard>
+            )}
+
+            {/* Notes - Only show for list context, not recommendations */}
             {!isRecommendationsContext && listPlace && (
               <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md }}>
-                  <Title3>Your Notes</Title3>
+                  <Title3>Notes</Title3>
                   <TouchableOpacity onPress={() => setEditingNotes(!editingNotes)}>
                     <Edit3 size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
                   </TouchableOpacity>
@@ -1095,12 +1277,6 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                 title="Get Directions"
                 icon={Navigation}
                 onPress={handleGetDirections}
-              />
-              
-              <SecondaryButton
-                title="Check In Here"
-                icon={Camera}
-                onPress={handleCheckIn}
               />
             </View>
           </View>

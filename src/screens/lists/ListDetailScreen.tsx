@@ -1240,33 +1240,7 @@ function PlaceCard({
                 </Body>
               )}
 
-              {/* Your rating - only show if user has rated */}
-              {currentRating && (
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  marginBottom: Spacing.xs,
-                }}>
-                  <SecondaryText style={{ 
-                    marginRight: Spacing.sm,
-                    fontSize: 12,
-                  }}>
-                    Your rating:
-                  </SecondaryText>
-                  <View style={{
-                    paddingHorizontal: Spacing.xs,
-                    paddingVertical: 4,
-                    borderRadius: 4,
-                    backgroundColor: checkInUtils.getRatingColor(currentRating) + '20',
-                    borderWidth: 1,
-                    borderColor: checkInUtils.getRatingColor(currentRating),
-                  }}>
-                    <Typography style={{ fontSize: 14 }}>
-                      {currentRating === 'thumbs_up' ? '👍' : currentRating === 'thumbs_down' ? '👎' : '😐'}
-                    </Typography>
-                  </View>
-                </View>
-              )}
+
 
               {/* Notes - enhanced styling to distinguish from address */}
               {listPlace.notes && (
@@ -1311,48 +1285,7 @@ function PlaceCard({
               Added {new Date(listPlace.added_at).toLocaleDateString()}
             </Typography>
 
-            {/* Action buttons */}
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-            }}>
-              <TouchableOpacity
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onGetDirections();
-                }}
-                style={{
-                  padding: Spacing.xs,
-                  backgroundColor: Colors.neutral[100],
-                  borderRadius: 6,
-                  marginRight: Spacing.sm,
-                }}
-              >
-                <Navigation 
-                  size={16} 
-                  color={Colors.neutral[700]}
-                  strokeWidth={2}
-                />
-              </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onCheckIn();
-                }}
-                style={{
-                  padding: Spacing.xs,
-                  backgroundColor: Colors.accent.yellow,
-                  borderRadius: 6,
-                }}
-              >
-                <Target 
-                  size={16} 
-                  color={Colors.neutral[950]}
-                  strokeWidth={2}
-                />
-              </TouchableOpacity>
-            </View>
           </View>
         </ElevatedCard>
       </TouchableOpacity>
