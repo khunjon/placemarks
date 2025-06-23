@@ -4,7 +4,7 @@ import { Colors } from '../constants/Colors';
 import { DecideStackParamList, DecideStackScreenProps } from './types';
 
 // Import screens
-import DecideScreen from '../screens/DecideScreen';
+import { DecideScreen, RecommendationsScreen } from '../screens/decide';
 import { ListDetailScreen } from '../screens/lists';
 import { PlaceDetailScreen } from '../screens/places';
 
@@ -75,6 +75,15 @@ export default function DecideStackNavigator() {
         component={DecideScreen}
         options={{
           headerShown: false, // DecideScreen has its own header
+        }}
+      />
+      
+      <Stack.Screen 
+        name="Recommendations" 
+        component={RecommendationsScreen}
+        options={{
+          title: 'Recommendations',
+          headerShown: false, // RecommendationsScreen has its own header
         }}
       />
       

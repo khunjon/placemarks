@@ -1,68 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Sparkles, User, Zap, MapPin, Clock, Coffee, Utensils, Wine, ShoppingBag, ChevronRight } from 'lucide-react-native';
-import { DarkTheme } from '../constants/theme';
-import ListCard, { ListCardProps } from '../components/lists/ListCard';
-import type { DecideStackScreenProps } from '../navigation/types';
-import { createCityContext, createValidatedCityContext, Location as CityLocation, CityContext } from '../services/cityContext';
-import { recommendationService, getTimeContext } from '../services/recommendationService';
-import { TimeContext, ScoredPlace, RecommendationResponse } from '../types/recommendations';
-import { useLocation } from '../hooks/useLocation';
-import { useAuth } from '../services/auth-context';
-import { locationUtils } from '../utils/location';
+import { MapPin, Clock, Coffee, Utensils, Wine, ShoppingBag, Sparkles } from 'lucide-react-native';
+import { DarkTheme } from '../../constants/theme';
+import type { DecideStackScreenProps } from '../../navigation/types';
+import { createValidatedCityContext, Location as CityLocation, CityContext } from '../../services/cityContext';
+import { recommendationService, getTimeContext } from '../../services/recommendationService';
+import { TimeContext, ScoredPlace, RecommendationResponse } from '../../types/recommendations';
+import { useLocation } from '../../hooks/useLocation';
+import { useAuth } from '../../services/auth-context';
+import { locationUtils } from '../../utils/location';
 
-type DecideScreenProps = DecideStackScreenProps<'Decide'>;
+type RecommendationsScreenProps = DecideStackScreenProps<'Recommendations'>;
 
-// Mock data for curated editorial lists
-const mockCuratedListsData = [
-  {
-    id: 'curated-1',
-    name: 'Best of Tatler',
-    type: 'curated' as const,
-    listType: 'editorial' as const,
-    placeCount: 25,
-    previewPlaces: ['Gaggan Anand', 'Le Du', 'Sühring'],
-    curator: 'Tatler Thailand',
-    description: 'The finest dining experiences in Bangkok',
-  },
-  {
-    id: 'curated-2',
-    name: 'Michelin Bib Gourmand',
-    type: 'curated' as const,
-    listType: 'michelin' as const,
-    placeCount: 18,
-    previewPlaces: ['Jay Fai', 'Raan Jay Fai', 'Krua Apsorn'],
-    curator: 'Michelin Guide',
-    description: 'Exceptional food at moderate prices',
-  },
-  {
-    id: 'curated-3',
-    name: 'Recommended by Timeout',
-    type: 'curated' as const,
-    listType: 'timeout' as const,
-    placeCount: 32,
-    previewPlaces: ['Chatuchak Market', 'Wat Arun', 'Khao San Road'],
-    curator: 'Time Out Bangkok',
-    description: 'Must-visit spots according to local experts',
-  },
-  {
-    id: 'curated-4',
-    name: 'Hidden Gems',
-    type: 'curated' as const,
-    listType: 'hidden' as const,
-    placeCount: 15,
-    previewPlaces: ['Baan Silapin', 'Wang Thonglang Market', 'Saphan Phut Night Market'],
-    curator: 'Placemarks Editors',
-    description: 'Secret spots locals love',
-  },
-];
-
-export default function DecideScreen({ navigation }: DecideScreenProps) {
+export default function RecommendationsScreen({ navigation }: RecommendationsScreenProps) {
   // Get user from auth context
   const { user } = useAuth();
   
-  // Use the location hook with session-based settings for DecideScreen
+  // Use the location hook with optimized settings for recommendations
   const {
     location,
     loading: locationLoading,
@@ -70,17 +25,15 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
     source,
     refreshLocation,
     forceLocationRetry,
-    getSessionInfo,
+    getCurrentLocation,
   } = useLocation({
     enableHighAccuracy: false, // Use balanced accuracy for better performance and battery life
     fallbackToBangkok: true,
-    autoRequest: true,
+    autoRequest: true, // Auto-request for this screen since user explicitly wants recommendations
     enableCaching: true,
     enableOfflineFallback: true,
-    sessionMode: true, // Enable session mode - only update once per session or after 1 hour
-    sessionUpdateInterval: 1 * 60 * 60 * 1000, // 1 hour - only update if more than 1 hour since session start
-    enableBackgroundUpdates: false, // Disable background updates in session mode
-    // disabled: true, // Uncomment for faster testing without location
+    sessionMode: false, // Disable session mode for on-demand usage
+    enableBackgroundUpdates: false, // Disable background updates
   });
 
   // Computed values for backward compatibility
@@ -118,7 +71,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
     }
   }, [location]);
 
-  // Load recommendations when location or time changes
+  // Load recommendations when location, city context, or time changes
   useEffect(() => {
     if (location && cityContext && user) {
       loadRecommendations();
@@ -150,11 +103,12 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
     }
   };
 
-  const handleNavigateToList = (listId: string, listName: string, listType: 'user' | 'smart') => {
-    navigation.navigate('ListDetail', {
-      listId,
-      listName,
-      listType,
+  const handleNavigateToPlace = (placeId: string) => {
+    navigation.navigate('PlaceInListDetail', {
+      placeId,
+      listId: 'recommendations', // Virtual list ID for recommendations
+      listName: 'Recommended For You',
+      source: 'suggestion'
     });
   };
 
@@ -212,11 +166,6 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
     return locationUtils.getLocationContextString(location);
   };
 
-  // Debug session info (you can remove this later)
-  const sessionInfo = getSessionInfo();
-  
-
-
   const formatDistance = (distanceKm: number) => {
     if (distanceKm < 1) {
       return `${Math.round(distanceKm * 1000)}m away`;
@@ -224,8 +173,6 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
       return `${distanceKm.toFixed(1)}km away`;
     }
   };
-
-
 
   // Helper functions for database recommendations
   const getDatabaseRecommendationReason = (place: ScoredPlace, timeCtx: TimeContext) => {
@@ -264,11 +211,6 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
     return '$ '.repeat(priceLevel).trim();
   };
 
-  // Convert curated data with navigation handlers
-  const mockCuratedLists = mockCuratedListsData.map(list => ({
-    ...list,
-    onPress: () => handleNavigateToList(list.id, list.name, 'user'), // Use 'user' for navigation compatibility
-  }));
   return (
     <SafeAreaView style={{ 
       flex: 1, 
@@ -288,7 +230,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
             fontWeight: 'bold' 
           }
         ]}>
-          Decide
+          Recommendations
         </Text>
       </View>
 
@@ -297,7 +239,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
         contentContainerStyle={{ paddingBottom: DarkTheme.spacing.xl }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Smart Recommendations Section */}
+        {/* Recommendations Section */}
         <View style={{
           paddingHorizontal: DarkTheme.spacing.lg,
           paddingTop: DarkTheme.spacing.md,
@@ -378,7 +320,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
           </View>
 
           {/* Recommendations Content */}
-          {locationLoading || recommendationsLoading ? (
+          {recommendationsLoading ? (
             <View style={{
               backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
               borderRadius: DarkTheme.borderRadius.lg,
@@ -457,14 +399,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
                       flexDirection: 'row',
                       alignItems: 'center',
                     }}
-                    onPress={() => {
-                      navigation.navigate('PlaceInListDetail', {
-                        placeId: place.google_place_id,
-                        listId: 'recommendations', // Virtual list ID for recommendations
-                        listName: 'Recommended For You',
-                        source: 'suggestion'
-                      });
-                    }}
+                    onPress={() => handleNavigateToPlace(place.google_place_id)}
                   >
                     {/* Category Icon */}
                     <View style={{
@@ -611,124 +546,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
             </View>
           )}
         </View>
-
-        {/* Curated Lists Section */}
-        <View style={{
-          paddingHorizontal: DarkTheme.spacing.lg,
-        }}>
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            marginBottom: DarkTheme.spacing.md,
-          }}>
-            <Sparkles 
-              size={20} 
-              color={DarkTheme.colors.bangkok.gold}
-              strokeWidth={2}
-            />
-            <Text style={[
-              DarkTheme.typography.title2,
-              { 
-                color: DarkTheme.colors.semantic.label,
-                fontWeight: '600',
-                marginLeft: DarkTheme.spacing.sm,
-              }
-            ]}>
-              Curated Lists
-            </Text>
-            <Text style={[
-              DarkTheme.typography.caption1,
-              { 
-                color: DarkTheme.colors.semantic.tertiaryLabel,
-                marginLeft: DarkTheme.spacing.sm,
-              }
-            ]}>
-              ({mockCuratedLists.length})
-            </Text>
-          </View>
-
-          {mockCuratedLists.map((list) => (
-            <TouchableOpacity
-              key={list.id}
-              onPress={list.onPress}
-              activeOpacity={0.7}
-              style={{
-                backgroundColor: `${DarkTheme.colors.bangkok.gold}08`,
-                borderColor: `${DarkTheme.colors.bangkok.gold}40`,
-                borderWidth: 1,
-                borderRadius: DarkTheme.borderRadius.md,
-                padding: DarkTheme.spacing.md,
-                marginBottom: DarkTheme.spacing.sm,
-                ...DarkTheme.shadows.small,
-              }}
-            >
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}>
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  flex: 1,
-                }}>
-                  <View 
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 20,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: DarkTheme.spacing.sm,
-                      backgroundColor: `${DarkTheme.colors.bangkok.gold}20`,
-                    }}
-                  >
-                    <Sparkles 
-                      size={20} 
-                      color={DarkTheme.colors.bangkok.gold}
-                      strokeWidth={2}
-                    />
-                  </View>
-                  
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                      <Text 
-                        style={[
-                          DarkTheme.typography.headline,
-                          { 
-                            color: DarkTheme.colors.semantic.label,
-                          }
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {list.name}
-                      </Text>
-                    </View>
-                    
-                    <Text 
-                      style={[
-                        DarkTheme.typography.caption1,
-                        { 
-                          color: DarkTheme.colors.semantic.secondaryLabel,
-                          fontWeight: '600' 
-                        }
-                      ]}
-                    >
-                      {list.placeCount} {list.placeCount === 1 ? 'place' : 'places'} • {list.curator}
-                    </Text>
-                  </View>
-                </View>
-                
-                <ChevronRight 
-                  size={20} 
-                  color={DarkTheme.colors.semantic.tertiaryLabel}
-                  strokeWidth={2}
-                />
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
-} 
+}

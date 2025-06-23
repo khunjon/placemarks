@@ -18,6 +18,10 @@ src/screens/
 │   ├── CheckInFormScreen.tsx
 │   ├── CheckInDetailScreen.tsx
 │   └── index.ts            # Exports all check-in screens
+├── decide/                 # Discovery & recommendations
+│   ├── DecideScreen.tsx
+│   ├── RecommendationsScreen.tsx
+│   └── index.ts            # Exports all decide screens
 ├── lists/                  # List management
 │   ├── ListsScreen.tsx
 │   ├── ListDetailScreen.tsx
@@ -35,7 +39,6 @@ src/screens/
 │   ├── PreferencesScreen.tsx
 │   ├── AchievementDetailScreen.tsx
 │   └── index.ts            # Exports all profile screens
-└── DecideScreen.tsx        # Main discovery screen (kept at root)
 ```
 
 ## Benefits
@@ -55,9 +58,11 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 
 // After reorganization (cleaner)
 import { ProfileScreen, EditProfileScreen } from '../screens/profile';
+import { DecideScreen, RecommendationsScreen } from '../screens/decide';
 
 // Or individual imports still work
 import ProfileScreen from '../screens/profile/ProfileScreen';
+import DecideScreen from '../screens/decide/DecideScreen';
 ```
 
 ## Guidelines
@@ -65,4 +70,10 @@ import ProfileScreen from '../screens/profile/ProfileScreen';
 - Place screens in the subdirectory that matches their primary domain
 - Shared screens (like PlaceDetails) go in the most logical domain
 - Update the index.ts file when adding new screens
-- Keep DecideScreen at root as it's the main discovery entry point 
+- Each domain folder should have a clear, focused responsibility
+
+## Screen Responsibilities
+
+### decide/
+- **DecideScreen**: Main discovery page with curated lists and "Help me decide" entry point
+- **RecommendationsScreen**: Personalized location-based recommendations with real-time context 

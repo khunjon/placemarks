@@ -57,7 +57,7 @@ export const locationUtils = {
     try {
       // Use a faster, more reliable endpoint with much shorter timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 800); // Reduced to 800ms
+      const timeoutId = setTimeout(() => controller.abort(), 300); // Optimized to 300ms
       
       const response = await fetch('https://httpbin.org/status/200', {
         method: 'HEAD',
@@ -90,7 +90,7 @@ export const locationUtils = {
       forceRefresh = false,
       useCache = true,
       enableOfflineFallback = true,
-      timeout = 8000, // Reduced default timeout to 8 seconds
+      timeout = 3000, // Optimized timeout to 3 seconds
     } = options;
 
     try {
@@ -109,7 +109,7 @@ export const locationUtils = {
       // Optimized network check with faster timeout
       const networkCheckPromise = this.isNetworkAvailable();
       const networkTimeoutPromise = new Promise<boolean>((_, reject) => 
-        setTimeout(() => reject(new Error('Network check timeout')), 1000) // Reduced to 1 second
+        setTimeout(() => reject(new Error('Network check timeout')), 500) // Optimized to 500ms
       );
       
       let isOnline = false;

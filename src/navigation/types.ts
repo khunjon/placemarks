@@ -28,6 +28,7 @@ export type CheckInStackParamList = {
 // Decide Stack Params
 export type DecideStackParamList = {
   Decide: undefined;
+  Recommendations: undefined;
   ListDetail: {
     listId: string;
     listName: string;

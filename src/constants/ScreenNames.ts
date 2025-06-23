@@ -18,6 +18,7 @@ export const SCREEN_NAMES = {
   PROFILE: 'Profile',
 
   // Decide Stack
+  DECIDE_RECOMMENDATIONS: 'Decide_Recommendations',
   DECIDE_LIST_DETAIL: 'Decide_ListDetail',
   DECIDE_PLACE_DETAIL: 'Decide_PlaceDetail',
 
@@ -74,6 +75,7 @@ export const STACK_SCREEN_MAPPING = {
   // Bottom Tab Stacks
   DecideStack: {
     Decide: SCREEN_NAMES.DECIDE,
+    Recommendations: SCREEN_NAMES.DECIDE_RECOMMENDATIONS,
     ListDetail: SCREEN_NAMES.DECIDE_LIST_DETAIL,
     PlaceInListDetail: SCREEN_NAMES.DECIDE_PLACE_DETAIL,
   },
@@ -138,6 +140,7 @@ export function getScreenTitle(screenName: ScreenName): string {
     [SCREEN_NAMES.WELCOME]: 'Welcome',
     [SCREEN_NAMES.SIGNUP]: 'Sign Up',
     [SCREEN_NAMES.DECIDE]: 'Decide',
+    [SCREEN_NAMES.DECIDE_RECOMMENDATIONS]: 'Recommendations',
     [SCREEN_NAMES.LISTS]: 'Lists',
     [SCREEN_NAMES.CHECK_IN]: 'Check In',
     [SCREEN_NAMES.PROFILE]: 'Profile',

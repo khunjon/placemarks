@@ -205,7 +205,7 @@ export function useLocation(options: UseLocationOptions = {}) {
         forceRefresh,
         useCache: enableCaching,
         enableOfflineFallback,
-        timeout: 8000, // Reduced timeout to 8 seconds
+        timeout: 3000, // Optimized timeout to 3 seconds
       });
 
       if (locationResult.location) {
@@ -445,20 +445,26 @@ export function useLocation(options: UseLocationOptions = {}) {
 
     const initialize = async () => {
       try {
-        // Load cached location first (immediate)
-        await loadCachedLocation();
+        // Load cached location first (immediate and non-blocking)
+        loadCachedLocation().catch(error => {
+          console.warn('Failed to load cached location:', error);
+        });
         
         // Check permissions (non-blocking)
-        const permissionStatus = await checkPermissionStatus();
+        checkPermissionStatus().then(permissionStatus => {
+          // Auto-request location only if enabled and we have permission
+          if (autoRequest && permissionStatus === 'granted') {
+            // Don't await this - let it run in background
+            getCurrentLocation().catch(error => {
+              console.warn('Auto location request failed:', error);
+            });
+          }
+        }).catch(error => {
+          console.warn('Permission check failed:', error);
+        });
         
-        // Auto-request location if enabled and we have permission
-        if (autoRequest && permissionStatus === 'granted') {
-          // Don't await this - let it run in background
-          getCurrentLocation().catch(error => {
-            console.warn('Auto location request failed:', error);
-          });
-        } else if (autoRequest && fallbackToBangkok && !state.location) {
-          // Set fallback immediately if no permission and no cached location
+        // Set fallback immediately for faster app initialization
+        if (autoRequest && fallbackToBangkok) {
           try {
             await cacheManager.location.store(BANGKOK_CENTER, 'fallback');
             setState(prev => ({
@@ -466,7 +472,7 @@ export function useLocation(options: UseLocationOptions = {}) {
               location: BANGKOK_CENTER,
               source: 'fallback',
               lastUpdated: Date.now(),
-              error: 'Enable location access for personalized recommendations.',
+              error: null, // No error message for immediate fallback
             }));
 
             // Update global location service with fallback

@@ -9,6 +9,7 @@ import { LoginScreen } from './src/screens/auth';
 import type { RootStackParamList } from './src/navigation/types';
 import { analyticsService } from './src/services/analytics';
 import { NAVIGATION_METHODS } from './src/constants/ScreenNames';
+import { FullScreenLoading } from './src/components/common/LoadingState';
 import './global.css';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -93,7 +94,7 @@ function AppNavigator() {
   };
 
   if (loading) {
-    return null; // You can add a loading screen here
+    return <FullScreenLoading message="Loading Placemarks..." />;
   }
 
   return (
