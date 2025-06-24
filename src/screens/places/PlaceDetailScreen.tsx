@@ -33,6 +33,7 @@ import {
   TrendingUp,
   ChevronRight
 } from 'lucide-react-native';
+import { PhotoUrlGenerator } from '../../services/photoUrlGenerator';
 import { DarkTheme } from '../../constants/theme';
 import { Spacing } from '../../constants/Spacing';
 import { 
@@ -247,34 +248,37 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   const getPhotoUrls = (): string[] => {
     if (!place) return [];
     
-    // Prioritize pre-generated URLs from database (no API calls needed)
-    if (place.photos_urls && place.photos_urls.length > 0) {
-      console.log('🗄️ PlaceDetails rendered from database cache');
-      return place.photos_urls;
-    }
-    
-    // Fallback: Generate URLs from photo references (should rarely happen now)
+    // NEW APPROACH: Generate URLs from photo references (client-side)
     if (place.photo_references && place.photo_references.length > 0) {
       const validReferences = place.photo_references.filter(ref => 
         ref.photo_reference && !ref.photo_reference.startsWith('ATplDJ')
       );
       
       if (validReferences.length > 0) {
-        console.log('⚠️ FALLBACK: Generating photo URLs from references', {
+        console.log('📸 PlaceDetails: Generating photo URLs from references', {
           photoCount: validReferences.length,
-          reason: 'No pre-generated URLs found',
-          recommendation: 'This should rarely happen with new cache system'
+          approach: 'client-side generation'
         });
-        const limitedReferences = validReferences.slice(0, 1);
-        return limitedReferences.map(ref => getGooglePhotoUrl(ref.photo_reference));
+        
+        return PhotoUrlGenerator.generateUrls(validReferences.slice(0, 10));
       }
+    }
+    
+    // LEGACY FALLBACK: Use pre-generated URLs (deprecated approach)
+    const correctApiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '';
+    const hasCorrectApiKey = place.photos_urls?.some(url => url.includes(correctApiKey));
+    
+    if (place.photos_urls && place.photos_urls.length > 0 && hasCorrectApiKey) {
+      console.log('🗄️ LEGACY: Using pre-generated photo URLs from database');
+      return place.photos_urls;
     }
     
     return [];
   };
 
   // OPTIMIZATION: Memoize photo URLs to prevent regeneration on every render
-  const photoUrls = useMemo(() => getPhotoUrls(), [place?.photo_references, place?.photos_urls, place?.google_place_id]);
+  // Only recalculate if the place object identity changes, not individual properties
+  const photoUrls = useMemo(() => getPhotoUrls(), [place]);
 
   const loadPlaceDetails = async () => {
     if (!user?.id) return;
@@ -337,13 +341,23 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
             const googleData = await googlePlacesCache.getCachedPlace(placeData.google_place_id);
             
             if (googleData && googleData.photo_urls && googleData.photo_urls.length > 0) {
-              // If we have cached photo URLs but our place doesn't, update it
-              if (!placeData.photos_urls || placeData.photos_urls.length === 0) {
-                console.log('🗄️ PHOTO ENHANCEMENT: Adding cached photo URLs to place data', {
+              // Check if we need to update photo URLs (missing or wrong API key)
+              const correctApiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '';
+              const needsPhotoUpdate = !placeData.photos_urls || 
+                                     placeData.photos_urls.length === 0 ||
+                                     !placeData.photos_urls.some(url => url.includes(correctApiKey));
+              
+              if (needsPhotoUpdate) {
+                const updateReason = !placeData.photos_urls || placeData.photos_urls.length === 0 
+                  ? 'Missing photos' 
+                  : 'Wrong API key';
+                
+                console.log('🗄️ PHOTO ENHANCEMENT: Updating photo URLs with correct API key', {
                   placeId: placeData.id,
                   name: placeData.name,
                   photoCount: googleData.photo_urls.length,
-                  source: 'google_places_cache'
+                  source: 'google_places_cache',
+                  reason: updateReason
                 });
                 
                 // Update the place state with cached photo URLs
