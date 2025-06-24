@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(grep:*)",
-      "Bash(npm run type-check:*)"
+      "Bash(npm run type-check:*)",
+      "Bash(npm run test-db:*)",
+      "Bash(find:*)",
+      "Bash(rg:*)",
+      "Bash(npx supabase db diff:*)",
+      "Bash(npx supabase:*)"
     ],
     "deny": []
   }

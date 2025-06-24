@@ -32,7 +32,7 @@ export type DecideStackParamList = {
   ListDetail: {
     listId: string;
     listName: string;
-    listType: 'user' | 'smart';
+    listType: 'user' | 'smart' | 'curated';
   };
   PlaceInListDetail: {
     placeId: string;

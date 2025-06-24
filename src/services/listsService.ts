@@ -90,23 +90,49 @@ export class EnhancedListsService {
    */
   async createDefaultFavoritesList(userId: string): Promise<EnhancedList> {
     try {
-      const { data, error } = await supabase.rpc('get_or_create_favorites_list', {
-        user_uuid: userId
-      });
-
-      if (error) throw error;
-
-      // Get the created list details
-      const { data: list, error: fetchError } = await supabase
+      console.log('Creating or getting default favorites list for user');
+      
+      // Check if favorites list already exists
+      const { data: existingList, error: checkError } = await supabase
         .from('lists')
         .select('*')
-        .eq('id', data)
+        .eq('user_id', userId)
+        .eq('is_default', true)
         .single();
 
-      if (fetchError) throw fetchError;
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found"
+        throw checkError;
+      }
+
+      if (existingList) {
+        return {
+          ...existingList,
+          type: 'user'
+        } as EnhancedList;
+      }
+
+      // Create new favorites list
+      const { data: newList, error: createError } = await supabase
+        .from('lists')
+        .insert({
+          user_id: userId,
+          name: 'Favorites',
+          description: 'My favorite places',
+          visibility: 'private',
+          icon: 'heart',
+          color: '#DC2626',
+          auto_generated: false,
+          is_default: true,
+          type: 'user',
+          is_curated: false
+        })
+        .select()
+        .single();
+
+      if (createError) throw createError;
 
       return {
-        ...list,
+        ...newList,
         type: 'user'
       } as EnhancedList;
     } catch (error) {
@@ -121,38 +147,63 @@ export class EnhancedListsService {
    */
   async getUserLists(userId: string): Promise<ListWithPlaces[]> {
     try {
-      // Use the optimized function to get lists with counts in a single query
-      const { data: listsWithCounts, error: listsError } = await supabase.rpc(
-        'get_user_lists_with_counts',
-        { user_uuid: userId }
-      );
+      // Use direct query since RPC functions are not available
+      console.log('Using direct query for user lists');
+      const directResult = await supabase
+        .from('lists')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('is_curated', false)
+        .order('is_default', { ascending: false })
+        .order('created_at', { ascending: false });
+      
+      const listsWithCounts = directResult.data;
+      const listsError = directResult.error;
 
       if (listsError) throw listsError;
 
       const result: ListWithPlaces[] = [];
 
-      // For each list, get the places using the optimized function
+      // For each list, get the places using direct query
       for (const list of listsWithCounts || []) {
-        const { data: listData, error: placesError } = await supabase.rpc(
-          'get_list_with_places_optimized',
-          { 
-            list_uuid: list.id,
-            requesting_user_uuid: userId 
-          }
-        );
+        console.log(`Loading places for list: ${list.name}`);
+        // Use direct query with joins
+        const directResult = await supabase
+          .from('list_places')
+          .select(`
+            *,
+            places (
+              id,
+              google_place_id,
+              name,
+              address,
+              place_type,
+              google_types,
+              primary_type,
+              price_level,
+              bangkok_context,
+              google_rating,
+              phone,
+              website,
+              hours_open,
+              photos_urls
+            )
+          `)
+          .eq('list_id', list.id)
+          .order('sort_order', { ascending: true });
+        
+        const listData = directResult.data;
+        const placesError = directResult.error;
 
         if (placesError) throw placesError;
 
-        // Group the results by list (should all be the same list)
+        // Build places array from direct query results
         const places: EnrichedListPlace[] = [];
         
         if (listData && listData.length > 0) {
-          // All rows should have the same list info, so take from first row
-          const firstRow = listData[0];
-          
-          // Build places array from all rows that have place data
+          // Direct query result format - build places array
           for (const row of listData) {
-            if (row.place_id) {
+            if (row.places) {
               places.push({
                 list_id: row.list_id,
                 place_id: row.place_id,
@@ -162,22 +213,21 @@ export class EnhancedListsService {
                 visit_count: row.visit_count,
                 sort_order: row.sort_order,
                 place: {
-                  id: row.place_id,
-                  google_place_id: row.google_place_id,
-                  name: row.place_name,
-                  address: row.place_address || '',
-                  coordinates: [0, 0], // PostGIS geometry parsing would go here
-                  place_type: row.place_type,
-                  google_types: row.google_types,
-                  primary_type: row.primary_type,
-                  price_level: row.price_level,
-                  city_context: row.city_context,
-                  bangkok_context: row.bangkok_context,
-                  google_rating: row.google_rating,
-                  phone: row.place_phone,
-                  website: row.place_website,
-                  hours_open: row.hours_open,
-                  photos_urls: row.place_photos
+                  id: row.places.id,
+                  google_place_id: row.places.google_place_id,
+                  name: row.places.name,
+                  address: row.places.address || '',
+                  coordinates: [0, 0],
+                  place_type: row.places.place_type,
+                  google_types: row.places.google_types,
+                  primary_type: row.places.primary_type,
+                  price_level: row.places.price_level,
+                  bangkok_context: row.places.bangkok_context,
+                  google_rating: row.places.google_rating,
+                  phone: row.places.phone,
+                  website: row.places.website,
+                  hours_open: row.places.hours_open,
+                  photos_urls: row.places.photos_urls
                 }
               });
             }
@@ -344,35 +394,77 @@ export class EnhancedListsService {
     }
   ): Promise<void> {
     try {
-      // First, upsert the place using our database function
-      const { data: placeId, error: upsertError } = await supabase.rpc('upsert_place_with_rich_data', {
-        p_google_place_id: googlePlaceData.google_place_id,
-        p_name: googlePlaceData.name,
-        p_address: googlePlaceData.address,
-        p_coordinates: googlePlaceData.coordinates ? 
-          `POINT(${googlePlaceData.coordinates[0]} ${googlePlaceData.coordinates[1]})` : null,
-        p_place_type: googlePlaceData.place_type,
-        p_google_types: googlePlaceData.google_types || [],
-        p_price_level: googlePlaceData.price_level,
-        p_hours_open: googlePlaceData.hours_open || {},
-        p_phone: googlePlaceData.phone,
-        p_website: googlePlaceData.website,
-        p_google_rating: googlePlaceData.google_rating,
-        p_photos_urls: googlePlaceData.photos_urls || []
-      });
+      // Upsert the place using direct database operations
+      console.log('Upserting place with direct query');
+      let placeId;
+      
+      // Check if place already exists
+      const { data: existingPlace, error: placeCheckError } = await supabase
+        .from('places')
+        .select('id')
+        .eq('google_place_id', googlePlaceData.google_place_id)
+        .single();
 
-      if (upsertError) throw upsertError;
+      if (placeCheckError && placeCheckError.code !== 'PGRST116') { // PGRST116 is "not found"
+        throw placeCheckError;
+      }
+
+      if (existingPlace) {
+        // Update existing place
+        const { data: updatedPlace, error: updateError } = await supabase
+          .from('places')
+          .update({
+            name: googlePlaceData.name,
+            address: googlePlaceData.address,
+            place_type: googlePlaceData.place_type,
+            google_types: googlePlaceData.google_types || [],
+            price_level: googlePlaceData.price_level,
+            hours_open: googlePlaceData.hours_open || {},
+            phone: googlePlaceData.phone,
+            website: googlePlaceData.website,
+            google_rating: googlePlaceData.google_rating,
+            photos_urls: googlePlaceData.photos_urls || []
+          })
+          .eq('id', existingPlace.id)
+          .select('id')
+          .single();
+
+        if (updateError) throw updateError;
+        placeId = updatedPlace.id;
+      } else {
+        // Create new place
+        const { data: newPlace, error: createError } = await supabase
+          .from('places')
+          .insert({
+            google_place_id: googlePlaceData.google_place_id,
+            name: googlePlaceData.name,
+            address: googlePlaceData.address,
+            place_type: googlePlaceData.place_type,
+            google_types: googlePlaceData.google_types || [],
+            price_level: googlePlaceData.price_level,
+            hours_open: googlePlaceData.hours_open || {},
+            phone: googlePlaceData.phone,
+            website: googlePlaceData.website,
+            google_rating: googlePlaceData.google_rating,
+            photos_urls: googlePlaceData.photos_urls || []
+          })
+          .select('id')
+          .single();
+
+        if (createError) throw createError;
+        placeId = newPlace.id;
+      }
 
       // Check if place is already in list
-      const { data: existing, error: checkError } = await supabase
+      const { data: existing, error: listCheckError } = await supabase
         .from('list_places')
         .select('list_id')
         .eq('list_id', listId)
         .eq('place_id', placeId)
         .single();
 
-      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found"
-        throw checkError;
+      if (listCheckError && listCheckError.code !== 'PGRST116') { // PGRST116 is "not found"
+        throw listCheckError;
       }
 
       if (existing) {
@@ -728,7 +820,207 @@ export class EnhancedListsService {
     }
   }
 
-  // 5. UTILITY METHODS
+  // 5. CURATED LISTS
+
+  /**
+   * Gets all curated lists with optional filtering
+   */
+  async getCuratedLists(filters?: {
+    location_scope?: string;
+    list_type?: string;
+    publisher_name?: string;
+    min_priority?: number;
+  }): Promise<ListWithPlaces[]> {
+    try {
+      // Use direct table query with visibility filtering
+      console.log('Loading curated lists with direct query');
+      let query = supabase
+        .from('lists')
+        .select(`
+          id,
+          user_id,
+          name,
+          created_at,
+          description,
+          list_type,
+          icon,
+          color,
+          is_curated,
+          publisher_name,
+          publisher_logo_url,
+          external_link,
+          location_scope,
+          curator_priority,
+          visibility
+        `)
+        .eq('is_curated', true)
+        .in('visibility', ['curated', 'public']) // Show curated and public lists
+        .order('curator_priority', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      // Apply filters if provided
+      if (filters?.location_scope) {
+        query = query.eq('location_scope', filters.location_scope);
+      }
+      if (filters?.list_type) {
+        query = query.eq('list_type', filters.list_type);
+      }
+      if (filters?.publisher_name) {
+        query = query.eq('publisher_name', filters.publisher_name);
+      }
+      if (filters?.min_priority) {
+        query = query.gte('curator_priority', filters.min_priority);
+      }
+
+      const directResult = await query;
+      const curatedLists = directResult.data;
+      const error = directResult.error;
+
+      if (error) throw error;
+
+      // Get place counts for each list
+      const listsWithCounts = await Promise.all(
+        (curatedLists || []).map(async (list: any) => {
+          const { count } = await supabase
+            .from('list_places')
+            .select('*', { count: 'exact', head: true })
+            .eq('list_id', list.id);
+
+          return {
+            id: list.id,
+            user_id: list.user_id,
+            name: list.name,
+            is_default: false,
+            visibility: 'curated' as const,
+            auto_generated: false,
+            created_at: list.created_at,
+            description: list.description,
+            list_type: list.list_type,
+            icon: list.icon,
+            color: list.color,
+            type: 'curated' as const,
+            is_curated: true,
+            publisher_name: list.publisher_name,
+            publisher_logo_url: list.publisher_logo_url,
+            external_link: list.external_link,
+            location_scope: list.location_scope,
+            curator_priority: list.curator_priority,
+            places: [], // Places loaded separately if needed
+            place_count: count || 0,
+          };
+        })
+      );
+
+      return listsWithCounts;
+    } catch (error) {
+      console.error('Error getting curated lists:', error);
+      throw new ListError('Failed to get curated lists', 'GET_CURATED_ERROR');
+    }
+  }
+
+  /**
+   * Gets a specific curated list with all its places
+   */
+  async getCuratedListDetails(listId: string): Promise<ListWithPlaces | null> {
+    try {
+      // Use direct queries for curated list details
+      console.log(`Loading curated list details for: ${listId}`);
+      
+      // Get the curated list
+      const { data: list, error: listError } = await supabase
+        .from('lists')
+        .select('*')
+        .eq('id', listId)
+        .eq('is_curated', true)
+        .in('visibility', ['curated', 'public']) // Show curated and public lists
+        .single();
+
+      if (listError) throw listError;
+      if (!list) return null;
+
+      // Get places for this list
+      const { data: listPlaces, error: placesError } = await supabase
+        .from('list_places')
+        .select(`
+          *,
+          places (
+            id,
+            google_place_id,
+            name,
+            address,
+            place_type,
+            google_types,
+            primary_type,
+            price_level,
+            bangkok_context,
+            google_rating,
+            phone,
+            website,
+            hours_open,
+            photos_urls
+          )
+        `)
+        .eq('list_id', listId)
+        .order('sort_order', { ascending: true });
+
+      if (placesError) throw placesError;
+
+      const places: EnrichedListPlace[] = (listPlaces || []).map(lp => ({
+        list_id: lp.list_id,
+        place_id: lp.place_id,
+        added_at: lp.added_at,
+        notes: lp.notes,
+        personal_rating: lp.personal_rating,
+        visit_count: lp.visit_count,
+        sort_order: lp.sort_order,
+        place: {
+          id: lp.places.id,
+          google_place_id: lp.places.google_place_id,
+          name: lp.places.name,
+          address: lp.places.address || '',
+          coordinates: [0, 0],
+          place_type: lp.places.place_type,
+          google_types: lp.places.google_types,
+          primary_type: lp.places.primary_type,
+          price_level: lp.places.price_level,
+          bangkok_context: lp.places.bangkok_context,
+          google_rating: lp.places.google_rating,
+          phone: lp.places.phone,
+          website: lp.places.website,
+          hours_open: lp.places.hours_open,
+          photos_urls: lp.places.photos_urls
+        }
+      }));
+
+      return {
+        id: list.id,
+        user_id: list.user_id,
+        name: list.name,
+        is_default: false,
+        visibility: 'curated' as const,
+        auto_generated: false,
+        created_at: list.created_at,
+        description: list.description,
+        list_type: list.list_type,
+        icon: list.icon,
+        color: list.color,
+        type: 'curated' as const,
+        is_curated: true,
+        publisher_name: list.publisher_name,
+        publisher_logo_url: list.publisher_logo_url,
+        external_link: list.external_link,
+        location_scope: list.location_scope,
+        curator_priority: list.curator_priority,
+        places: places,
+        place_count: places.length,
+      };
+    } catch (error) {
+      console.error('Error getting curated list details:', error);
+      throw new ListError('Failed to get curated list details', 'GET_CURATED_DETAILS_ERROR');
+    }
+  }
+
+  // 6. UTILITY METHODS
 
   /**
    * Gets list statistics for a user

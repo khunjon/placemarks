@@ -47,7 +47,8 @@ import {
   Book,
   Gamepad2,
   Dumbbell,
-  Sparkles
+  Sparkles,
+  ExternalLink
 } from 'lucide-react-native';
 import { Colors } from '../../constants/Colors';
 import { Spacing } from '../../constants/Spacing';
@@ -102,7 +103,7 @@ const sortOptions: SortConfig[] = [
 ];
 
 export default function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
-  const { listId, listName: initialListName } = route.params;
+  const { listId, listName: initialListName, listType, isEditable } = route.params;
   const { user } = useAuth();
   
   // Track initial mount to prevent duplicate loading
@@ -189,17 +190,23 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       }
       
       // Load fresh data from API
-  
+      let currentList;
       
       // Add timeout for slow connections
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Request timeout')), 15000)
       );
       
-      const dataPromise = enhancedListsService.getUserLists(user.id);
-      
-      const lists = await Promise.race([dataPromise, timeoutPromise]) as any;
-      const currentList = lists.find((l: any) => l.id === listId);
+      if (listType === 'curated') {
+        // Load curated list details directly
+        const dataPromise = enhancedListsService.getCuratedListDetails(listId);
+        currentList = await Promise.race([dataPromise, timeoutPromise]) as any;
+      } else {
+        // Load user lists
+        const dataPromise = enhancedListsService.getUserLists(user.id);
+        const lists = await Promise.race([dataPromise, timeoutPromise]) as any;
+        currentList = lists.find((l: any) => l.id === listId);
+      }
       
       if (currentList) {
         setList(currentList);
@@ -577,34 +584,22 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
           {isEditing ? (
             // Edit Mode
             <View>
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                marginBottom: Spacing.md,
-              }}>
-                <ListIcon 
-                  size={Spacing.iconSize.lg} 
-                  color={list.color || Colors.primary[500]}
-                  strokeWidth={2}
-                />
-                <TextInput
-                  value={editedName}
-                  onChangeText={setEditedName}
-                  style={{
-                    flex: 1,
-                    marginLeft: Spacing.md,
-                    fontSize: 24,
-                    fontWeight: '700',
-                    color: Colors.semantic.textPrimary,
-                    backgroundColor: Colors.semantic.backgroundSecondary,
-                    paddingHorizontal: Spacing.sm,
-                    paddingVertical: Spacing.xs,
-                    borderRadius: 8,
-                  }}
-                  placeholder="List name"
-                  placeholderTextColor={Colors.semantic.textTertiary}
-                />
-              </View>
+              <TextInput
+                value={editedName}
+                onChangeText={setEditedName}
+                style={{
+                  fontSize: 24,
+                  fontWeight: '700',
+                  color: Colors.semantic.textPrimary,
+                  backgroundColor: Colors.semantic.backgroundSecondary,
+                  paddingHorizontal: Spacing.sm,
+                  paddingVertical: Spacing.xs,
+                  borderRadius: 8,
+                  marginBottom: Spacing.md,
+                }}
+                placeholder="List name"
+                placeholderTextColor={Colors.semantic.textTertiary}
+              />
 
               <TextInput
                 value={editedDescription}
@@ -669,26 +664,74 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
             // Display Mode
             <View>
               {/* Description */}
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                marginBottom: Spacing.sm,
-                marginTop: 0,
-                paddingTop: 0,
-              }}>
-                <ListIcon 
-                  size={Spacing.iconSize.lg} 
-                  color={list.color || Colors.primary[500]}
-                  strokeWidth={2}
-                />
-                <View style={{ flex: 1, marginLeft: Spacing.md }}>
-                  {list.description && (
-                    <Body color="secondary">
-                      {list.description}
-                    </Body>
-                  )}
+              {list.description && (
+                <View style={{
+                  marginBottom: Spacing.sm,
+                  marginTop: 0,
+                  paddingTop: 0,
+                }}>
+                  <Body color="secondary">
+                    {list.description}
+                  </Body>
                 </View>
-              </View>
+              )}
+
+              {/* Curated List Publisher Info */}
+              {listType === 'curated' && list.publisher_name && (
+                <View style={{
+                  backgroundColor: Colors.semantic.backgroundSecondary,
+                  padding: Spacing.md,
+                  borderRadius: 12,
+                  marginBottom: Spacing.md,
+                }}>
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    marginBottom: Spacing.xs,
+                  }}>
+                    <SecondaryText style={{ 
+                      fontSize: 12,
+                      color: Colors.neutral[600],
+                      fontWeight: '500'
+                    }}>
+                      Curated by
+                    </SecondaryText>
+                  </View>
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}>
+                    <Body style={{ 
+                      fontWeight: '600',
+                      color: Colors.semantic.textPrimary
+                    }}>
+                      {list.publisher_name}
+                    </Body>
+                    {list.external_link && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          // TODO: Open external link
+                          Alert.alert('External Link', `Open ${list.external_link}?`);
+                        }}
+                        style={{
+                          padding: Spacing.xs,
+                          borderWidth: 1,
+                          borderColor: Colors.accent.yellow,
+                          borderRadius: 6,
+                          backgroundColor: 'transparent',
+                        }}
+                      >
+                        <ExternalLink 
+                          size={16} 
+                          color={Colors.accent.yellow}
+                          strokeWidth={2}
+                        />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              )}
 
               {/* Progress Bar + Action Icons */}
               <View style={{
@@ -742,41 +785,49 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                   </View>
                 )}
 
+
+
                 {/* Action Icons */}
                 <View style={{
                   flexDirection: 'row',
                   alignItems: 'center',
                 }}>
-                  <TouchableOpacity
-                    onPress={handleShare}
-                    style={{
-                      padding: Spacing.sm,
-                      backgroundColor: 'transparent',
-                      borderRadius: 8,
-                      marginRight: Spacing.sm,
-                    }}
-                  >
-                    <Share 
-                      size={Spacing.iconSize.md} 
-                      color={Colors.accent.yellow}
-                      strokeWidth={2}
-                    />
-                  </TouchableOpacity>
+                  {/* Only show share button for non-curated lists */}
+                  {listType !== 'curated' && (
+                    <TouchableOpacity
+                      onPress={handleShare}
+                      style={{
+                        padding: Spacing.sm,
+                        backgroundColor: 'transparent',
+                        borderRadius: 8,
+                        marginRight: Spacing.sm,
+                      }}
+                    >
+                      <Share 
+                        size={Spacing.iconSize.md} 
+                        color={Colors.accent.yellow}
+                        strokeWidth={2}
+                      />
+                    </TouchableOpacity>
+                  )}
 
-                  <TouchableOpacity
-                    onPress={() => setIsEditing(!isEditing)}
-                    style={{
-                      padding: Spacing.sm,
-                      backgroundColor: 'transparent',
-                      borderRadius: 8,
-                    }}
-                  >
-                    <Edit3 
-                      size={Spacing.iconSize.md} 
-                      color={Colors.primary[500]}
-                      strokeWidth={2}
-                    />
-                  </TouchableOpacity>
+                  {/* Only show edit button for editable lists */}
+                  {(isEditable !== false && listType !== 'curated') && (
+                    <TouchableOpacity
+                      onPress={() => setIsEditing(!isEditing)}
+                      style={{
+                        padding: Spacing.sm,
+                        backgroundColor: 'transparent',
+                        borderRadius: 8,
+                      }}
+                    >
+                      <Edit3 
+                        size={Spacing.iconSize.md} 
+                        color={Colors.primary[500]}
+                        strokeWidth={2}
+                      />
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
 
@@ -808,12 +859,15 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                   </SecondaryText>
                 </TouchableOpacity>
 
-                <PrimaryButton
-                  title="Add Places"
-                  onPress={handleAddPlaces}
-                  icon={Plus}
-                  size="sm"
-                />
+                {/* Only show Add Places button for editable lists */}
+                {(isEditable !== false && listType !== 'curated') && (
+                  <PrimaryButton
+                    title="Add Places"
+                    onPress={handleAddPlaces}
+                    icon={Plus}
+                    size="sm"
+                  />
+                )}
               </View>
             </View>
           )}
@@ -845,6 +899,8 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                   onViewDetails={() => handleNavigateToPlace(listPlace)}
                   onGetDirections={() => handleGetDirections(listPlace)}
                   onCheckIn={() => handleCheckIn(listPlace)}
+                  isEditable={isEditable !== false && listType !== 'curated'}
+                  isCurated={listType === 'curated'}
                 />
               ))}
             </View>
@@ -956,6 +1012,8 @@ interface PlaceCardProps {
   onViewDetails: () => void;
   onGetDirections: () => void;
   onCheckIn: () => void;
+  isEditable?: boolean;
+  isCurated?: boolean;
 }
 
 function PlaceCard({ 
@@ -965,7 +1023,9 @@ function PlaceCard({
   onRatingChange, 
   onViewDetails, 
   onGetDirections, 
-  onCheckIn 
+  onCheckIn,
+  isEditable = true,
+  isCurated = false
 }: PlaceCardProps) {
   const { place } = listPlace;
   const hasVisited = (listPlace.visit_count || 0) > 0;
@@ -1172,12 +1232,11 @@ function PlaceCard({
     );
   };
 
-  return (
-    <Swipeable renderRightActions={renderRightAction}>
-      <TouchableOpacity
-        onPress={onViewDetails}
-        activeOpacity={0.7}
-      >
+  const cardContent = (
+    <TouchableOpacity
+      onPress={onViewDetails}
+      activeOpacity={0.7}
+    >
         <ElevatedCard 
           padding="sm" 
           style={{ 
@@ -1267,28 +1326,37 @@ function PlaceCard({
             </View>
           </View>
 
-          {/* Bottom row: Added date + Actions */}
-          <View style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginTop: Spacing.xs,
-            paddingTop: Spacing.xs,
-            borderTopWidth: 1,
-            borderTopColor: Colors.semantic.borderPrimary + '30',
-          }}>
-            {/* De-emphasized added date */}
-            <Typography style={{ 
-              fontSize: 11,
-              color: Colors.semantic.textTertiary,
+          {/* Bottom row: Added date + Actions (only show for non-curated lists) */}
+          {!isCurated && (
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginTop: Spacing.xs,
+              paddingTop: Spacing.xs,
+              borderTopWidth: 1,
+              borderTopColor: Colors.semantic.borderPrimary + '30',
             }}>
-              Added {new Date(listPlace.added_at).toLocaleDateString()}
-            </Typography>
+              {/* De-emphasized added date */}
+              <Typography style={{ 
+                fontSize: 11,
+                color: Colors.semantic.textTertiary,
+              }}>
+                Added {new Date(listPlace.added_at).toLocaleDateString()}
+              </Typography>
 
 
-          </View>
+            </View>
+          )}
         </ElevatedCard>
-      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+
+  return isEditable ? (
+    <Swipeable renderRightActions={renderRightAction}>
+      {cardContent}
     </Swipeable>
+  ) : (
+    cardContent
   );
 } 

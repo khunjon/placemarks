@@ -17,7 +17,8 @@ function ListDetailScreenWrapper({ navigation, route }: DecideStackScreenProps<'
     ...route,
     params: {
       ...route.params,
-      listType: route.params.listType === 'smart' ? 'auto' as const : 'user' as const,
+      listType: route.params.listType === 'smart' ? 'auto' as const : 
+                route.params.listType === 'curated' ? 'curated' as const : 'user' as const,
       isEditable: route.params.listType === 'user',
     }
   };

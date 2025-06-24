@@ -1,9 +1,11 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Sparkles, ChevronRight } from 'lucide-react-native';
 import { DarkTheme } from '../../constants/theme';
 import type { DecideStackScreenProps } from '../../navigation/types';
+import { enhancedListsService, ListWithPlaces } from '../../services/listsService';
+import { useAuth } from '../../services/auth-context';
 
 type DecideScreenProps = DecideStackScreenProps<'Decide'>;
 
@@ -52,24 +54,53 @@ const mockCuratedListsData = [
 ];
 
 export default function DecideScreen({ navigation }: DecideScreenProps) {
+  const { user } = useAuth();
+  const [curatedLists, setCuratedLists] = useState<ListWithPlaces[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadCuratedLists();
+  }, []);
+
+  const loadCuratedLists = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const lists = await enhancedListsService.getCuratedLists();
+      setCuratedLists(lists);
+    } catch (err) {
+      console.error('Error loading curated lists:', err);
+      setError('Failed to load curated lists');
+      // Fallback to mock data if there's an error
+      setCuratedLists(mockCuratedListsData.map(list => ({
+        ...list,
+        user_id: undefined,
+        is_default: false,
+        visibility: 'curated' as const,
+        auto_generated: false,
+        created_at: new Date().toISOString(),
+        is_curated: true,
+        places: [],
+        place_count: list.placeCount,
+        publisher_name: list.curator,
+      })));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleHelpMeDecide = () => {
     navigation.navigate('Recommendations');
   };
 
-  const handleNavigateToList = (listId: string, listName: string, listType: 'user' | 'smart') => {
+  const handleNavigateToList = (listId: string, listName: string, listType: 'user' | 'smart' | 'curated') => {
     navigation.navigate('ListDetail', {
       listId,
       listName,
       listType,
     });
   };
-
-
-  // Convert curated data with navigation handlers
-  const mockCuratedLists = mockCuratedListsData.map(list => ({
-    ...list,
-    onPress: () => handleNavigateToList(list.id, list.name, 'user'), // Use 'user' for navigation compatibility
-  }));
   return (
     <SafeAreaView style={{ 
       flex: 1, 
@@ -171,14 +202,51 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
                 marginLeft: DarkTheme.spacing.sm,
               }
             ]}>
-              ({mockCuratedLists.length})
+              ({curatedLists.length})
             </Text>
           </View>
 
-          {mockCuratedLists.map((list) => (
+          {loading ? (
+            <View style={{
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: DarkTheme.spacing.xl,
+            }}>
+              <ActivityIndicator 
+                size="large" 
+                color={DarkTheme.colors.bangkok.gold} 
+              />
+              <Text style={[
+                DarkTheme.typography.caption1,
+                { 
+                  color: DarkTheme.colors.semantic.secondaryLabel,
+                  marginTop: DarkTheme.spacing.sm,
+                }
+              ]}>
+                Loading curated lists...
+              </Text>
+            </View>
+          ) : error ? (
+            <View style={{
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: DarkTheme.spacing.xl,
+            }}>
+              <Text style={[
+                DarkTheme.typography.caption1,
+                { 
+                  color: DarkTheme.colors.semantic.secondaryLabel,
+                  textAlign: 'center',
+                }
+              ]}>
+                {error}
+              </Text>
+            </View>
+          ) : (
+            curatedLists.map((list) => (
             <TouchableOpacity
               key={list.id}
-              onPress={list.onPress}
+              onPress={() => handleNavigateToList(list.id, list.name, 'curated')}
               activeOpacity={0.7}
               style={{
                 backgroundColor: `${DarkTheme.colors.bangkok.gold}08`,
@@ -242,7 +310,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
                         }
                       ]}
                     >
-                      {list.placeCount} {list.placeCount === 1 ? 'place' : 'places'} • {list.curator}
+                      {list.place_count} {list.place_count === 1 ? 'place' : 'places'} • {list.publisher_name || 'Curated'}
                     </Text>
                   </View>
                 </View>
@@ -254,7 +322,7 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
                 />
               </View>
             </TouchableOpacity>
-          ))}
+          )))}
         </View>
       </ScrollView>
     </SafeAreaView>
