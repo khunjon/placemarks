@@ -71,7 +71,6 @@ class AnalyticsService implements IAnalyticsService {
       });
 
       this.initialized = true;
-      this.log('Analytics initialized successfully');
 
       // Track app launch
       await this.trackAppLaunch();
@@ -158,7 +157,6 @@ class AnalyticsService implements IAnalyticsService {
    */
   initializeNavigation(navigationRef: NavigationContainerRef<any>): void {
     this.navigationRef = navigationRef;
-    this.log('Navigation tracking initialized');
   }
 
   /**
@@ -466,7 +464,7 @@ class AnalyticsService implements IAnalyticsService {
           const navigationMethod = data?.navigation_method;
           const timeSpent = data?.time_on_previous_screen;
           
-          let logMessage = `🧭 Screen: ${screenName}`;
+          let logMessage = `🧭 Screen View: ${screenName}`;
           if (navigationMethod && navigationMethod !== 'programmatic') {
             logMessage += ` (${navigationMethod})`;
           }
