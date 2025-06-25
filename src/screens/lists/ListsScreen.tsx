@@ -68,6 +68,10 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
         cacheManager.lists.hasCache(user.id).then(hasValidCache => {
           if (!hasValidCache) {
             console.log('No valid cache, reloading lists...');
+            // Add debug info about cache status
+            cacheManager.lists.getStatus(user.id).then(status => {
+              console.log('Cache status:', status);
+            });
             loadAllLists();
           } else {
             console.log('Valid cache exists, skipping reload');
@@ -120,8 +124,8 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       const lists = await enhancedListsService.getUserLists(user.id);
       setUserLists(lists);
       
-      // Save to cache
-      await cacheManager.lists.store(lists, smartLists, user.id);
+      // Save to cache immediately after loading user lists (before smart lists)
+      await cacheManager.lists.store(lists, [], user.id); // Use empty array for smartLists for now
     } catch (error) {
       console.error('Error loading user lists:', error);
       if (error instanceof ListError) {

@@ -90,8 +90,6 @@ export class EnhancedListsService {
    */
   async createDefaultFavoritesList(userId: string): Promise<EnhancedList> {
     try {
-      console.log('Creating or getting default favorites list for user');
-      
       // Check if favorites list already exists
       const { data: existingList, error: checkError } = await supabase
         .from('lists')
@@ -112,6 +110,7 @@ export class EnhancedListsService {
       }
 
       // Create new favorites list
+      console.log('Creating new default favorites list for user');
       const { data: newList, error: createError } = await supabase
         .from('lists')
         .insert({
@@ -147,31 +146,38 @@ export class EnhancedListsService {
    */
   async getUserLists(userId: string): Promise<ListWithPlaces[]> {
     try {
-      // Use direct query since RPC functions are not available
-      console.log('Using direct query for user lists');
-      const directResult = await supabase
-        .from('lists')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('is_curated', false)
-        .order('is_default', { ascending: false })
-        .order('created_at', { ascending: false });
+      console.log('Using optimized single query for user lists');
       
-      const listsWithCounts = directResult.data;
-      const listsError = directResult.error;
-
-      if (listsError) throw listsError;
-
-      const result: ListWithPlaces[] = [];
-
-      // For each list, get the places using direct query
-      for (const list of listsWithCounts || []) {
-        console.log(`Loading places for list: ${list.name}`);
-        // Use direct query with joins
-        const directResult = await supabase
-          .from('list_places')
-          .select(`
-            *,
+      // Single optimized query to get all lists with their places in one go
+      const { data: listPlacesData, error: queryError } = await supabase
+        .from('lists')
+        .select(`
+          id,
+          user_id,
+          name,
+          is_default,
+          visibility,
+          auto_generated,
+          created_at,
+          description,
+          list_type,
+          icon,
+          color,
+          type,
+          is_curated,
+          publisher_name,
+          publisher_logo_url,
+          external_link,
+          location_scope,
+          curator_priority,
+          list_places (
+            list_id,
+            place_id,
+            added_at,
+            notes,
+            personal_rating,
+            visit_count,
+            sort_order,
             places (
               id,
               google_place_id,
@@ -188,58 +194,68 @@ export class EnhancedListsService {
               hours_open,
               photo_references
             )
-          `)
-          .eq('list_id', list.id)
-          .order('sort_order', { ascending: true });
-        
-        const listData = directResult.data;
-        const placesError = directResult.error;
+          )
+        `)
+        .eq('user_id', userId)
+        .eq('is_curated', false)
+        .order('is_default', { ascending: false })
+        .order('created_at', { ascending: false });
 
-        if (placesError) throw placesError;
+      if (queryError) throw queryError;
 
-        // Build places array from direct query results
+      const result: ListWithPlaces[] = [];
+
+      // Process each list and its places
+      for (const list of listPlacesData || []) {
         const places: EnrichedListPlace[] = [];
         
-        if (listData && listData.length > 0) {
-          // Direct query result format - build places array
-          for (const row of listData) {
-            if (row.places) {
-              places.push({
-                list_id: row.list_id,
-                place_id: row.place_id,
-                added_at: row.added_at,
-                notes: row.notes,
-                personal_rating: row.personal_rating,
-                visit_count: row.visit_count,
-                sort_order: row.sort_order,
-                place: {
-                  id: row.places.id,
-                  google_place_id: row.places.google_place_id,
-                  name: row.places.name,
-                  address: row.places.address || '',
-                  coordinates: [0, 0],
-                  place_type: row.places.place_type,
-                  google_types: row.places.google_types,
-                  primary_type: row.places.primary_type,
-                  price_level: row.places.price_level,
-                  bangkok_context: row.places.bangkok_context,
-                  google_rating: row.places.google_rating,
-                  phone: row.places.phone,
-                  website: row.places.website,
-                  hours_open: row.places.hours_open,
-                  photo_references: row.places.photo_references
-                }
-              });
+        // Process places for this list
+        if (list.list_places && list.list_places.length > 0) {
+          for (const listPlace of list.list_places) {
+            if (listPlace.places) {
+              // listPlace.places is an array even though it's a single relation
+              const place = Array.isArray(listPlace.places) ? listPlace.places[0] : listPlace.places;
+              if (place) {
+                places.push({
+                  list_id: listPlace.list_id,
+                  place_id: listPlace.place_id,
+                  added_at: listPlace.added_at,
+                  notes: listPlace.notes,
+                  personal_rating: listPlace.personal_rating,
+                  visit_count: listPlace.visit_count,
+                  sort_order: listPlace.sort_order,
+                  place: {
+                    id: place.id,
+                    google_place_id: place.google_place_id,
+                    name: place.name,
+                    address: place.address || '',
+                    coordinates: [0, 0],
+                    place_type: place.place_type,
+                    google_types: place.google_types,
+                    primary_type: place.primary_type,
+                    price_level: place.price_level,
+                    bangkok_context: place.bangkok_context,
+                    google_rating: place.google_rating,
+                    phone: place.phone,
+                    website: place.website,
+                    hours_open: place.hours_open,
+                    photo_references: place.photo_references
+                  }
+                });
+              }
             }
           }
         }
+
+        // Sort places by sort_order
+        places.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
         result.push({
           id: list.id,
           user_id: list.user_id,
           name: list.name,
           is_default: list.is_default,
-          visibility: list.visibility || 'private', // Default to private if not set
+          visibility: list.visibility || 'private',
           auto_generated: list.auto_generated,
           created_at: list.created_at,
           description: list.description,
@@ -258,6 +274,7 @@ export class EnhancedListsService {
         });
       }
 
+      console.log(`Loaded ${result.length} lists with places in single query`);
       return result;
     } catch (error) {
       console.error('Error getting user lists:', error);
