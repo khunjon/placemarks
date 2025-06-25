@@ -337,34 +337,29 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
         // Check if we can enhance the fetched place data with Google Places cache
         if (placeData?.google_place_id) {
           try {
-            // Always check the Google Places cache for photo URLs, even if we have basic data
+            // Check Google Places cache for missing data (but NOT for photo URLs)
             const googleData = await googlePlacesCache.getCachedPlace(placeData.google_place_id);
             
-            if (googleData && googleData.photo_urls && googleData.photo_urls.length > 0) {
-              // Check if we need to update photo URLs (missing or wrong API key)
-              const correctApiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '';
-              const needsPhotoUpdate = !placeData.photos_urls || 
-                                     placeData.photos_urls.length === 0 ||
-                                     !placeData.photos_urls.some(url => url.includes(correctApiKey));
+            if (googleData) {
+              // Only enhance missing non-photo data and photo references
+              const needsDataEnhancement = 
+                !placeData.phone || 
+                !placeData.website || 
+                !placeData.google_rating ||
+                !placeData.photo_references || 
+                placeData.photo_references.length === 0;
               
-              if (needsPhotoUpdate) {
-                const updateReason = !placeData.photos_urls || placeData.photos_urls.length === 0 
-                  ? 'Missing photos' 
-                  : 'Wrong API key';
-                
-                console.log('🗄️ PHOTO ENHANCEMENT: Updating photo URLs with correct API key', {
+              if (needsDataEnhancement) {
+                console.log('🗄️ DATA ENHANCEMENT: Adding missing place data from cache', {
                   placeId: placeData.id,
                   name: placeData.name,
-                  photoCount: googleData.photo_urls.length,
                   source: 'google_places_cache',
-                  reason: updateReason
+                  hasPhotos: (googleData.photos?.length || 0) > 0
                 });
                 
-                // Update the place state with cached photo URLs
+                // Update the place state with cached data (NO photo URLs)
                 const updatedPlace = {
                   ...placeData,
-                  photos_urls: googleData.photo_urls,
-                  // Also update any other missing Google data
                   phone: googleData.formatted_phone_number || placeData.phone,
                   website: googleData.website || placeData.website,
                   google_rating: googleData.rating || placeData.google_rating,
@@ -372,16 +367,13 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                   hours_open: googleData.opening_hours || placeData.hours_open,
                   photo_references: googleData.photos || placeData.photo_references,
                   place_types: googleData.types || placeData.place_types
+                  // NOTE: Deliberately NOT setting photos_urls - let PhotoUrlGenerator handle it
                 };
                 
                 setPlace(updatedPlace);
                 
-                // Update the database with the photo URLs to avoid this lookup next time
-                const updateData: any = {
-                  photos_urls: googleData.photo_urls
-                };
-                
-                // Also update other missing fields
+                // Update the database with missing data (NO photo URLs)
+                const updateData: any = {};
                 if (googleData.formatted_phone_number && !placeData.phone) updateData.phone = googleData.formatted_phone_number;
                 if (googleData.website && !placeData.website) updateData.website = googleData.website;
                 if (googleData.rating && !placeData.google_rating) updateData.google_rating = googleData.rating.toString();
@@ -390,15 +382,17 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                 if (googleData.photos && (!placeData.photo_references || placeData.photo_references.length === 0)) updateData.photo_references = googleData.photos;
                 if (googleData.types && (!placeData.place_types || placeData.place_types.length === 0)) updateData.google_types = googleData.types;
                 
-                const { error } = await supabase
-                  .from('places')
-                  .update(updateData)
-                  .eq('id', placeId);
-                  
-                if (error) {
-                  console.warn('Failed to update place with cached Google data:', error);
-                } else {
-                  console.log('Successfully enhanced place with cached Google data');
+                if (Object.keys(updateData).length > 0) {
+                  const { error } = await supabase
+                    .from('places')
+                    .update(updateData)
+                    .eq('id', placeId);
+                    
+                  if (error) {
+                    console.warn('Failed to update place with cached Google data:', error);
+                  } else {
+                    console.log('Successfully enhanced place with cached Google data');
+                  }
                 }
               }
             } else if (shouldFetchFreshGoogleData(placeData)) {
@@ -407,7 +401,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
               const freshGoogleData = await googlePlacesCache.getPlaceDetails(placeData.google_place_id);
               
               if (freshGoogleData) {
-                // Convert Google Places cache format to our format
+                // Convert Google Places cache format to our format (NO photo URLs)
                 const convertedData = {
                   phone: freshGoogleData.formatted_phone_number || null,
                   website: freshGoogleData.website || null,
@@ -420,11 +414,11 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                     width: photo.width,
                     html_attributions: photo.html_attributions || []
                   })) : [],
-                  photo_urls: freshGoogleData.photo_urls || [], // Use pre-generated URLs
                   place_types: freshGoogleData.types || []
+                  // NOTE: Deliberately NOT including photo_urls
                 };
 
-                // Update the place state with fresh Google data
+                // Update the place state with fresh Google data (NO photo URLs)
                 const updatedPlace = {
                   ...placeData,
                   phone: convertedData.phone || placeData.phone,
@@ -433,13 +427,13 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                   price_level: convertedData.price_level || placeData.price_level,
                   hours_open: convertedData.hours_open || placeData.hours_open,
                   photo_references: convertedData.photo_references.length > 0 ? convertedData.photo_references : placeData.photo_references,
-                  photos_urls: convertedData.photo_urls.length > 0 ? convertedData.photo_urls : placeData.photos_urls, // Use pre-generated URLs
                   place_types: convertedData.place_types.length > 0 ? convertedData.place_types : placeData.place_types
+                  // NOTE: Deliberately NOT setting photos_urls
                 };
                 
                 setPlace(updatedPlace);
                 
-                // Update the database with fresh Google Places data
+                // Update the database with fresh Google Places data (NO photo URLs)
                 const updateData: any = {};
                 if (convertedData.phone) updateData.phone = convertedData.phone;
                 if (convertedData.website) updateData.website = convertedData.website;
@@ -447,8 +441,8 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                 if (convertedData.price_level) updateData.price_level = convertedData.price_level;
                 if (convertedData.hours_open) updateData.hours_open = convertedData.hours_open;
                 if (convertedData.photo_references.length > 0) updateData.photo_references = convertedData.photo_references;
-                if (convertedData.photo_urls.length > 0) updateData.photos_urls = convertedData.photo_urls; // Store pre-generated URLs
                 if (convertedData.place_types.length > 0) updateData.google_types = convertedData.place_types;
+                // NOTE: Deliberately NOT storing photos_urls
                 
                 if (Object.keys(updateData).length > 0) {
                   const { error } = await supabase
@@ -511,8 +505,8 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       phone: data.formatted_phone_number,
       website: data.website,
       hours_open: data.opening_hours || {},
-      photos_urls: data.photo_urls || [],
-      photo_references: [], // Not needed for cached data
+      photos_urls: undefined, // Don't use cached photo URLs
+      photo_references: data.photos || [], // Use photo references for PhotoUrlGenerator
       place_types: data.types || []
     };
   };
