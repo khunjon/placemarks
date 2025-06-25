@@ -4,6 +4,16 @@ import { supabase } from './supabase';
 import { authService } from './auth';
 import { AuthProvider as AuthProviderType, UserUpdate as ProfileUpdate, User as AppUser } from '../types';
 
+// Utility function to add timeout to promises
+const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs)
+    )
+  ]);
+};
+
 interface AuthContextType {
   user: AppUser | null;
   session: Session | null;
@@ -35,22 +45,51 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const failsafeTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  // Helper function to clear failsafe timeout and set loading to false
+  const clearFailsafeAndSetLoading = (value: boolean) => {
+    if (failsafeTimeoutRef.current) {
+      clearTimeout(failsafeTimeoutRef.current);
+      failsafeTimeoutRef.current = null;
+    }
+    setLoading(value);
+  };
 
   useEffect(() => {
     let isMounted = true;
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!isMounted) return;
-      
-      setSession(session);
-      if (session?.user) {
-        loadUserProfile(session.user.id);
-      } else {
-        setUser(null);
+    // Maximum loading time failsafe - force loading to false after 5 seconds
+    failsafeTimeoutRef.current = setTimeout(() => {
+      if (isMounted) {
+        console.warn('Auth initialization timed out after 5 seconds, proceeding without auth');
         setLoading(false);
+        setSession(null);
+        setUser(null);
       }
-    });
+    }, 5000);
+
+    // Get initial session with timeout
+    withTimeout(supabase.auth.getSession(), 3000)
+      .then(({ data: { session } }) => {
+        if (!isMounted) return;
+        
+        setSession(session);
+        if (session?.user) {
+          loadUserProfile(session.user.id);
+        } else {
+          setUser(null);
+          clearFailsafeAndSetLoading(false);
+        }
+      })
+      .catch((error) => {
+        if (!isMounted) return;
+        
+        console.warn('Auth session check failed or timed out:', error);
+        setSession(null);
+        setUser(null);
+        clearFailsafeAndSetLoading(false);
+      });
 
     // Listen for auth changes
     const {
@@ -64,31 +103,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (session?.user) {
         // Only load profile if it's a new user or sign in event
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          await loadUserProfile(session.user.id);
+          try {
+            await loadUserProfile(session.user.id);
+          } catch (error) {
+            console.warn('Failed to load user profile during auth state change:', error);
+            clearFailsafeAndSetLoading(false);
+          }
         }
       } else {
         setUser(null);
-        setLoading(false);
+        clearFailsafeAndSetLoading(false);
       }
     });
 
     return () => {
       isMounted = false;
+      if (failsafeTimeoutRef.current) {
+        clearTimeout(failsafeTimeoutRef.current);
+      }
       subscription.unsubscribe();
     };
   }, []);
 
   const loadUserProfile = async (userId: string) => {
     try {
-      // Loading user profile
-      const userProfile = await authService.getCurrentUser();
+      // Loading user profile with timeout
+      const userProfile = await withTimeout(authService.getCurrentUser(), 3000);
       // User profile loaded successfully
       setUser(userProfile);
     } catch (error) {
-      console.error('Error loading user profile:', error);
+      console.warn('Error loading user profile or timed out:', error);
       setUser(null);
     } finally {
-      setLoading(false);
+      clearFailsafeAndSetLoading(false);
     }
   };
 
@@ -121,7 +168,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error: any) {
       return { error };
     } finally {
-      setLoading(false);
+      clearFailsafeAndSetLoading(false);
     }
   };
 
@@ -133,7 +180,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error: any) {
       return { error };
     } finally {
-      setLoading(false);
+      clearFailsafeAndSetLoading(false);
     }
   };
 
@@ -144,7 +191,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Sign out error:', error);
     } finally {
-      setLoading(false);
+      clearFailsafeAndSetLoading(false);
     }
   };
 

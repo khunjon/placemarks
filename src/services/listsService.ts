@@ -8,7 +8,7 @@ export interface EnhancedPlace extends Place {
   phone?: string;
   website?: string;
   google_rating?: number;
-  photos_urls?: string[];
+  photo_references?: any[];
   hours_open?: Record<string, any>;
 }
 
@@ -186,7 +186,7 @@ export class EnhancedListsService {
               phone,
               website,
               hours_open,
-              photos_urls
+              photo_references
             )
           `)
           .eq('list_id', list.id)
@@ -227,7 +227,7 @@ export class EnhancedListsService {
                   phone: row.places.phone,
                   website: row.places.website,
                   hours_open: row.places.hours_open,
-                  photos_urls: row.places.photos_urls
+                  photo_references: row.places.photo_references
                 }
               });
             }
@@ -385,7 +385,7 @@ export class EnhancedListsService {
       phone?: string;
       website?: string;
       hours_open?: Record<string, any>;
-      photos_urls?: string[];
+      photo_references?: any[];
     },
     options?: {
       notes?: string;
@@ -423,7 +423,7 @@ export class EnhancedListsService {
             phone: googlePlaceData.phone,
             website: googlePlaceData.website,
             google_rating: googlePlaceData.google_rating,
-            photos_urls: googlePlaceData.photos_urls || []
+            photo_references: googlePlaceData.photo_references || []
           })
           .eq('id', existingPlace.id)
           .select('id')
@@ -446,7 +446,7 @@ export class EnhancedListsService {
             phone: googlePlaceData.phone,
             website: googlePlaceData.website,
             google_rating: googlePlaceData.google_rating,
-            photos_urls: googlePlaceData.photos_urls || []
+            photo_references: googlePlaceData.photo_references || []
           })
           .select('id')
           .single();
@@ -957,7 +957,7 @@ export class EnhancedListsService {
             phone,
             website,
             hours_open,
-            photos_urls
+            photo_references
           )
         `)
         .eq('list_id', listId)
@@ -988,7 +988,7 @@ export class EnhancedListsService {
           phone: lp.places.phone,
           website: lp.places.website,
           hours_open: lp.places.hours_open,
-          photos_urls: lp.places.photos_urls
+          photo_references: lp.places.photo_references
         }
       }));
 

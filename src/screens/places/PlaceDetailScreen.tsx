@@ -88,7 +88,6 @@ interface PlaceDetails {
   phone?: string;
   website?: string;
   hours_open?: any;
-  photos_urls?: string[];
   photo_references?: GooglePhotoReference[];
   place_types?: string[];
 }
@@ -228,27 +227,11 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   // Note: Direct Google Places API calls have been replaced with googlePlacesCache service
   // This provides intelligent caching and reduces API costs
 
-  // Get photo URLs for display (prioritize fresh Google Photos, fallback to stored URLs)
-  // Check if we should fetch fresh Google Places data (to avoid unnecessary API calls)
-  const shouldFetchFreshGoogleData = (placeData: PlaceDetails): boolean => {
-    // Always fetch if we have no Google data at all
-    if (!placeData.phone && !placeData.website && !placeData.google_rating) {
-      return true;
-    }
-    
-    // Also fetch if we have basic data but no photo URLs (to get pre-generated URLs from cache)
-    if (!placeData.photos_urls || placeData.photos_urls.length === 0) {
-      return true;
-    }
-    
-    // Skip if we have both basic data AND photo URLs
-    return false;
-  };
-
+  // Get photo URLs for display using photo references
   const getPhotoUrls = (): string[] => {
     if (!place) return [];
     
-    // NEW APPROACH: Generate URLs from photo references (client-side)
+    // Generate URLs from photo references (client-side)
     if (place.photo_references && place.photo_references.length > 0) {
       const validReferences = place.photo_references.filter(ref => 
         ref.photo_reference && !ref.photo_reference.startsWith('ATplDJ')
@@ -262,15 +245,6 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
         
         return PhotoUrlGenerator.generateUrls(validReferences.slice(0, 10));
       }
-    }
-    
-    // LEGACY FALLBACK: Use pre-generated URLs (deprecated approach)
-    const correctApiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '';
-    const hasCorrectApiKey = place.photos_urls?.some(url => url.includes(correctApiKey));
-    
-    if (place.photos_urls && place.photos_urls.length > 0 && hasCorrectApiKey) {
-      console.log('🗄️ LEGACY: Using pre-generated photo URLs from database');
-      return place.photos_urls;
     }
     
     return [];
@@ -395,8 +369,8 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                   }
                 }
               }
-            } else if (shouldFetchFreshGoogleData(placeData)) {
-              // Only fetch fresh data if we don't have cached data and we need it
+            } else if (!placeData.phone && !placeData.website && !placeData.google_rating) {
+              // Only fetch fresh data if we don't have cached data and we need basic info
               console.log('🟢 GOOGLE PLACES API: Fetching fresh data for:', placeData.name);
               const freshGoogleData = await googlePlacesCache.getPlaceDetails(placeData.google_place_id);
               
@@ -505,7 +479,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       phone: data.formatted_phone_number,
       website: data.website,
       hours_open: data.opening_hours || {},
-      photos_urls: undefined, // Don't use cached photo URLs
+
       photo_references: data.photos || [], // Use photo references for PhotoUrlGenerator
       place_types: data.types || []
     };
@@ -576,7 +550,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       phone: data.phone,
       website: data.website,
       hours_open: data.hours_open || {},
-      photos_urls: data.photos_urls || [],
+
       photo_references: data.photo_references || [],
       place_types: data.google_types || []
     };

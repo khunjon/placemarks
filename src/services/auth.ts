@@ -6,6 +6,16 @@ import { Platform } from 'react-native';
 // Complete the auth session for web browser
 WebBrowser.maybeCompleteAuthSession();
 
+// Utility function to add timeout to promises
+const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs)
+    )
+  ]);
+};
+
 export class AuthService {
   // Google Sign In with proper scopes
   async signInWithGoogle(): Promise<{ error: any }> {
@@ -212,15 +222,20 @@ export class AuthService {
 
   async getCurrentUser(): Promise<User | null> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await withTimeout(supabase.auth.getUser(), 3000);
       if (!user) return null;
 
-      // Get user profile from database
-      const { data: profile, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      // Get user profile from database with timeout
+      const { data: profile, error } = await withTimeout(
+        Promise.resolve(
+          supabase
+            .from('users')
+            .select('*')
+            .eq('id', user.id)
+            .single()
+        ),
+        3000
+      );
 
       if (error) {
         console.error('Get user profile error:', error);
@@ -229,7 +244,7 @@ export class AuthService {
 
       return profile;
     } catch (error) {
-      console.error('Get current user error:', error);
+      console.error('Get current user error or timed out:', error);
       return null;
     }
   }

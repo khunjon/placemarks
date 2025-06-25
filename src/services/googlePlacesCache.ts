@@ -293,16 +293,8 @@ class GooglePlacesCacheService {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + this.CACHE_DURATION_DAYS * 24 * 60 * 60 * 1000);
 
-    // Generate photo URLs from photo references (if available)
-    const photoUrls: string[] = [];
-    if (result.photos && result.photos.length > 0 && this.GOOGLE_PLACES_API_KEY) {
-      for (const photo of result.photos) {
-        const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${photo.photo_reference}&key=${this.GOOGLE_PLACES_API_KEY}`;
-        photoUrls.push(photoUrl);
-      }
-      
-
-    }
+    // Note: Photo URLs should be generated client-side using PhotoUrlGenerator
+    // This ensures each environment uses its own API key
 
     const cacheEntry = {
       google_place_id: result.place_id,
@@ -319,7 +311,7 @@ class GooglePlacesCacheService {
       opening_hours: result.opening_hours,
       current_opening_hours: result.current_opening_hours,
       photos: result.photos,
-      photo_urls: photoUrls, // Store pre-generated URLs
+      photo_urls: null, // URLs should be generated client-side
       reviews: result.reviews?.slice(0, 5), // Limit to 5 reviews
       business_status: result.business_status,
       place_id: result.place_id,

@@ -229,7 +229,7 @@ export default function AddPlaceToListScreen({
         google_types: detailedPlace.types || [],
         google_rating: detailedPlace.rating,
         price_level: detailedPlace.price_level,
-        photos_urls: detailedPlace.photos,
+        photo_references: detailedPlace.photos || [],
       });
 
       setSearchResults(prev => 
