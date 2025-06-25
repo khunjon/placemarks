@@ -368,8 +368,8 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                   }
                 }
               }
-            } else if (!placeData.phone && !placeData.website && !placeData.google_rating) {
-              // Only fetch fresh data if we don't have cached data and we need basic info
+            } else if (!placeData.phone || !placeData.website || !placeData.google_rating) {
+              // Fetch fresh data if we're missing any basic info (more aggressive for better UX)
               console.log('🟢 GOOGLE PLACES API: Fetching fresh data for:', placeData.name);
               const freshGoogleData = await googlePlacesCache.getPlaceDetails(placeData.google_place_id);
               
