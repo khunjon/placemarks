@@ -98,6 +98,16 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
       
     } catch (error) {
       console.error('Error loading recommendations:', error);
+      
+      // Set empty recommendations on error to show "coming soon" message
+      setDatabaseRecommendations({
+        places: [],
+        totalAvailable: 0,
+        hasMorePlaces: false,
+        generatedAt: new Date(),
+        radiusKm: 15,
+        excludedCheckedInCount: 0
+      });
     } finally {
       setRecommendationsLoading(false);
     }
@@ -247,76 +257,28 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
         }}>
           {/* Context Header */}
           <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
             marginBottom: DarkTheme.spacing.md,
           }}>
-            <View style={{ flex: 1 }}>
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                marginBottom: DarkTheme.spacing.xs,
-              }}>
-                <MapPin 
-                  size={16} 
-                  color={isUsingFallback ? DarkTheme.colors.bangkok.gold : DarkTheme.colors.semantic.secondaryLabel}
-                  strokeWidth={2}
-                />
-                {isUsingFallback && (
-                  <ActivityIndicator 
-                    size="small" 
-                    color={DarkTheme.colors.bangkok.gold}
-                    style={{ marginLeft: DarkTheme.spacing.xs }}
-                  />
-                )}
-                <Text style={[
-                  DarkTheme.typography.caption1,
-                  { 
-                    color: isUsingFallback ? DarkTheme.colors.bangkok.gold : DarkTheme.colors.semantic.secondaryLabel,
-                    marginLeft: DarkTheme.spacing.xs,
-                  }
-                ]}>
-                  {getLocationContextMessage()}
-                </Text>
-              </View>
-              
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-              }}>
-                <Clock 
-                  size={16} 
-                  color={DarkTheme.colors.bangkok.gold}
-                  strokeWidth={2}
-                />
-                <Text style={[
-                  DarkTheme.typography.subhead,
-                  { 
-                    color: DarkTheme.colors.semantic.label,
-                    fontWeight: '600',
-                    marginLeft: DarkTheme.spacing.xs,
-                  }
-                ]}>
-                  {getTimeContextMessage(timeContext, cityContext)}
-                </Text>
-              </View>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+            }}>
+              <Clock 
+                size={16} 
+                color={DarkTheme.colors.bangkok.gold}
+                strokeWidth={2}
+              />
+              <Text style={[
+                DarkTheme.typography.subhead,
+                { 
+                  color: DarkTheme.colors.semantic.label,
+                  fontWeight: '600',
+                  marginLeft: DarkTheme.spacing.xs,
+                }
+              ]}>
+                {getTimeContextMessage(timeContext, cityContext)}
+              </Text>
             </View>
-
-            {!locationLoading && !locationError && (
-              <TouchableOpacity 
-                onPress={retryLocation}
-                style={{
-                  padding: DarkTheme.spacing.xs,
-                }}
-              >
-                <Sparkles 
-                  size={20} 
-                  color={DarkTheme.colors.bangkok.gold}
-                  strokeWidth={2}
-                />
-              </TouchableOpacity>
-            )}
           </View>
 
           {/* Recommendations Content */}

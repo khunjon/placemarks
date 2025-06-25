@@ -265,22 +265,21 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       
       if (isRecommendationsContext) {
         // For recommendations, we expect a Google Place ID and should fetch from google_places_cache
-        const [placeData, checkInsData, userRatingData] = await Promise.all([
+        const [placeData, checkInsData] = await Promise.all([
           // Get place details from google_places_cache using the Google Place ID
           fetchRecommendedPlaceDetails(placeId),
           
           // Get check-in history for this place (by Google Place ID)
-          fetchCheckInsForRecommendedPlace(user.id, placeId),
+          fetchCheckInsForRecommendedPlace(user.id, placeId)
           
-          // Get user's universal rating (use Google Place ID as place ID for recommendations)
-          userRatingsService.getUserRating(user.id, placeId)
+          // No user ratings for recommendations
         ]);
         
         setPlace(placeData);
         setListPlace(null); // No list context for recommendations
         setCheckIns(checkInsData);
         setOtherLists([]); // No other lists for recommendations
-        setUserRating(userRatingData);
+        setUserRating(null); // No ratings for recommendations
         setTempNotes('');
       } else {
         // Load place details, list context, and related data in parallel
@@ -672,18 +671,15 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   };
 
   const handleUpdateRating = async (ratingType: 'thumbs_up' | 'neutral' | 'thumbs_down') => {
-    if (!user?.id || !place?.id) return;
+    if (!user?.id || !place?.id || isRecommendationsContext) return;
     
     try {
       // Convert rating type to numerical value
       const ratingValue = ratingType === 'thumbs_up' ? 5 : ratingType === 'thumbs_down' ? 1 : 3;
       
-      // Use the actual place ID for regular lists, or the Google Place ID for recommendations
-      const actualPlaceId = isRecommendationsContext ? placeId : place.id;
-      
       const updatedRating = await userRatingsService.setUserRating(
         user.id,
-        actualPlaceId,
+        place.id,
         ratingType,
         ratingValue
       );
@@ -988,7 +984,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
             </ElevatedCard>
 
             {/* Ratings */}
-            {(place.google_rating || userRating) && (
+            {(place.google_rating || (!isRecommendationsContext && userRating)) && (
               <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
                 <Title3 style={{ marginBottom: Spacing.md }}>Ratings</Title3>
                 
@@ -1020,74 +1016,76 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                     </View>
                   )}
 
-                                    {/* Rating Selection - Always show all three options */}
-                  <View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}>
-                      <Body>Your Rating</Body>
-                      <SecondaryText style={{ marginLeft: Spacing.sm, fontSize: 12 }}>Personal preference</SecondaryText>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-                      {/* Thumbs Up */}
-                      <TouchableOpacity 
-                        onPress={() => handleUpdateRating('thumbs_up')}
-                        style={{
-                          flex: 1,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          backgroundColor: userRating?.rating_type === 'thumbs_up' 
-                            ? DarkTheme.colors.accent.green + '40' 
-                            : DarkTheme.colors.semantic.tertiarySystemBackground,
-                          paddingVertical: Spacing.sm,
-                          borderRadius: DarkTheme.borderRadius.sm,
-                          borderWidth: userRating?.rating_type === 'thumbs_up' ? 2 : 0,
-                          borderColor: userRating?.rating_type === 'thumbs_up' ? DarkTheme.colors.accent.green : 'transparent',
-                        }}
-                      >
-                        <Body style={{ fontSize: 20 }}>👍</Body>
-                      </TouchableOpacity>
+                  {/* User Rating Selection - Only show for non-recommendation places */}
+                  {!isRecommendationsContext && (
+                    <View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}>
+                        <Body>Your Rating</Body>
+                        <SecondaryText style={{ marginLeft: Spacing.sm, fontSize: 12 }}>Personal preference</SecondaryText>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+                        {/* Thumbs Up */}
+                        <TouchableOpacity 
+                          onPress={() => handleUpdateRating('thumbs_up')}
+                          style={{
+                            flex: 1,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: userRating?.rating_type === 'thumbs_up' 
+                              ? DarkTheme.colors.accent.green + '40' 
+                              : DarkTheme.colors.semantic.tertiarySystemBackground,
+                            paddingVertical: Spacing.sm,
+                            borderRadius: DarkTheme.borderRadius.sm,
+                            borderWidth: userRating?.rating_type === 'thumbs_up' ? 2 : 0,
+                            borderColor: userRating?.rating_type === 'thumbs_up' ? DarkTheme.colors.accent.green : 'transparent',
+                          }}
+                        >
+                          <Body style={{ fontSize: 20 }}>👍</Body>
+                        </TouchableOpacity>
 
-                      {/* Neutral */}
-                      <TouchableOpacity 
-                        onPress={() => handleUpdateRating('neutral')}
-                        style={{
-                          flex: 1,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          backgroundColor: userRating?.rating_type === 'neutral' 
-                            ? DarkTheme.colors.semantic.secondaryLabel + '40' 
-                            : DarkTheme.colors.semantic.tertiarySystemBackground,
-                          paddingVertical: Spacing.sm,
-                          borderRadius: DarkTheme.borderRadius.sm,
-                          borderWidth: userRating?.rating_type === 'neutral' ? 2 : 0,
-                          borderColor: userRating?.rating_type === 'neutral' ? DarkTheme.colors.semantic.secondaryLabel : 'transparent',
-                        }}
-                      >
-                        <Body style={{ fontSize: 20 }}>😐</Body>
-                      </TouchableOpacity>
+                        {/* Neutral */}
+                        <TouchableOpacity 
+                          onPress={() => handleUpdateRating('neutral')}
+                          style={{
+                            flex: 1,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: userRating?.rating_type === 'neutral' 
+                              ? DarkTheme.colors.semantic.secondaryLabel + '40' 
+                              : DarkTheme.colors.semantic.tertiarySystemBackground,
+                            paddingVertical: Spacing.sm,
+                            borderRadius: DarkTheme.borderRadius.sm,
+                            borderWidth: userRating?.rating_type === 'neutral' ? 2 : 0,
+                            borderColor: userRating?.rating_type === 'neutral' ? DarkTheme.colors.semantic.secondaryLabel : 'transparent',
+                          }}
+                        >
+                          <Body style={{ fontSize: 20 }}>😐</Body>
+                        </TouchableOpacity>
 
-                      {/* Thumbs Down */}
-                      <TouchableOpacity 
-                        onPress={() => handleUpdateRating('thumbs_down')}
-                        style={{
-                          flex: 1,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          backgroundColor: userRating?.rating_type === 'thumbs_down' 
-                            ? DarkTheme.colors.accent.red + '40' 
-                            : DarkTheme.colors.semantic.tertiarySystemBackground,
-                          paddingVertical: Spacing.sm,
-                          borderRadius: DarkTheme.borderRadius.sm,
-                          borderWidth: userRating?.rating_type === 'thumbs_down' ? 2 : 0,
-                          borderColor: userRating?.rating_type === 'thumbs_down' ? DarkTheme.colors.accent.red : 'transparent',
-                        }}
-                      >
-                        <Body style={{ fontSize: 20 }}>👎</Body>
-                      </TouchableOpacity>
+                        {/* Thumbs Down */}
+                        <TouchableOpacity 
+                          onPress={() => handleUpdateRating('thumbs_down')}
+                          style={{
+                            flex: 1,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: userRating?.rating_type === 'thumbs_down' 
+                              ? DarkTheme.colors.accent.red + '40' 
+                              : DarkTheme.colors.semantic.tertiarySystemBackground,
+                            paddingVertical: Spacing.sm,
+                            borderRadius: DarkTheme.borderRadius.sm,
+                            borderWidth: userRating?.rating_type === 'thumbs_down' ? 2 : 0,
+                            borderColor: userRating?.rating_type === 'thumbs_down' ? DarkTheme.colors.accent.red : 'transparent',
+                          }}
+                        >
+                          <Body style={{ fontSize: 20 }}>👎</Body>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  </View>
+                  )}
                 </View>
               </ElevatedCard>
             )}
