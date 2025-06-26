@@ -114,6 +114,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   const [editingNotes, setEditingNotes] = useState(false);
   const [tempNotes, setTempNotes] = useState('');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [enhancedPlaces, setEnhancedPlaces] = useState<Set<string>>(new Set());
 
   
   // Toast state
@@ -238,10 +239,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       );
       
       if (validReferences.length > 0) {
-        console.log('📸 PlaceDetails: Generating photo URLs from references', {
-          photoCount: validReferences.length,
-          approach: 'client-side generation'
-        });
+        console.log('📸 Generating photo URLs:', validReferences.length);
         
         return PhotoUrlGenerator.generateUrls(validReferences.slice(0, 10));
       }
@@ -309,7 +307,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
         setTempNotes(listPlaceData?.notes || '');
         
         // Check if we can enhance the fetched place data with Google Places cache
-        if (placeData?.google_place_id) {
+        if (placeData?.google_place_id && !enhancedPlaces.has(placeData.id)) {
           try {
             // Check Google Places cache for missing data (but NOT for photo URLs)
             const googleData = await googlePlacesCache.getCachedPlace(placeData.google_place_id);
@@ -317,19 +315,14 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
             if (googleData) {
               // Only enhance missing non-photo data and photo references
               const needsDataEnhancement = 
-                !placeData.phone || 
-                !placeData.website || 
-                !placeData.google_rating ||
-                !placeData.photo_references || 
-                placeData.photo_references.length === 0;
+                (!placeData.phone && googleData.formatted_phone_number) || 
+                (!placeData.website && googleData.website) || 
+                (!placeData.google_rating && googleData.rating) ||
+                ((!placeData.hours_open || Object.keys(placeData.hours_open).length === 0) && googleData.opening_hours) ||
+                ((!placeData.photo_references || placeData.photo_references.length === 0) && googleData.photos?.length > 0);
               
               if (needsDataEnhancement) {
-                console.log('🗄️ DATA ENHANCEMENT: Adding missing place data from cache', {
-                  placeId: placeData.id,
-                  name: placeData.name,
-                  source: 'google_places_cache',
-                  hasPhotos: (googleData.photos?.length || 0) > 0
-                });
+                console.log('🔄 Enhancing place data:', placeData.name);
                 
                 // Update the place state with cached data (NO photo URLs)
                 const updatedPlace = {
@@ -352,7 +345,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                 if (googleData.website && !placeData.website) updateData.website = googleData.website;
                 if (googleData.rating && !placeData.google_rating) updateData.google_rating = googleData.rating.toString();
                 if (googleData.price_level && !placeData.price_level) updateData.price_level = googleData.price_level;
-                if (googleData.opening_hours && !placeData.hours_open) updateData.hours_open = googleData.opening_hours;
+                if (googleData.opening_hours && (!placeData.hours_open || Object.keys(placeData.hours_open).length === 0)) updateData.hours_open = googleData.opening_hours;
                 if (googleData.photos && (!placeData.photo_references || placeData.photo_references.length === 0)) updateData.photo_references = googleData.photos;
                 if (googleData.types && (!placeData.place_types || placeData.place_types.length === 0)) updateData.google_types = googleData.types;
                 
@@ -365,13 +358,17 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                   if (error) {
                     console.warn('Failed to update place with cached Google data:', error);
                   } else {
-                    console.log('Successfully enhanced place with cached Google data');
+                    console.log('✅ Place data enhanced');
+                    setEnhancedPlaces(prev => new Set(prev).add(placeData.id));
                   }
+                } else {
+                  // Even if no database update needed, mark as enhanced to prevent repeated checks
+                  setEnhancedPlaces(prev => new Set(prev).add(placeData.id));
                 }
               }
-            } else if (!placeData.phone || !placeData.website || !placeData.google_rating) {
+            } else if (!placeData.phone || !placeData.website || !placeData.google_rating || !placeData.hours_open || Object.keys(placeData.hours_open).length === 0) {
               // Fetch fresh data if we're missing any basic info (more aggressive for better UX)
-              console.log('🟢 GOOGLE PLACES API: Fetching fresh data for:', placeData.name);
+              console.log('🌐 Fetching fresh data:', placeData.name);
               const freshGoogleData = await googlePlacesCache.getPlaceDetails(placeData.google_place_id);
               
               if (freshGoogleData) {
@@ -427,13 +424,18 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                   if (error) {
                     console.warn('Failed to update place with Google data:', error);
                   } else {
-                    console.log('Successfully updated place with fresh Google data');
+                    console.log('✅ Fresh data updated');
+                    setEnhancedPlaces(prev => new Set(prev).add(placeData.id));
                   }
+                } else {
+                  setEnhancedPlaces(prev => new Set(prev).add(placeData.id));
                 }
               }
             }
           } catch (error) {
             console.warn('Failed to enhance place with Google Places data:', error);
+            // Mark as enhanced even on error to prevent endless retries
+            setEnhancedPlaces(prev => new Set(prev).add(placeData.id));
           }
         }
       }
