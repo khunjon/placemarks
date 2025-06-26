@@ -59,6 +59,8 @@ The app uses Supabase with these core tables:
 - `lists` - User-created place collections
 - `list_places` - Many-to-many relationship between lists and places
 
+You can use Supabase MCP tools to interact with Supabase directly.
+
 ## Development Guidelines
 
 ### Type Safety

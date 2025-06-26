@@ -251,8 +251,9 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   };
 
   // OPTIMIZATION: Memoize photo URLs to prevent regeneration on every render
-  // Only recalculate if the place object identity changes, not individual properties
-  const photoUrls = useMemo(() => getPhotoUrls(), [place]);
+  // Only recalculate if photo references actually change, not when other place properties change
+  const photoReferences = useMemo(() => place?.photo_references, [place?.photo_references]);
+  const photoUrls = useMemo(() => getPhotoUrls(), [photoReferences]);
 
   const loadPlaceDetails = async () => {
     if (!user?.id) return;

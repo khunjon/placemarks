@@ -7,8 +7,13 @@
       "Bash(find:*)",
       "Bash(rg:*)",
       "Bash(npx supabase db diff:*)",
-      "Bash(npx supabase:*)"
+      "Bash(npx supabase:*)",
+      "mcp__supabase__list_tables"
     ],
     "deny": []
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }
