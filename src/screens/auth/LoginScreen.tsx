@@ -92,7 +92,7 @@ export default function LoginScreen() {
                   }
                 ]}
               >
-                Sign in to your account
+                Log in or sign up
               </Text>
             </View>
 
@@ -163,19 +163,9 @@ export default function LoginScreen() {
               />
 
               <Button
-                title={loading ? 'Signing In...' : 'Sign In'}
+                title={loading ? 'Signing In...' : 'Continue'}
                 loading={loading}
                 disabled={loading}
-                icon={
-                  !loading ? (
-                    <Icon 
-                      name="login" 
-                      size={20} 
-                      color={DarkTheme.colors.system.white}
-                      style={{ marginRight: DarkTheme.spacing.sm }}
-                    />
-                  ) : undefined
-                }
                 buttonStyle={[
                   DarkTheme.componentStyles.Button.buttonStyle,
                   { 
@@ -212,24 +202,6 @@ export default function LoginScreen() {
               </Text>
             </View>
 
-            {/* Bangkok Branding */}
-            <View className="items-center mt-12">
-              <View className="flex-row items-center">
-                <Text style={DarkTheme.typography.caption1}>🏛️</Text>
-                <Text 
-                  style={[
-                    DarkTheme.typography.caption1,
-                    { 
-                      color: DarkTheme.colors.bangkok.gold,
-                      marginHorizontal: DarkTheme.spacing.xs 
-                    }
-                  ]}
-                >
-                  Discover Bangkok's Hidden Gems
-                </Text>
-                <Text style={DarkTheme.typography.caption1}>🍜</Text>
-              </View>
-            </View>
           </View>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
