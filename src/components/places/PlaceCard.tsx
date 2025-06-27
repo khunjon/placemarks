@@ -3,20 +3,36 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { MapPin, Star, Coffee, ShoppingBag, Building, TreePine, Camera, Utensils } from 'lucide-react-native';
 import { DarkTheme } from '../../constants/theme';
 import { LocationBadge } from '../ui';
+import { EnrichedPlace } from '../../types';
 
+// Enhanced props interface that can accept either individual props or an EnrichedPlace object
 export interface PlaceCardProps {
-  id: string;
+  // Google Place ID (primary identifier)
+  googlePlaceId: string;
+  
+  // Core place data (can be provided individually or via place object)
   name: string;
-  type: 'restaurant' | 'cafe' | 'shopping' | 'temple' | 'park' | 'hotel' | 'attraction';
-  description: string;
+  type?: 'restaurant' | 'cafe' | 'shopping' | 'temple' | 'park' | 'hotel' | 'attraction';
+  description?: string;
   address: string;
-  distance: string;
+  distance?: string;
   rating?: number;
   priceLevel?: 1 | 2 | 3 | 4;
   isOpen?: boolean;
   btsStation?: string;
-  onCheckIn: (placeId: string, placeName: string) => void;
+  
+  // Alternative: accept full place object
+  place?: EnrichedPlace;
+  
+  // Event handlers
+  onCheckIn: (googlePlaceId: string, placeName: string) => void;
   onPress?: () => void;
+  
+  // UI options
+  showCheckInButton?: boolean;
+  
+  // Optional styling
+  style?: any;
 }
 
 const getTypeIcon = (type: PlaceCardProps['type']) => {
@@ -61,8 +77,41 @@ const getTypeColor = (type: PlaceCardProps['type']) => {
   }
 };
 
+// Helper function to infer place type from Google Places API types
+const inferPlaceTypeFromGoogleTypes = (types: string[]): PlaceCardProps['type'] => {
+  if (!types || !Array.isArray(types) || types.length === 0) {
+    return 'restaurant'; // Default fallback
+  }
+  
+  const typeMap: { [key: string]: PlaceCardProps['type'] } = {
+    restaurant: 'restaurant',
+    food: 'restaurant',
+    meal_takeaway: 'restaurant',
+    meal_delivery: 'restaurant',
+    cafe: 'cafe',
+    shopping_mall: 'shopping',
+    store: 'shopping',
+    clothing_store: 'shopping',
+    hindu_temple: 'temple',
+    buddhist_temple: 'temple',
+    place_of_worship: 'temple',
+    park: 'park',
+    lodging: 'hotel',
+    tourist_attraction: 'attraction',
+    point_of_interest: 'attraction'
+  };
+
+  for (const type of types) {
+    if (typeMap[type]) {
+      return typeMap[type];
+    }
+  }
+  
+  return 'attraction'; // Default fallback
+};
+
 export default function PlaceCard({
-  id,
+  googlePlaceId,
   name,
   type,
   description,
@@ -72,29 +121,60 @@ export default function PlaceCard({
   priceLevel,
   isOpen,
   btsStation,
+  place,
   onCheckIn,
   onPress,
+  showCheckInButton = true,
+  style,
 }: PlaceCardProps) {
-  const TypeIcon = getTypeIcon(type);
-  const typeColor = getTypeColor(type);
+  // Use place object data if provided, otherwise use individual props
+  const placeData = place ? {
+    googlePlaceId: place.google_place_id,
+    name: place.name,
+    type: place.types ? inferPlaceTypeFromGoogleTypes(place.types) : 'restaurant',
+    description: place.display_description || '',
+    address: place.formatted_address,
+    distance: distance || '',
+    rating: place.rating,
+    priceLevel: place.price_level,
+    isOpen: place.opening_hours?.open_now,
+    btsStation: btsStation // BTS station would come from Bangkok context
+  } : {
+    googlePlaceId,
+    name,
+    type: type || 'attraction',
+    description: description || '',
+    address,
+    distance: distance || '',
+    rating,
+    priceLevel,
+    isOpen,
+    btsStation
+  };
+
+  const TypeIcon = getTypeIcon(placeData.type);
+  const typeColor = getTypeColor(placeData.type);
 
   const handleCheckIn = () => {
-    onCheckIn(id, name);
+    onCheckIn(placeData.googlePlaceId, placeData.name);
   };
 
   return (
     <TouchableOpacity 
       onPress={onPress}
       activeOpacity={0.7}
-      style={{
-        backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
-        borderColor: DarkTheme.colors.semantic.separator,
-        borderWidth: 1,
-        borderRadius: DarkTheme.borderRadius.md,
-        padding: DarkTheme.spacing.md,
-        marginBottom: DarkTheme.spacing.sm,
-        ...DarkTheme.shadows.small,
-      }}
+      style={[
+        {
+          backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
+          borderColor: DarkTheme.colors.semantic.separator,
+          borderWidth: 1,
+          borderRadius: DarkTheme.borderRadius.md,
+          padding: DarkTheme.spacing.md,
+          marginBottom: DarkTheme.spacing.sm,
+          ...DarkTheme.shadows.small,
+        },
+        style
+      ]}
     >
       {/* Header Row */}
       <View style={{
@@ -137,7 +217,7 @@ export default function PlaceCard({
               ]}
               numberOfLines={1}
             >
-              {name}
+              {placeData.name}
             </Text>
             
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -151,10 +231,10 @@ export default function PlaceCard({
                   }
                 ]}
               >
-                {type}
+                {placeData.type}
               </Text>
               
-              {isOpen !== undefined && (
+              {placeData.isOpen !== undefined && (
                 <>
                   <View 
                     style={{
@@ -172,7 +252,7 @@ export default function PlaceCard({
                         height: 8,
                         borderRadius: 4,
                         marginRight: 4,
-                        backgroundColor: isOpen 
+                        backgroundColor: placeData.isOpen 
                           ? DarkTheme.colors.status.success 
                           : DarkTheme.colors.status.error,
                       }}
@@ -181,13 +261,13 @@ export default function PlaceCard({
                       style={[
                         DarkTheme.typography.caption1,
                         { 
-                          color: isOpen 
+                          color: placeData.isOpen 
                             ? DarkTheme.colors.status.success 
                             : DarkTheme.colors.status.error 
                         }
                       ]}
                     >
-                      {isOpen ? 'Open' : 'Closed'}
+                      {placeData.isOpen ? 'Open' : 'Closed'}
                     </Text>
                   </View>
                 </>
@@ -215,11 +295,11 @@ export default function PlaceCard({
                 }
               ]}
             >
-              {distance}
+              {placeData.distance}
             </Text>
           </View>
           
-          {rating && (
+          {placeData.rating && (
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Star 
                 size={12} 
@@ -235,7 +315,7 @@ export default function PlaceCard({
                   }
                 ]}
               >
-                {rating.toFixed(1)}
+                {placeData.rating.toFixed(1)}
               </Text>
             </View>
           )}
@@ -253,7 +333,7 @@ export default function PlaceCard({
         ]}
         numberOfLines={2}
       >
-        {description}
+        {placeData.description}
       </Text>
 
       {/* Address */}
@@ -277,7 +357,7 @@ export default function PlaceCard({
           ]}
           numberOfLines={1}
         >
-          {address}
+          {placeData.address}
         </Text>
       </View>
 
@@ -285,58 +365,60 @@ export default function PlaceCard({
       <View style={{ 
         flexDirection: 'row', 
         alignItems: 'center', 
-        justifyContent: 'space-between' 
+        justifyContent: showCheckInButton ? 'space-between' : 'flex-start'
       }}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {btsStation && (
+          {placeData.btsStation && (
             <LocationBadge 
               type="bts" 
-              value={btsStation} 
+              value={placeData.btsStation} 
               size="small" 
               style={{ marginRight: DarkTheme.spacing.sm }}
             />
           )}
           
-          {priceLevel && (
+          {placeData.priceLevel && (
             <LocationBadge 
               type="price" 
-              value={priceLevel} 
+              value={placeData.priceLevel} 
               size="small" 
             />
           )}
         </View>
         
-        <TouchableOpacity
-          onPress={handleCheckIn}
-          style={{
-            backgroundColor: DarkTheme.colors.bangkok.gold,
-            paddingHorizontal: DarkTheme.spacing.md,
-            paddingVertical: DarkTheme.spacing.sm,
-            borderRadius: DarkTheme.borderRadius.sm,
-            flexDirection: 'row',
-            alignItems: 'center',
-          }}
-          activeOpacity={0.8}
-        >
-          <Camera 
-            size={16} 
-            color={DarkTheme.colors.system.black}
-            strokeWidth={2}
-          />
-          <Text 
-            style={[
-              DarkTheme.typography.callout,
-              { 
-                color: DarkTheme.colors.system.black,
-                fontWeight: '600',
-                marginLeft: DarkTheme.spacing.xs 
-              }
-            ]}
+        {showCheckInButton && (
+          <TouchableOpacity
+            onPress={handleCheckIn}
+            style={{
+              backgroundColor: DarkTheme.colors.bangkok.gold,
+              paddingHorizontal: DarkTheme.spacing.md,
+              paddingVertical: DarkTheme.spacing.sm,
+              borderRadius: DarkTheme.borderRadius.sm,
+              flexDirection: 'row',
+              alignItems: 'center',
+            }}
+            activeOpacity={0.8}
           >
-            Check In
-          </Text>
-        </TouchableOpacity>
+            <Camera 
+              size={16} 
+              color={DarkTheme.colors.system.black}
+              strokeWidth={2}
+            />
+            <Text 
+              style={[
+                DarkTheme.typography.callout,
+                { 
+                  color: DarkTheme.colors.system.black,
+                  fontWeight: '600',
+                  marginLeft: DarkTheme.spacing.xs 
+                }
+              ]}
+            >
+              Check In
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </TouchableOpacity>
   );
-} 
+}

@@ -222,29 +222,48 @@ export class AuthService {
 
   async getCurrentUser(): Promise<User | null> {
     try {
-      const { data: { user } } = await withTimeout(supabase.auth.getUser(), 3000);
+      // Get auth user without timeout - this is usually fast
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
 
-      // Get user profile from database with timeout
-      const { data: profile, error } = await withTimeout(
-        Promise.resolve(
-          supabase
-            .from('users')
-            .select('*')
-            .eq('id', user.id)
-            .single()
-        ),
-        3000
+      // Get user profile from database with longer timeout and better error handling
+      const result = await withTimeout(
+        supabase
+          .from('users')
+          .select('*')
+          .eq('id', user.id)
+          .single(),
+        10000 // Increased to 10 seconds for slow networks
       );
+      
+      const { data: profile, error } = result;
 
       if (error) {
-        console.error('Get user profile error:', error);
+        console.warn('Get user profile error:', error);
+        
+        // If user exists in auth but not in database, create profile
+        if (error.code === 'PGRST116') { // Row not found
+          try {
+            const newProfile = await this.createUserProfile(user, 'email');
+            return newProfile;
+          } catch (createError) {
+            console.error('Failed to create user profile:', createError);
+            return null;
+          }
+        }
+        
+        // For other errors (including timeout), return null silently
         return null;
       }
 
       return profile;
     } catch (error) {
-      console.error('Get current user error or timed out:', error);
+      // Silently handle timeout errors during app startup
+      if (error instanceof Error && error.message.includes('timed out')) {
+        console.warn('Database query timed out during app startup, will retry later');
+      } else {
+        console.error('Get current user error:', error);
+      }
       return null;
     }
   }

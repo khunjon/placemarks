@@ -1,4 +1,5 @@
 // Recommendation Engine Types for Placemarks
+// ✅ Updated for Google Place ID architecture
 // Database-backed recommendation system types
 
 import { Location } from '../services/cityContext';
@@ -47,7 +48,6 @@ export interface ScoredPlace {
   website?: string;
   formatted_phone_number?: string;
   editorial_summary?: string;
-  place_id?: string; // For backwards compatibility
 }
 
 export interface RecommendationResponse {

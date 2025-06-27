@@ -28,13 +28,13 @@ export type RootStackParamList = {
   ProfileSetup: undefined;
   MainTabs: undefined;
   PlaceDetails: {
-    placeId: string;
+    googlePlaceId: string; // Updated to use Google Place ID
     placeName: string;
-    source?: 'checkin' | 'search' | 'nearby' | 'list' | 'suggestion';
+    source?: 'checkin' | 'search' | 'nearby' | 'list' | 'suggestion' | 'recommendation';
   };
   CheckInHistory: undefined;
   Map: {
     initialRegion?: MapRegion;
-    selectedPlaceId?: string;
+    selectedGooglePlaceId?: string; // Updated to use Google Place ID
   };
 }; 

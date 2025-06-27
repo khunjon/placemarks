@@ -82,6 +82,17 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: false,
   },
+  global: {
+    headers: {
+      'Cache-Control': 'no-cache',
+    },
+  },
+  // Add timeout configuration for better network handling
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
 });
 
 // Auth service functions

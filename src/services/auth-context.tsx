@@ -14,6 +14,26 @@ const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => 
   ]);
 };
 
+// Utility function with exponential backoff for retries
+const withRetry = async <T,>(
+  operation: () => Promise<T>, 
+  maxRetries: number = 2, 
+  baseDelay: number = 1000
+): Promise<T> => {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (attempt === maxRetries) throw error;
+      
+      const delay = baseDelay * Math.pow(2, attempt);
+      console.warn(`Auth operation failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms:`, error);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error('Max retries exceeded');
+};
+
 interface AuthContextType {
   user: AppUser | null;
   session: Session | null;
@@ -59,18 +79,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     let isMounted = true;
 
-    // Maximum loading time failsafe - force loading to false after 5 seconds
+    // Maximum loading time failsafe - increased to 10 seconds to allow for retries
     failsafeTimeoutRef.current = setTimeout(() => {
       if (isMounted) {
-        console.warn('Auth initialization timed out after 5 seconds, proceeding without auth');
+        console.warn('Auth initialization timed out, proceeding without auth');
         setLoading(false);
         setSession(null);
         setUser(null);
       }
-    }, 5000);
+    }, 10000);
 
-    // Get initial session with timeout
-    withTimeout(supabase.auth.getSession(), 3000)
+    // Get initial session with timeout and retry logic
+    withRetry(
+      () => withTimeout(supabase.auth.getSession(), 5000), // Increased timeout to 5 seconds
+      2, // Retry up to 2 times
+      1000 // Start with 1 second delay
+    )
       .then(({ data: { session } }) => {
         if (!isMounted) return;
         
@@ -85,7 +109,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       .catch((error) => {
         if (!isMounted) return;
         
-        console.warn('Auth session check failed or timed out:', error);
+        console.warn('Auth session check failed after retries:', error);
         setSession(null);
         setUser(null);
         clearFailsafeAndSetLoading(false);
@@ -127,12 +151,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const loadUserProfile = async (userId: string) => {
     try {
-      // Loading user profile with timeout
-      const userProfile = await withTimeout(authService.getCurrentUser(), 3000);
-      // User profile loaded successfully
+      // Loading user profile with timeout and retry logic
+      const userProfile = await withRetry(
+        () => withTimeout(authService.getCurrentUser(), 5000), // Increased timeout to 5 seconds
+        2, // Retry up to 2 times
+        1000 // Start with 1 second delay
+      );
       setUser(userProfile);
     } catch (error) {
-      console.warn('Error loading user profile or timed out:', error);
+      console.warn('Error loading user profile after retries:', error);
+      // Don't set user to null immediately - they might still be authenticated
+      // Just proceed without the profile data for now
       setUser(null);
     } finally {
       clearFailsafeAndSetLoading(false);

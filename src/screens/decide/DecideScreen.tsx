@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Sparkles, ChevronRight } from 'lucide-react-native';
 import { DarkTheme } from '../../constants/theme';
 import type { DecideStackScreenProps } from '../../navigation/types';
-import { enhancedListsService, ListWithPlaces } from '../../services/listsService';
+import { listsService, ListWithPlaces } from '../../services/listsService';
 import { useAuth } from '../../services/auth-context';
 
 type DecideScreenProps = DecideStackScreenProps<'Decide'>;
@@ -67,12 +67,20 @@ export default function DecideScreen({ navigation }: DecideScreenProps) {
     try {
       setLoading(true);
       setError(null);
-      const lists = await enhancedListsService.getCuratedLists();
+      
+      // Load actual curated lists from database
+      const lists = await listsService.getCuratedLists();
       setCuratedLists(lists);
+      
+      // If no curated lists found, show a message
+      if (lists.length === 0) {
+        setError('No curated lists available at the moment');
+      }
     } catch (err) {
       console.error('Error loading curated lists:', err);
       setError('Failed to load curated lists');
-      // Fallback to mock data if there's an error
+      
+      // Fallback to mock data if database query fails
       setCuratedLists(mockCuratedListsData.map(list => ({
         ...list,
         user_id: undefined,

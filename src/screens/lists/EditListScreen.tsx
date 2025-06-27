@@ -19,8 +19,7 @@ import {
   Plus
 } from 'lucide-react-native';
 import { DarkTheme } from '../../constants/theme';
-import { enhancedListsService } from '../../services/listsService';
-import { cacheManager } from '../../services/cacheManager';
+import { listsService } from '../../services/listsService';
 import { useAuth } from '../../services/auth-context';
 import type { ListsStackScreenProps } from '../../navigation/types';
 import { Toast } from '../../components/common';
@@ -93,12 +92,9 @@ export default function EditListScreen({ route, navigation }: EditListScreenProp
 
       console.log('Updating list with data:', JSON.stringify(updateData, null, 2));
       
-      await enhancedListsService.updateList(listId, updateData);
+      await listsService.updateList(listId, updateData);
       
-      // Invalidate cache since list was updated
-      if (user?.id) {
-        await cacheManager.lists.invalidate();
-      }
+      // Note: List updated - navigation will refresh when going back
       
       showToastMessage(`"${name}" updated successfully!`, 'success');
       

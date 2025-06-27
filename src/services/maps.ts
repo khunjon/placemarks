@@ -183,6 +183,12 @@ export class MapsService {
         `mode=${mode}&` +
         `key=${this.GOOGLE_MAPS_API_KEY}`;
 
+      console.log('🟢 GOOGLE API CALL: Directions API', {
+        origin: originStr,
+        destination: destinationStr,
+        mode
+      });
+
       const response = await fetch(url);
       const data = await response.json();
 

@@ -1,3 +1,5 @@
+// ✅ Updated for Google Place ID architecture
+// Uses recommendationService and navigates directly to PlaceDetails with Google Place IDs
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,6 +12,7 @@ import { TimeContext, ScoredPlace, RecommendationResponse } from '../../types/re
 import { useLocation } from '../../hooks/useLocation';
 import { useAuth } from '../../services/auth-context';
 import { locationUtils } from '../../utils/location';
+import { PlaceNavigationHelper } from '../../components/places';
 
 type RecommendationsScreenProps = DecideStackScreenProps<'Recommendations'>;
 
@@ -84,7 +87,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
     try {
       setRecommendationsLoading(true);
       
-      // Load database-backed recommendations
+      // Load recommendations directly with Google Place IDs - no conversion needed
       const databaseRecs = await recommendationService.getRecommendations({
         userId: user.id,
         latitude: location.latitude,
@@ -93,13 +96,12 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
         timeContext
       });
       
-      // Set database recommendations
       setDatabaseRecommendations(databaseRecs);
       
     } catch (error) {
       console.error('Error loading recommendations:', error);
       
-      // Set empty recommendations on error to show "coming soon" message
+      // Set empty recommendations on error
       setDatabaseRecommendations({
         places: [],
         totalAvailable: 0,
@@ -113,29 +115,17 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
     }
   };
 
-  const handleNavigateToPlace = (placeId: string) => {
+  const handleNavigateToPlace = (googlePlaceId: string, placeName: string) => {
+    // Navigate to PlaceInListDetail since DecideStack doesn't have PlaceDetails
     navigation.navigate('PlaceInListDetail', {
-      placeId,
-      listId: 'recommendations', // Virtual list ID for recommendations
-      listName: 'Recommended For You',
-      source: 'suggestion'
+      placeId: googlePlaceId,
+      listId: 'recommendations',
+      listName: 'Recommendations',
+      source: 'suggestion',
     });
   };
 
-  // Helper functions for UI
-  const getCategoryIcon = (category: string) => {
-    const iconMap: Record<string, any> = {
-      cafe: Coffee,
-      restaurant: Utensils,
-      bar: Wine,
-      market: ShoppingBag,
-      fine_dining: Utensils,
-      breakfast: Coffee,
-      rooftop: Wine,
-      shopping: ShoppingBag,
-    };
-    return iconMap[category] || MapPin;
-  };
+  // UI helper functions - simplified for direct Google Place ID usage
 
   const getCategoryEmoji = (category: string) => {
     const emojiMap: Record<string, string> = {
@@ -361,7 +351,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                       flexDirection: 'row',
                       alignItems: 'center',
                     }}
-                    onPress={() => handleNavigateToPlace(place.google_place_id)}
+                    onPress={() => handleNavigateToPlace(place.google_place_id, place.name)}
                   >
                     {/* Category Icon */}
                     <View style={{

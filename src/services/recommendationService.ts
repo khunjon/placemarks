@@ -1,5 +1,7 @@
 // Database-backed Recommendation Service for Placemarks
-// Uses Google Places cache and PostGIS spatial queries for efficient recommendations
+// ✅ Fully migrated to Google Place ID architecture
+// Uses google_places_cache and PostGIS spatial queries for efficient recommendations
+// Returns Google Place IDs directly - no UUID conversion needed
 
 import { supabase } from './supabase';
 import { PlaceAvailabilityService } from './placeAvailability';
@@ -96,7 +98,8 @@ export class RecommendationService {
       // Get user's checked-in places to exclude from recommendations
       const userCheckedInPlaces = await this.getUserCheckedInPlaces(userId);
 
-      // Get places from Google cache within radius, excluding checked-in places
+      // Get places from google_places_cache within radius, excluding checked-in places
+      // This works directly with Google Place IDs - no conversion needed
       const candidatePlaces = await this.getCachedPlacesWithinRadius(
         latitude,
         longitude,
@@ -222,22 +225,18 @@ export class RecommendationService {
     try {
       const { data, error } = await supabase
         .from('check_ins')
-        .select(`
-          places!inner (
-            google_place_id
-          )
-        `)
+        .select('place_id')
         .eq('user_id', userId)
-        .not('places.google_place_id', 'is', null);
+        .not('place_id', 'is', null);
 
       if (error) {
         console.error('Error fetching user check-ins:', error);
         return [];
       }
 
-      // Extract Google Place IDs
+      // Extract Google Place IDs (place_id column now stores Google Place IDs directly)
       const placeIds = data
-        ?.map((checkIn: any) => checkIn.places?.google_place_id)
+        ?.map((checkIn: any) => checkIn.place_id)
         .filter((id: string) => id) || [];
 
       return [...new Set(placeIds)]; // Remove duplicates

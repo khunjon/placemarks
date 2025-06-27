@@ -105,7 +105,7 @@ export default function CheckInFormScreen({ navigation, route }: CheckInFormScre
 
       // Create check-in (rating and comment are optional)
       await checkInsService.createCheckIn(user.id, {
-        google_place_id: placeId,
+        place_id: placeId,
         rating: selectedRating || undefined,
         comment: comment.trim() || undefined,
       });
@@ -279,7 +279,7 @@ export default function CheckInFormScreen({ navigation, route }: CheckInFormScre
               marginHorizontal: Spacing.sm,
             }}>
               {renderRatingOption('thumbs_down', '👎', 'Not Great')}
-              {renderRatingOption('neutral', '😐', 'Okay')}
+              {renderRatingOption('neutral', '👌', 'Okay')}
               {renderRatingOption('thumbs_up', '👍', 'Great!')}
             </View>
           </View>

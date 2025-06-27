@@ -30,6 +30,27 @@ function CreateListScreenWrapper({ navigation }: ListsStackScreenProps<'CreateLi
   );
 }
 
+// Wrapper component to adapt ListsStack navigation props for PlaceDetailScreen
+function PlaceDetailScreenWrapper({ navigation, route }: ListsStackScreenProps<'PlaceInListDetail'>) {
+  // Convert ListsStack params to format expected by PlaceDetailScreen
+  const adaptedRoute = {
+    ...route,
+    params: {
+      googlePlaceId: route.params.placeId, // Map placeId to googlePlaceId
+      placeName: 'Loading...', // PlaceDetailScreen will load the actual name
+      source: 'list' as const,
+    }
+  };
+
+  // Type assertion is safe here because we're adapting the props
+  return (
+    <PlaceDetailScreen 
+      navigation={navigation as any} 
+      route={adaptedRoute as any} 
+    />
+  );
+}
+
 const Stack = createNativeStackNavigator<ListsStackParamList>();
 
 export default function ListsStackNavigator() {
@@ -104,7 +125,7 @@ export default function ListsStackNavigator() {
       
       <Stack.Screen 
         name="PlaceInListDetail" 
-        component={PlaceDetailScreen}
+        component={PlaceDetailScreenWrapper}
         options={{
           headerShown: false, // PlaceDetailScreen has its own header
           animation: 'slide_from_right',

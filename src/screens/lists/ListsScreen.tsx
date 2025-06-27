@@ -22,13 +22,9 @@ import ListItem, { ListItemProps } from '../../components/lists/ListItem';
 import CreateListScreen from './CreateListScreen';
 import { useAuth } from '../../services/auth-context';
 import { 
-  enhancedListsService, 
-  ListWithPlaces, 
-  EnhancedList,
-  ListError,
-  PlaceError 
+  listsService, 
+  ListWithPlaces
 } from '../../services/listsService';
-import { cacheManager } from '../../services/cacheManager';
 import type { ListsStackScreenProps } from '../../navigation/types';
 
 type ListsScreenProps = ListsStackScreenProps<'Lists'>;
@@ -40,7 +36,8 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
   const isInitialMount = useRef(true);
   
   const [userLists, setUserLists] = useState<ListWithPlaces[]>([]);
-  const [smartLists, setSmartLists] = useState<EnhancedList[]>([]);
+  // Smart lists will be implemented later
+  // const [smartLists, setSmartLists] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -64,19 +61,8 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
 
       if (user) {
         console.log('ListsScreen focused, checking cache...');
-        // Only reload if cache is invalid or missing
-        cacheManager.lists.hasCache(user.id).then(hasValidCache => {
-          if (!hasValidCache) {
-            console.log('No valid cache, reloading lists...');
-            // Add debug info about cache status
-            cacheManager.lists.getStatus(user.id).then(status => {
-              console.log('Cache status:', status);
-            });
-            loadAllLists();
-          } else {
-            console.log('Valid cache exists, skipping reload');
-          }
-        });
+        // Reload lists when screen comes into focus
+        loadAllLists();
       }
     }, [user])
   );
@@ -87,24 +73,8 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     try {
       setLoading(true);
       
-      // Try to load from cache first (unless forcing refresh)
-      if (!forceRefresh) {
-        const cachedData = await cacheManager.lists.get(user.id);
-        if (cachedData) {
-      
-          setUserLists(cachedData.userLists);
-          setSmartLists(cachedData.smartLists);
-          setLoading(false);
-          return;
-        }
-      }
-      
-      // Load fresh data from API
-  
-      await Promise.all([
-        loadUserLists(),
-        loadSmartLists()
-      ]);
+      // Load fresh data from API (caching handled internally)
+      await loadUserLists();
     } catch (error) {
       console.error('Error loading lists:', error);
       Alert.alert('Error', 'Failed to load your lists');
@@ -117,34 +87,19 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     if (!user?.id) return;
     
     try {
-      // Ensure default favorites list exists
-      await enhancedListsService.createDefaultFavoritesList(user.id);
-      
-      // Load all user lists
-      const lists = await enhancedListsService.getUserLists(user.id);
+      // Load all user lists (includes default favorites)
+      const lists = await listsService.getUserListsWithPlaces(user.id);
       setUserLists(lists);
-      
-      // Save to cache immediately after loading user lists (before smart lists)
-      await cacheManager.lists.store(lists, [], user.id); // Use empty array for smartLists for now
     } catch (error) {
       console.error('Error loading user lists:', error);
-      if (error instanceof ListError) {
-        Alert.alert('Error', error.message);
-      }
+      Alert.alert('Error', 'Failed to load user lists');
     }
   };
 
-  const loadSmartLists = async () => {
-    if (!user?.id) return;
-    
-    try {
-      // For now, we'll just track if Most Visited exists
-      // In the future, this could query for actual smart lists
-      setSmartLists([]); // Will be populated when smart lists are generated
-    } catch (error) {
-      console.error('Error loading smart lists:', error);
-    }
-  };
+  // Smart lists will be implemented later
+  // const loadSmartLists = async () => {
+  //   // Implementation pending
+  // };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -178,7 +133,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     if (!user?.id) return;
     
     try {
-      const newList = await enhancedListsService.createList({
+      const newList = await listsService.createList({
         user_id: user.id,
         name: listData.name,
         description: listData.description,
@@ -194,11 +149,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       Alert.alert('Success', `"${listData.name}" list created!`);
     } catch (error) {
       console.error('Error creating list:', error);
-      if (error instanceof ListError) {
-        Alert.alert('Error', error.message);
-      } else {
-        Alert.alert('Error', 'Failed to create list');
-      }
+      Alert.alert('Error', 'Failed to create list');
     }
   };
 
@@ -213,22 +164,12 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await enhancedListsService.deleteList(listId);
-              
-              // Update cache optimistically
-              if (user?.id) {
-                await cacheManager.lists.removeList(listId, user.id);
-              }
-              
+              await listsService.deleteList(listId);
               await loadUserLists();
               Alert.alert('Success', 'List deleted');
             } catch (error) {
               console.error('Error deleting list:', error);
-              if (error instanceof ListError) {
-                Alert.alert('Error', error.message);
-              } else {
-                Alert.alert('Error', 'Failed to delete list');
-              }
+              Alert.alert('Error', 'Failed to delete list');
             }
           }
         }

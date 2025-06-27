@@ -1,17 +1,8 @@
 import { supabase } from './supabase';
-import { PlacesService } from './places';
-import { Place, List, User, CheckIn, PlaceSuggestion, PlaceDetails, Location } from '../types';
+import { placesService } from './places';
+import { EnrichedPlace, List, User, CheckIn, PlaceSuggestion, PlaceDetails, Location } from '../types';
 
 // Enhanced type definitions for the new schema
-export interface EnhancedPlace extends Place {
-  hours?: Record<string, any>;
-  phone?: string;
-  website?: string;
-  google_rating?: number;
-  photo_references?: any[];
-  hours_open?: Record<string, any>;
-}
-
 export interface EnhancedList extends List {
   is_default?: boolean;
   description?: string;
@@ -23,7 +14,7 @@ export interface EnhancedList extends List {
 
 export interface ListPlace {
   list_id: string;
-  place_id: string;
+  place_id: string; // Google Place ID
   added_at: string;
   notes?: string;
   personal_rating?: number;
@@ -32,7 +23,7 @@ export interface ListPlace {
 }
 
 export interface EnrichedListPlace extends ListPlace {
-  place: EnhancedPlace;
+  place: EnrichedPlace;
 }
 
 export interface ListWithPlaces extends EnhancedList {
@@ -45,131 +36,80 @@ export interface SmartListConfig {
   description: string;
   icon: string;
   color: string;
-  generator: (userId: string) => Promise<string[]>; // Returns place IDs
-}
-
-export interface PlaceSearchResult {
-  google_place_id: string;
-  name: string;
-  address: string;
-  rating?: number;
-  price_level?: number;
-  photos?: string[];
-  types?: string[];
-  formatted_for_list: boolean;
+  generator: (userId: string) => Promise<string[]>; // Returns Google Place IDs
 }
 
 // Error classes
 export class ListError extends Error {
-  constructor(message: string, public code?: string) {
+  code: string;
+  
+  constructor(message: string, code: string) {
     super(message);
     this.name = 'ListError';
+    this.code = code;
   }
 }
 
 export class PlaceError extends Error {
-  constructor(message: string, public code?: string) {
+  code: string;
+  
+  constructor(message: string, code: string) {
     super(message);
     this.name = 'PlaceError';
+    this.code = code;
   }
 }
 
-export class EnhancedListsService {
-  private placesService: PlacesService;
-  private searchCache: Map<string, { results: PlaceSearchResult[]; timestamp: number }> = new Map();
-  private readonly SEARCH_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
-  constructor() {
-    this.placesService = new PlacesService();
-  }
-
+export class ListsService {
   // 1. LIST MANAGEMENT
 
   /**
-   * Creates default Favorites list for new user signup
+   * Get all lists for a user with place counts
    */
-  async createDefaultFavoritesList(userId: string): Promise<EnhancedList> {
+  async getUserLists(userId: string): Promise<EnhancedList[]> {
     try {
-      // Check if favorites list already exists
-      const { data: existingList, error: checkError } = await supabase
-        .from('lists')
+      const { data: lists, error } = await supabase
+        .from('user_lists_with_counts')
         .select('*')
         .eq('user_id', userId)
-        .eq('is_default', true)
-        .single();
+        // Note: is_curated column doesn't exist in user_lists_with_counts view
+        // This view should only contain user lists, not curated lists
+        .order('created_at', { ascending: false });
 
-      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found"
-        throw checkError;
-      }
-
-      if (existingList) {
-        return {
-          ...existingList,
-          type: 'user'
-        } as EnhancedList;
-      }
-
-      // Create new favorites list
-      console.log('Creating new default favorites list for user');
-      const { data: newList, error: createError } = await supabase
-        .from('lists')
-        .insert({
-          user_id: userId,
-          name: 'Favorites',
-          description: 'My favorite places',
-          visibility: 'private',
-          icon: 'heart',
-          color: '#DC2626',
-          auto_generated: false,
-          is_default: true,
-          type: 'user',
-          is_curated: false
-        })
-        .select()
-        .single();
-
-      if (createError) throw createError;
-
-      return {
-        ...newList,
-        type: 'user'
-      } as EnhancedList;
+      if (error) throw error;
+      return lists || [];
     } catch (error) {
-      console.error('Error creating default favorites list:', error);
-      throw new ListError('Failed to create default favorites list', 'CREATE_DEFAULT_ERROR');
+      console.error('Error getting user lists:', error);
+      throw new ListError('Failed to get user lists', 'GET_LISTS_ERROR');
     }
   }
 
   /**
-   * Gets user's lists with proper sorting (Favorites pinned, then custom lists)
-   * Updated to use optimized database function for better performance
+   * Get lists with their places for a user
    */
-  async getUserLists(userId: string): Promise<ListWithPlaces[]> {
+  async getUserListsWithPlaces(userId: string): Promise<ListWithPlaces[]> {
     try {
-      console.log('Using optimized single query for user lists');
-      
-      // Single optimized query to get all lists with their places in one go
-      const { data: listPlacesData, error: queryError } = await supabase
+      const { data: listData, error } = await supabase
         .from('lists')
         .select(`
           id,
           user_id,
           name,
-          is_default,
-          visibility,
           auto_generated,
-          created_at,
+          visibility,
           description,
           list_type,
           icon,
           color,
           type,
+          is_default,
           is_curated,
           publisher_name,
           publisher_logo_url,
           external_link,
           location_scope,
           curator_priority,
+          created_at,
           list_places (
             list_id,
             place_id,
@@ -178,144 +118,152 @@ export class EnhancedListsService {
             personal_rating,
             visit_count,
             sort_order,
-            places (
-              id,
+            enriched_places (
               google_place_id,
               name,
-              address,
-              place_type,
-              google_types,
-              primary_type,
+              formatted_address,
+              geometry,
+              types,
+              rating,
               price_level,
-              bangkok_context,
-              google_rating,
-              phone,
+              formatted_phone_number,
               website,
-              hours_open,
-              photo_references
+              opening_hours,
+              photo_urls,
+              primary_image_url,
+              display_description,
+              is_featured,
+              has_editorial_content,
+              business_status
             )
           )
         `)
         .eq('user_id', userId)
         .eq('is_curated', false)
-        .order('is_default', { ascending: false })
         .order('created_at', { ascending: false });
 
-      if (queryError) throw queryError;
+      if (error) throw error;
 
       const result: ListWithPlaces[] = [];
 
-      // Process each list and its places
-      for (const list of listPlacesData || []) {
-        const places: EnrichedListPlace[] = [];
-        
-        // Process places for this list
-        if (list.list_places && list.list_places.length > 0) {
-          for (const listPlace of list.list_places) {
-            if (listPlace.places) {
-              // listPlace.places is an array even though it's a single relation
-              const place = Array.isArray(listPlace.places) ? listPlace.places[0] : listPlace.places;
-              if (place) {
-                places.push({
-                  list_id: listPlace.list_id,
-                  place_id: listPlace.place_id,
-                  added_at: listPlace.added_at,
-                  notes: listPlace.notes,
-                  personal_rating: listPlace.personal_rating,
-                  visit_count: listPlace.visit_count,
-                  sort_order: listPlace.sort_order,
-                  place: {
-                    id: place.id,
-                    google_place_id: place.google_place_id,
-                    name: place.name,
-                    address: place.address || '',
-                    coordinates: [0, 0],
-                    place_type: place.place_type,
-                    google_types: place.google_types,
-                    primary_type: place.primary_type,
-                    price_level: place.price_level,
-                    bangkok_context: place.bangkok_context,
-                    google_rating: place.google_rating,
-                    phone: place.phone,
-                    website: place.website,
-                    hours_open: place.hours_open,
-                    photo_references: place.photo_references
-                  }
-                });
-              }
-            }
-          }
+      for (const list of listData || []) {
+        // Get places for this list separately with manual join
+        const { data: listPlacesData, error: placesError } = await supabase
+          .from('list_places')
+          .select(`
+            list_id,
+            place_id,
+            added_at,
+            notes,
+            personal_rating,
+            visit_count,
+            sort_order
+          `)
+          .eq('list_id', list.id)
+          .order('sort_order', { ascending: true });
+
+        if (placesError) {
+          console.error(`Error fetching places for list ${list.name}:`, placesError);
+          continue;
         }
 
-        // Sort places by sort_order
-        places.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+        const places: EnrichedListPlace[] = [];
+        
+        // For each list place, get the enriched place data
+        for (const listPlace of listPlacesData || []) {
+          const { data: enrichedPlace, error: enrichedError } = await supabase
+            .from('enriched_places')
+            .select('*')
+            .eq('google_place_id', listPlace.place_id)
+            .single();
+
+          if (enrichedError) {
+            console.warn(`Could not find enriched place for ${listPlace.place_id}:`, enrichedError);
+            continue;
+          }
+
+          // Include places that are operational or have unknown status (null)
+          if (enrichedPlace && (enrichedPlace.business_status === 'OPERATIONAL' || enrichedPlace.business_status === null)) {
+            places.push({
+              list_id: listPlace.list_id,
+              place_id: listPlace.place_id,
+              added_at: listPlace.added_at,
+              notes: listPlace.notes,
+              personal_rating: listPlace.personal_rating,
+              visit_count: listPlace.visit_count,
+              sort_order: listPlace.sort_order,
+              place: enrichedPlace as EnrichedPlace
+            });
+          }
+        }
 
         result.push({
           id: list.id,
           user_id: list.user_id,
           name: list.name,
-          is_default: list.is_default,
-          visibility: list.visibility || 'private',
           auto_generated: list.auto_generated,
-          created_at: list.created_at,
+          visibility: list.visibility,
           description: list.description,
           list_type: list.list_type,
           icon: list.icon,
           color: list.color,
           type: list.type,
-          is_curated: list.is_curated || false,
+          is_default: list.is_default,
+          is_curated: list.is_curated,
           publisher_name: list.publisher_name,
           publisher_logo_url: list.publisher_logo_url,
           external_link: list.external_link,
           location_scope: list.location_scope,
           curator_priority: list.curator_priority,
-          places: places,
-          place_count: places.length,
+          created_at: list.created_at,
+          places,
+          place_count: places.length
         });
       }
 
-      console.log(`Loaded ${result.length} lists with places in single query`);
       return result;
     } catch (error) {
-      console.error('Error getting user lists:', error);
-      throw new ListError('Failed to get user lists', 'GET_LISTS_ERROR');
+      console.error('Error getting user lists with places:', error);
+      throw new ListError('Failed to get user lists with places', 'GET_LISTS_WITH_PLACES_ERROR');
     }
   }
 
   /**
-   * Creates a new list
+   * Create a new list
    */
-  async createList(listData: {
-    user_id: string;
-    name: string;
-    description?: string;
-    visibility?: 'private' | 'public';
-    icon?: string;
-    color?: string;
-  }): Promise<EnhancedList> {
+  async createList(
+    userId: string,
+    name: string,
+    options?: {
+      description?: string;
+      list_type?: string;
+      icon?: string;
+      color?: string;
+      visibility?: 'private' | 'friends' | 'public' | 'curated';
+      is_default?: boolean;
+    }
+  ): Promise<EnhancedList> {
     try {
-      const { data: newList, error } = await supabase
+      const { data: list, error } = await supabase
         .from('lists')
         .insert({
-          user_id: listData.user_id,
-          name: listData.name,
-          description: listData.description,
-          visibility: listData.visibility || 'private',
-          icon: listData.icon || 'list',
-          color: listData.color || '#6B7280',
+          user_id: userId,
+          name,
           auto_generated: false,
-          is_default: false,
-          type: 'user'
+          visibility: options?.visibility || 'private',
+          description: options?.description,
+          list_type: options?.list_type,
+          icon: options?.icon,
+          color: options?.color,
+          type: 'user',
+          is_default: options?.is_default || false,
+          is_curated: false
         })
         .select()
         .single();
 
       if (error) throw error;
-
-      return {
-        ...newList,
-        type: 'user'
-      } as EnhancedList;
+      return list;
     } catch (error) {
       console.error('Error creating list:', error);
       throw new ListError('Failed to create list', 'CREATE_ERROR');
@@ -323,29 +271,25 @@ export class EnhancedListsService {
   }
 
   /**
-   * Updates an existing list
+   * Update a list
    */
-  async updateList(listId: string, updates: Partial<EnhancedList>): Promise<EnhancedList> {
+  async updateList(
+    listId: string,
+    updates: {
+      name?: string;
+      description?: string;
+      visibility?: 'private' | 'friends' | 'public' | 'curated';
+      icon?: string;
+      color?: string;
+    }
+  ): Promise<void> {
     try {
-      const { data: updatedList, error } = await supabase
+      const { error } = await supabase
         .from('lists')
-        .update({
-          name: updates.name,
-          description: updates.description,
-          visibility: updates.visibility,
-          icon: updates.icon,
-          color: updates.color
-        })
-        .eq('id', listId)
-        .select()
-        .single();
+        .update(updates)
+        .eq('id', listId);
 
       if (error) throw error;
-
-      return {
-        ...updatedList,
-        ...updates
-      } as EnhancedList;
     } catch (error) {
       console.error('Error updating list:', error);
       throw new ListError('Failed to update list', 'UPDATE_ERROR');
@@ -353,7 +297,7 @@ export class EnhancedListsService {
   }
 
   /**
-   * Deletes a list (cannot delete default favorites)
+   * Delete a list
    */
   async deleteList(listId: string): Promise<void> {
     try {
@@ -386,24 +330,11 @@ export class EnhancedListsService {
   // 2. PLACE MANAGEMENT IN LISTS
 
   /**
-   * Adds a place to a list with smart conflict resolution
+   * Add a place to a list using Google Place ID
    */
   async addPlaceToList(
-    listId: string, 
-    googlePlaceData: {
-      google_place_id: string;
-      name: string;
-      address?: string;
-      coordinates?: [number, number];
-      place_type?: string;
-      google_types?: string[]; // Full Google Places API types array
-      price_level?: number;
-      google_rating?: number;
-      phone?: string;
-      website?: string;
-      hours_open?: Record<string, any>;
-      photo_references?: any[];
-    },
+    listId: string,
+    googlePlaceId: string,
     options?: {
       notes?: string;
       personal_rating?: number;
@@ -411,65 +342,19 @@ export class EnhancedListsService {
     }
   ): Promise<void> {
     try {
-      // Upsert the place using direct database operations
-      console.log('Upserting place with direct query');
-      let placeId;
-      
-      // Check if place already exists
-      const { data: existingPlace, error: placeCheckError } = await supabase
-        .from('places')
-        .select('id')
-        .eq('google_place_id', googlePlaceData.google_place_id)
+      // Verify the place exists in google_places_cache
+      const { data: existingPlace, error: cacheCheckError } = await supabase
+        .from('google_places_cache')
+        .select('google_place_id')
+        .eq('google_place_id', googlePlaceId)
         .single();
 
-      if (placeCheckError && placeCheckError.code !== 'PGRST116') { // PGRST116 is "not found"
-        throw placeCheckError;
+      if (cacheCheckError && cacheCheckError.code !== 'PGRST116') {
+        throw cacheCheckError;
       }
 
-      if (existingPlace) {
-        // Update existing place
-        const { data: updatedPlace, error: updateError } = await supabase
-          .from('places')
-          .update({
-            name: googlePlaceData.name,
-            address: googlePlaceData.address,
-            place_type: googlePlaceData.place_type,
-            google_types: googlePlaceData.google_types || [],
-            price_level: googlePlaceData.price_level,
-            hours_open: googlePlaceData.hours_open || {},
-            phone: googlePlaceData.phone,
-            website: googlePlaceData.website,
-            google_rating: googlePlaceData.google_rating,
-            photo_references: googlePlaceData.photo_references || []
-          })
-          .eq('id', existingPlace.id)
-          .select('id')
-          .single();
-
-        if (updateError) throw updateError;
-        placeId = updatedPlace.id;
-      } else {
-        // Create new place
-        const { data: newPlace, error: createError } = await supabase
-          .from('places')
-          .insert({
-            google_place_id: googlePlaceData.google_place_id,
-            name: googlePlaceData.name,
-            address: googlePlaceData.address,
-            place_type: googlePlaceData.place_type,
-            google_types: googlePlaceData.google_types || [],
-            price_level: googlePlaceData.price_level,
-            hours_open: googlePlaceData.hours_open || {},
-            phone: googlePlaceData.phone,
-            website: googlePlaceData.website,
-            google_rating: googlePlaceData.google_rating,
-            photo_references: googlePlaceData.photo_references || []
-          })
-          .select('id')
-          .single();
-
-        if (createError) throw createError;
-        placeId = newPlace.id;
+      if (!existingPlace) {
+        throw new PlaceError('Place not found in cache. Please ensure place is cached first.', 'PLACE_NOT_CACHED');
       }
 
       // Check if place is already in list
@@ -477,15 +362,15 @@ export class EnhancedListsService {
         .from('list_places')
         .select('list_id')
         .eq('list_id', listId)
-        .eq('place_id', placeId)
+        .eq('place_id', googlePlaceId)
         .single();
 
-      if (listCheckError && listCheckError.code !== 'PGRST116') { // PGRST116 is "not found"
+      if (listCheckError && listCheckError.code !== 'PGRST116') {
         throw listCheckError;
       }
 
       if (existing) {
-        // Place already in list, just update the metadata
+        // Place already in list, update metadata
         const { error: updateError } = await supabase
           .from('list_places')
           .update({
@@ -494,7 +379,7 @@ export class EnhancedListsService {
             sort_order: options?.sort_order
           })
           .eq('list_id', listId)
-          .eq('place_id', placeId);
+          .eq('place_id', googlePlaceId);
 
         if (updateError) throw updateError;
       } else {
@@ -503,7 +388,7 @@ export class EnhancedListsService {
           .from('list_places')
           .insert({
             list_id: listId,
-            place_id: placeId,
+            place_id: googlePlaceId,
             notes: options?.notes,
             personal_rating: options?.personal_rating,
             sort_order: options?.sort_order || 0
@@ -513,20 +398,21 @@ export class EnhancedListsService {
       }
     } catch (error) {
       console.error('Error adding place to list:', error);
+      if (error instanceof PlaceError) throw error;
       throw new PlaceError('Failed to add place to list', 'ADD_PLACE_ERROR');
     }
   }
 
   /**
-   * Removes a place from a list
+   * Remove a place from a list
    */
-  async removePlaceFromList(listId: string, placeId: string): Promise<void> {
+  async removePlaceFromList(listId: string, googlePlaceId: string): Promise<void> {
     try {
       const { error } = await supabase
         .from('list_places')
         .delete()
         .eq('list_id', listId)
-        .eq('place_id', placeId);
+        .eq('place_id', googlePlaceId);
 
       if (error) throw error;
     } catch (error) {
@@ -536,7 +422,34 @@ export class EnhancedListsService {
   }
 
   /**
-   * Reorders places in a list
+   * Update place metadata in a list
+   */
+  async updatePlaceInList(
+    listId: string,
+    googlePlaceId: string,
+    updates: {
+      notes?: string;
+      personal_rating?: number;
+      sort_order?: number;
+      visit_count?: number;
+    }
+  ): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('list_places')
+        .update(updates)
+        .eq('list_id', listId)
+        .eq('place_id', googlePlaceId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating place in list:', error);
+      throw new PlaceError('Failed to update place in list', 'UPDATE_PLACE_ERROR');
+    }
+  }
+
+  /**
+   * Reorder places in a list
    */
   async reorderPlacesInList(listId: string, placeOrders: { place_id: string; sort_order: number }[]): Promise<void> {
     try {
@@ -552,564 +465,693 @@ export class EnhancedListsService {
       await Promise.all(updates);
     } catch (error) {
       console.error('Error reordering places in list:', error);
-      throw new PlaceError('Failed to reorder places', 'REORDER_ERROR');
+      throw new PlaceError('Failed to reorder places in list', 'REORDER_ERROR');
     }
   }
 
   /**
-   * Updates place metadata in a list (notes, personal rating)
+   * Get places for a specific list
    */
-  async updatePlaceInList(
-    listId: string, 
-    placeId: string, 
-    updates: {
-      notes?: string;
-      personal_rating?: number;
-      sort_order?: number;
-    }
-  ): Promise<void> {
+  async getListPlaces(listId: string): Promise<EnrichedListPlace[]> {
     try {
-      const { error } = await supabase
+      const { data: listPlaces, error } = await supabase
         .from('list_places')
-        .update(updates)
+        .select(`
+          list_id,
+          place_id,
+          added_at,
+          notes,
+          personal_rating,
+          visit_count,
+          sort_order,
+          enriched_places (
+            google_place_id,
+            name,
+            formatted_address,
+            geometry,
+            types,
+            rating,
+            price_level,
+            formatted_phone_number,
+            website,
+            opening_hours,
+            photo_urls,
+            primary_image_url,
+            display_description,
+            is_featured,
+            has_editorial_content,
+            business_status
+          )
+        `)
         .eq('list_id', listId)
-        .eq('place_id', placeId);
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error updating place in list:', error);
-      throw new PlaceError('Failed to update place in list', 'UPDATE_PLACE_ERROR');
-    }
-  }
-
-  // 3. SMART LISTS
-
-  /**
-   * Generates "Most Visited" smart list based on check-ins
-   * Criteria: 3+ visits, last 3 months, recent bias
-   */
-  async generateMostVisitedList(userId: string): Promise<string[]> {
-    try {
-      const threeMonthsAgo = new Date();
-      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-
-      const { data: checkIns, error } = await supabase
-        .from('check_ins')
-        .select('place_id, timestamp')
-        .eq('user_id', userId)
-        .gte('timestamp', threeMonthsAgo.toISOString())
-        .order('timestamp', { ascending: false });
+        .order('sort_order', { ascending: true });
 
       if (error) throw error;
 
-      // Count visits per place with recency bias
-      const placeVisits = new Map<string, { count: number; lastVisit: Date; score: number }>();
+      const result: EnrichedListPlace[] = [];
       
-      checkIns?.forEach(checkIn => {
-        const placeId = checkIn.place_id;
-        const visitDate = new Date(checkIn.timestamp);
-        
-        if (!placeVisits.has(placeId)) {
-          placeVisits.set(placeId, { count: 0, lastVisit: visitDate, score: 0 });
-        }
-        
-        const place = placeVisits.get(placeId)!;
-        place.count++;
-        if (visitDate > place.lastVisit) {
-          place.lastVisit = visitDate;
-        }
-      });
-
-      // Calculate scores with recency bias
-      const now = new Date();
-      placeVisits.forEach((data, placeId) => {
-        const daysSinceLastVisit = (now.getTime() - data.lastVisit.getTime()) / (1000 * 60 * 60 * 24);
-        const recencyFactor = Math.max(0.1, 1 - (daysSinceLastVisit / 90)); // Decay over 90 days
-        data.score = data.count * recencyFactor;
-      });
-
-      // Filter places with 3+ visits and sort by score
-      return Array.from(placeVisits.entries())
-        .filter(([_, data]) => data.count >= 3)
-        .sort((a, b) => b[1].score - a[1].score)
-        .slice(0, 20) // Limit to top 20
-        .map(([placeId, _]) => placeId);
-    } catch (error) {
-      console.error('Error generating most visited list:', error);
-      throw new ListError('Failed to generate most visited list', 'SMART_LIST_ERROR');
-    }
-  }
-
-  /**
-   * Placeholder for "Try Next" smart list
-   * Logic: Places saved but never visited, prioritized by rating and recency
-   */
-  async generateTryNextList(userId: string): Promise<string[]> {
-    // TODO: Implement based on places in lists but no check-ins
-    return [];
-  }
-
-  /**
-   * Placeholder for "Weekend Spots" smart list
-   * Logic: Places checked in on weekends with good ratings
-   */
-  async generateWeekendSpotsList(userId: string): Promise<string[]> {
-    // TODO: Implement based on weekend check-ins
-    return [];
-  }
-
-  /**
-   * Creates or updates a smart list
-   */
-  async createOrUpdateSmartList(userId: string, config: SmartListConfig): Promise<EnhancedList> {
-    try {
-      // Generate place IDs using the config's generator function
-      const placeIds = await config.generator(userId);
-
-      // Check if smart list already exists
-      const { data: existingList, error: fetchError } = await supabase
-        .from('lists')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('name', config.name)
-        .eq('auto_generated', true)
-        .single();
-
-      let listId: string;
-
-      if (existingList) {
-        // Update existing smart list
-        listId = existingList.id;
-        
-        // Clear existing places
-        await supabase
-          .from('list_places')
-          .delete()
-          .eq('list_id', listId);
-      } else {
-        // Create new smart list
-        const { data: newList, error: createError } = await supabase
-          .from('lists')
-          .insert({
-            user_id: userId,
-            name: config.name,
-            description: config.description,
-            auto_generated: true,
-            visibility: 'private',
-            icon: config.icon,
-            color: config.color,
-            type: 'auto'
-          })
-          .select()
-          .single();
-
-        if (createError) throw createError;
-        listId = newList.id;
-      }
-
-      // Add places to the smart list
-      if (placeIds.length > 0) {
-        const listPlaces = placeIds.map((placeId, index) => ({
-          list_id: listId,
-          place_id: placeId,
-          sort_order: index
-        }));
-
-        const { error: insertError } = await supabase
-          .from('list_places')
-          .insert(listPlaces);
-
-        if (insertError) throw insertError;
-      }
-
-      // Return the updated list
-      const { data: list, error: finalError } = await supabase
-        .from('lists')
-        .select('*')
-        .eq('id', listId)
-        .single();
-
-      if (finalError) throw finalError;
-
-      return {
-        ...list,
-        type: 'auto'
-      } as EnhancedList;
-    } catch (error) {
-      console.error('Error creating/updating smart list:', error);
-      throw new ListError('Failed to create smart list', 'SMART_LIST_ERROR');
-    }
-  }
-
-  // 4. PLACE SEARCH FOR LISTS
-
-  /**
-   * Searches places using Google Places API for list addition
-   * OPTIMIZED: Uses autocomplete data efficiently, only fetches details when adding to list
-   */
-  async searchPlacesForList(
-    query: string, 
-    location?: Location, 
-    limit: number = 10
-  ): Promise<PlaceSearchResult[]> {
-    try {
-      const cacheKey = `${query.toLowerCase()}_${location?.latitude || 'no-loc'}_${location?.longitude || 'no-loc'}_${limit}`;
-      
-      // Check cache first
-      const cached = this.searchCache.get(cacheKey);
-      if (cached && (Date.now() - cached.timestamp) < this.SEARCH_CACHE_DURATION) {
-        console.log('🗄️ SEARCH CACHE HIT: Using cached search results', {
-          query: query,
-          resultCount: cached.results.length,
-          cost: '$0.000 - FREE!',
-          cacheAge: `${Math.round((Date.now() - cached.timestamp) / 1000)}s ago`
-        });
-        return cached.results;
-      }
-
-      // Use the existing places service for autocomplete
-      const suggestions = await this.placesService.getPlaceAutocomplete(query, location);
-      
-      // Convert suggestions to search results WITHOUT making additional API calls
-      const results: PlaceSearchResult[] = suggestions.slice(0, limit).map(suggestion => ({
-        google_place_id: suggestion.place_id,
-        name: suggestion.main_text,
-        address: suggestion.secondary_text,
-        // Don't fetch detailed info here - it's expensive and not needed for search results
-        rating: undefined,
-        price_level: undefined,
-        photos: undefined,
-        types: [],
-        formatted_for_list: true
-      }));
-
-      // Cache the results
-      this.searchCache.set(cacheKey, {
-        results: results,
-        timestamp: Date.now()
-      });
-
-      // Clean up old cache entries periodically
-      if (this.searchCache.size > 50) {
-        const now = Date.now();
-        for (const [key, value] of this.searchCache.entries()) {
-          if (now - value.timestamp > this.SEARCH_CACHE_DURATION) {
-            this.searchCache.delete(key);
+      for (const listPlace of listPlaces || []) {
+        if (listPlace.enriched_places) {
+          const place = Array.isArray(listPlace.enriched_places) 
+            ? listPlace.enriched_places[0] 
+            : listPlace.enriched_places;
+          
+          if (place && place.business_status === 'OPERATIONAL') {
+            result.push({
+              list_id: listPlace.list_id,
+              place_id: listPlace.place_id,
+              added_at: listPlace.added_at,
+              notes: listPlace.notes,
+              personal_rating: listPlace.personal_rating,
+              visit_count: listPlace.visit_count,
+              sort_order: listPlace.sort_order,
+              place: place as EnrichedPlace
+            });
           }
         }
       }
 
-      console.log('🔍 SEARCH OPTIMIZED: Using autocomplete data only', {
-        query: query,
-        resultCount: results.length,
-        cost: 'Only 1 API call instead of ' + (results.length + 1),
-        savings: `$${(results.length * 0.017).toFixed(3)} saved per search`,
-        cached: 'Results cached for 5 minutes'
+      return result;
+    } catch (error) {
+      console.error('Error getting list places:', error);
+      throw new ListError('Failed to get list places', 'GET_LIST_PLACES_ERROR');
+    }
+  }
+
+  // 3. SMART LIST GENERATION
+
+  /**
+   * Generate auto lists based on user's check-ins
+   */
+  async generateSmartLists(userId: string): Promise<EnhancedList[]> {
+    try {
+      const smartListConfigs: SmartListConfig[] = [
+        {
+          name: 'Recent Check-ins',
+          description: 'Places you\'ve visited recently',
+          icon: '🕒',
+          color: '#4A90E2',
+          generator: (userId: string) => this.getRecentCheckInPlaces(userId, 30)
+        },
+        {
+          name: 'Top Rated',
+          description: 'Your highest rated places',
+          icon: '⭐',
+          color: '#F5A623',
+          generator: (userId: string) => this.getTopRatedPlaces(userId)
+        },
+        {
+          name: 'Frequently Visited',
+          description: 'Places you visit often',
+          icon: '🔄',
+          color: '#7ED321',
+          generator: (userId: string) => this.getFrequentlyVisitedPlaces(userId)
+        }
+      ];
+
+      const generatedLists: EnhancedList[] = [];
+
+      for (const config of smartListConfigs) {
+        try {
+          const placeIds = await config.generator(userId);
+          
+          if (placeIds.length > 0) {
+            // Check if smart list already exists
+            const { data: existingList, error: checkError } = await supabase
+              .from('lists')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('name', config.name)
+              .eq('auto_generated', true)
+              .single();
+
+            if (checkError && checkError.code !== 'PGRST116') {
+              throw checkError;
+            }
+
+            let listId: string;
+
+            if (existingList) {
+              // Update existing list
+              listId = existingList.id;
+              
+              // Clear existing places
+              await supabase
+                .from('list_places')
+                .delete()
+                .eq('list_id', listId);
+            } else {
+              // Create new smart list
+              const { data: newList, error: createError } = await supabase
+                .from('lists')
+                .insert({
+                  user_id: userId,
+                  name: config.name,
+                  description: config.description,
+                  icon: config.icon,
+                  color: config.color,
+                  auto_generated: true,
+                  visibility: 'private',
+                  type: 'auto',
+                  is_curated: false
+                })
+                .select()
+                .single();
+
+              if (createError) throw createError;
+              listId = newList.id;
+            }
+
+            // Add places to list
+            const listPlaceInserts = placeIds.map((placeId, index) => ({
+              list_id: listId,
+              place_id: placeId,
+              sort_order: index
+            }));
+
+            await supabase
+              .from('list_places')
+              .insert(listPlaceInserts);
+
+            // Get the updated list
+            const { data: updatedList, error: fetchError } = await supabase
+              .from('lists')
+              .select('*')
+              .eq('id', listId)
+              .single();
+
+            if (fetchError) throw fetchError;
+            if (updatedList) generatedLists.push(updatedList);
+          }
+        } catch (error) {
+          console.error(`Error generating smart list "${config.name}":`, error);
+          // Continue with other lists even if one fails
+        }
+      }
+
+      return generatedLists;
+    } catch (error) {
+      console.error('Error generating smart lists:', error);
+      throw new ListError('Failed to generate smart lists', 'SMART_LIST_ERROR');
+    }
+  }
+
+  // 4. HELPER METHODS FOR SMART LISTS
+
+  /**
+   * Get recent check-in places for a user
+   */
+  private async getRecentCheckInPlaces(userId: string, days: number = 30): Promise<string[]> {
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+
+      const { data: checkIns, error } = await supabase
+        .from('check_ins')
+        .select('place_id')
+        .eq('user_id', userId)
+        .gte('timestamp', cutoffDate.toISOString())
+        .order('timestamp', { ascending: false });
+
+      if (error) throw error;
+
+      // Remove duplicates and return place IDs
+      const uniquePlaceIds = new Set(checkIns?.map(c => c.place_id));
+      return Array.from(uniquePlaceIds).slice(0, 20);
+    } catch (error) {
+      console.error('Error getting recent check-in places:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get top rated places for a user
+   */
+  private async getTopRatedPlaces(userId: string): Promise<string[]> {
+    try {
+      const { data: ratings, error } = await supabase
+        .from('user_place_ratings')
+        .select('place_id')
+        .eq('user_id', userId)
+        .eq('rating_type', 'thumbs_up')
+        .order('updated_at', { ascending: false });
+
+      if (error) throw error;
+      return ratings?.map(r => r.place_id) || [];
+    } catch (error) {
+      console.error('Error getting top rated places:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get frequently visited places for a user
+   */
+  private async getFrequentlyVisitedPlaces(userId: string): Promise<string[]> {
+    try {
+      const { data: checkIns, error } = await supabase
+        .from('check_ins')
+        .select('place_id')
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      // Count visits per place
+      const visitCounts = new Map<string, number>();
+      checkIns?.forEach(checkIn => {
+        const count = visitCounts.get(checkIn.place_id) || 0;
+        visitCounts.set(checkIn.place_id, count + 1);
       });
 
-      return results;
+      // Sort by visit count and return top places
+      return Array.from(visitCounts.entries())
+        .filter(([_, count]) => count > 1) // Only places visited more than once
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 15)
+        .map(([placeId, _]) => placeId);
     } catch (error) {
-      console.error('Error searching places for list:', error);
-      throw new PlaceError('Failed to search places', 'SEARCH_ERROR');
+      console.error('Error getting frequently visited places:', error);
+      return [];
     }
   }
 
+  // 5. PLACE SUGGESTIONS AND DISCOVERY
+
   /**
-   * Gets place details by Google Place ID for list addition
+   * Add places from suggestions (autocomplete results)
    */
-  async getPlaceDetailsForList(googlePlaceId: string): Promise<PlaceSearchResult> {
+  async addPlaceFromSuggestion(
+    listId: string,
+    suggestion: PlaceSuggestion,
+    options?: {
+      notes?: string;
+      personal_rating?: number;
+    }
+  ): Promise<void> {
     try {
-      const details = await this.placesService.getPlaceDetails(googlePlaceId);
+      // First ensure the place is cached by fetching details
+      await placesService.getPlaceDetails(suggestion.place_id);
       
-      return {
-        google_place_id: details.google_place_id,
-        name: details.name,
-        address: details.address,
-        rating: details.rating,
-        price_level: details.price_level,
-        photos: details.photos?.slice(0, 5),
-        types: details.types,
-        formatted_for_list: true
-      };
+      // Then add to list
+      await this.addPlaceToList(listId, suggestion.place_id, options);
     } catch (error) {
-      console.error('Error getting place details for list:', error);
-      throw new PlaceError('Failed to get place details', 'DETAILS_ERROR');
+      console.error('Error adding place from suggestion:', error);
+      throw new PlaceError('Failed to add place from suggestion', 'ADD_SUGGESTION_ERROR');
     }
   }
 
-  // 5. CURATED LISTS
+  /**
+   * Add places from location search
+   */
+  async addPlacesFromLocationSearch(
+    listId: string,
+    location: Location,
+    radius: number,
+    placeType?: string
+  ): Promise<number> {
+    try {
+      const places = await placesService.searchNearbyPlaces(location, radius, placeType);
+      let addedCount = 0;
+
+      for (const place of places) {
+        try {
+          await this.addPlaceToList(listId, place.google_place_id);
+          addedCount++;
+        } catch (error) {
+          // Continue adding other places even if one fails
+          console.warn('Failed to add place to list:', place.google_place_id, error);
+        }
+      }
+
+      return addedCount;
+    } catch (error) {
+      console.error('Error adding places from location search:', error);
+      throw new PlaceError('Failed to add places from location search', 'ADD_LOCATION_PLACES_ERROR');
+    }
+  }
+
+  // 6. LIST STATISTICS
 
   /**
-   * Gets all curated lists with optional filtering
+   * Get statistics for a list
    */
-  async getCuratedLists(filters?: {
-    location_scope?: string;
-    list_type?: string;
-    publisher_name?: string;
-    min_priority?: number;
-  }): Promise<ListWithPlaces[]> {
+  async getListStats(listId: string): Promise<{
+    totalPlaces: number;
+    averageRating: number;
+    mostRecentlyAdded: string;
+    topCategories: string[];
+  }> {
     try {
-      // Use direct table query with visibility filtering
-      console.log('Loading curated lists with direct query');
-      let query = supabase
+      const { data: listPlaces, error } = await supabase
+        .from('list_places')
+        .select('personal_rating, added_at, enriched_places(types)')
+        .eq('list_id', listId);
+
+      if (error) throw error;
+
+      const stats = {
+        totalPlaces: listPlaces?.length || 0,
+        averageRating: 0,
+        mostRecentlyAdded: '',
+        topCategories: [] as string[]
+      };
+
+      if (listPlaces && listPlaces.length > 0) {
+        // Calculate average rating
+        const ratings = listPlaces
+          .map(lp => lp.personal_rating)
+          .filter(rating => rating !== null);
+        
+        if (ratings.length > 0) {
+          stats.averageRating = ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length;
+        }
+
+        // Most recently added
+        const mostRecent = listPlaces
+          .sort((a, b) => new Date(b.added_at).getTime() - new Date(a.added_at).getTime())[0];
+        stats.mostRecentlyAdded = mostRecent.added_at;
+
+        // Top categories
+        const categoryCount = new Map<string, number>();
+        listPlaces.forEach(lp => {
+          const place = Array.isArray(lp.enriched_places) 
+            ? lp.enriched_places[0] 
+            : lp.enriched_places;
+          if (place?.types && Array.isArray(place.types)) {
+            place.types.forEach((type: string) => {
+              categoryCount.set(type, (categoryCount.get(type) || 0) + 1);
+            });
+          }
+        });
+
+        stats.topCategories = Array.from(categoryCount.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([category]) => category);
+      }
+
+      return stats;
+    } catch (error) {
+      console.error('Error getting list stats:', error);
+      return {
+        totalPlaces: 0,
+        averageRating: 0,
+        mostRecentlyAdded: '',
+        topCategories: []
+      };
+    }
+  }
+
+  // 7. CURATED LISTS METHODS
+
+  /**
+   * Get curated lists (admin-managed lists)
+   */
+  async getCuratedLists(): Promise<ListWithPlaces[]> {
+    try {
+      // Get lists with their places in a single query
+      const { data: listData, error } = await supabase
         .from('lists')
         .select(`
           id,
           user_id,
           name,
-          created_at,
+          auto_generated,
+          visibility,
           description,
           list_type,
           icon,
           color,
+          type,
+          is_default,
           is_curated,
           publisher_name,
           publisher_logo_url,
           external_link,
           location_scope,
           curator_priority,
-          visibility
+          created_at,
+          list_places (
+            list_id,
+            place_id,
+            added_at,
+            notes,
+            personal_rating,
+            visit_count,
+            sort_order,
+            enriched_places (
+              google_place_id,
+              name,
+              formatted_address,
+              geometry,
+              rating,
+              price_level,
+              formatted_phone_number,
+              website,
+              opening_hours,
+              photo_urls,
+              primary_image_url,
+              display_description,
+              is_featured,
+              has_editorial_content,
+              business_status
+            )
+          )
         `)
         .eq('is_curated', true)
-        .in('visibility', ['curated', 'public']) // Show curated and public lists
+        .in('visibility', ['public', 'curated'])
         .order('curator_priority', { ascending: false })
         .order('created_at', { ascending: false });
 
-      // Apply filters if provided
-      if (filters?.location_scope) {
-        query = query.eq('location_scope', filters.location_scope);
-      }
-      if (filters?.list_type) {
-        query = query.eq('list_type', filters.list_type);
-      }
-      if (filters?.publisher_name) {
-        query = query.eq('publisher_name', filters.publisher_name);
-      }
-      if (filters?.min_priority) {
-        query = query.gte('curator_priority', filters.min_priority);
-      }
-
-      const directResult = await query;
-      const curatedLists = directResult.data;
-      const error = directResult.error;
-
       if (error) throw error;
 
-      // Get place counts for each list
-      const listsWithCounts = await Promise.all(
-        (curatedLists || []).map(async (list: any) => {
-          const { count } = await supabase
-            .from('list_places')
-            .select('*', { count: 'exact', head: true })
-            .eq('list_id', list.id);
+      console.log('🗄️ Loaded curated lists from database');
 
-          return {
-            id: list.id,
-            user_id: list.user_id,
-            name: list.name,
-            is_default: false,
-            visibility: 'curated' as const,
-            auto_generated: false,
-            created_at: list.created_at,
-            description: list.description,
-            list_type: list.list_type,
-            icon: list.icon,
-            color: list.color,
-            type: 'curated' as const,
-            is_curated: true,
-            publisher_name: list.publisher_name,
-            publisher_logo_url: list.publisher_logo_url,
-            external_link: list.external_link,
-            location_scope: list.location_scope,
-            curator_priority: list.curator_priority,
-            places: [], // Places loaded separately if needed
-            place_count: count || 0,
-          };
-        })
-      );
+      const result: ListWithPlaces[] = [];
 
-      return listsWithCounts;
+      for (const list of listData || []) {
+        const places: EnrichedListPlace[] = [];
+        
+        // Processing list silently
+        
+        // Process places for this list
+        if (list.list_places && list.list_places.length > 0) {
+          for (const listPlace of list.list_places) {
+            // Processing place silently
+            
+            if (listPlace.enriched_places) {
+              const place = Array.isArray(listPlace.enriched_places) 
+                ? listPlace.enriched_places[0] 
+                : listPlace.enriched_places;
+              
+                                // Place data loaded
+              
+              if (place && place.name) {
+                // Checking business status
+                
+                // Include places that are operational or have unknown status (null)
+                if (place.business_status === 'OPERATIONAL' || place.business_status === null) {
+                  const enrichedListPlace: EnrichedListPlace = {
+                    list_id: listPlace.list_id,
+                    place_id: listPlace.place_id,
+                    added_at: listPlace.added_at,
+                    notes: listPlace.notes,
+                    personal_rating: listPlace.personal_rating,
+                    visit_count: listPlace.visit_count,
+                    sort_order: listPlace.sort_order,
+                    place: {
+                      google_place_id: place.google_place_id,
+                      name: place.name,
+                      formatted_address: place.formatted_address || '',
+                      geometry: place.geometry,
+                      rating: place.rating,
+                      price_level: place.price_level,
+                      formatted_phone_number: place.formatted_phone_number,
+                      website: place.website,
+                      opening_hours: place.opening_hours,
+                      photo_urls: place.photo_urls,
+                      primary_image_url: place.primary_image_url,
+                      display_description: place.display_description,
+                      is_featured: place.is_featured,
+                      has_editorial_content: place.has_editorial_content,
+                      business_status: place.business_status
+                    } as EnrichedPlace
+                  };
+                  
+                  places.push(enrichedListPlace);
+                  // Added place to list
+                } else {
+                  // Place filtered due to business status
+                }
+              } else {
+                console.log(`Place data is missing name or is invalid:`, place);
+              }
+            } else {
+                              // Place not found in enriched_places
+            }
+          }
+        }
+
+        // Sort places by sort_order
+        places.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+        // List processing complete
+
+        result.push({
+          id: list.id,
+          user_id: list.user_id,
+          name: list.name,
+          auto_generated: list.auto_generated,
+          visibility: list.visibility,
+          description: list.description,
+          list_type: list.list_type,
+          icon: list.icon,
+          color: list.color,
+          type: list.type,
+          is_default: list.is_default,
+          is_curated: list.is_curated,
+          publisher_name: list.publisher_name,
+          publisher_logo_url: list.publisher_logo_url,
+          external_link: list.external_link,
+          location_scope: list.location_scope,
+          curator_priority: list.curator_priority,
+          created_at: list.created_at,
+          places,
+          place_count: places.length
+        });
+      }
+
+      console.log(`🗄️ Found ${result.length} curated lists`);
+      return result;
+
     } catch (error) {
       console.error('Error getting curated lists:', error);
-      throw new ListError('Failed to get curated lists', 'GET_CURATED_ERROR');
+      throw new ListError('Failed to get curated lists', 'GET_CURATED_LISTS_ERROR');
     }
   }
 
   /**
-   * Gets a specific curated list with all its places
+   * Get a specific curated list with places
    */
   async getCuratedListDetails(listId: string): Promise<ListWithPlaces | null> {
     try {
-      // Use direct queries for curated list details
-      console.log(`Loading curated list details for: ${listId}`);
-      
-      // Get the curated list
-      const { data: list, error: listError } = await supabase
+      const { data: listData, error } = await supabase
         .from('lists')
-        .select('*')
-        .eq('id', listId)
-        .eq('is_curated', true)
-        .in('visibility', ['curated', 'public']) // Show curated and public lists
-        .single();
-
-      if (listError) throw listError;
-      if (!list) return null;
-
-      // Get places for this list
-      const { data: listPlaces, error: placesError } = await supabase
-        .from('list_places')
         .select(`
-          *,
-          places (
-            id,
-            google_place_id,
-            name,
-            address,
-            place_type,
-            google_types,
-            primary_type,
-            price_level,
-            bangkok_context,
-            google_rating,
-            phone,
-            website,
-            hours_open,
-            photo_references
+          id,
+          user_id,
+          name,
+          auto_generated,
+          visibility,
+          description,
+          list_type,
+          icon,
+          color,
+          type,
+          is_default,
+          is_curated,
+          publisher_name,
+          publisher_logo_url,
+          external_link,
+          location_scope,
+          curator_priority,
+          created_at,
+          list_places (
+            list_id,
+            place_id,
+            added_at,
+            notes,
+            personal_rating,
+            visit_count,
+            sort_order,
+            enriched_places (
+              google_place_id,
+              name,
+              formatted_address,
+              geometry,
+              types,
+              rating,
+              price_level,
+              formatted_phone_number,
+              website,
+              opening_hours,
+              photo_urls,
+              primary_image_url,
+              display_description,
+              is_featured,
+              has_editorial_content,
+              business_status
+            )
           )
         `)
-        .eq('list_id', listId)
-        .order('sort_order', { ascending: true });
+        .eq('id', listId)
+        .eq('is_curated', true)
+        .single();
 
-      if (placesError) throw placesError;
+      if (error) {
+        if (error.code === 'PGRST116') return null; // Not found
+        throw error;
+      }
 
-      const places: EnrichedListPlace[] = (listPlaces || []).map(lp => ({
-        list_id: lp.list_id,
-        place_id: lp.place_id,
-        added_at: lp.added_at,
-        notes: lp.notes,
-        personal_rating: lp.personal_rating,
-        visit_count: lp.visit_count,
-        sort_order: lp.sort_order,
-        place: {
-          id: lp.places.id,
-          google_place_id: lp.places.google_place_id,
-          name: lp.places.name,
-          address: lp.places.address || '',
-          coordinates: [0, 0],
-          place_type: lp.places.place_type,
-          google_types: lp.places.google_types,
-          primary_type: lp.places.primary_type,
-          price_level: lp.places.price_level,
-          bangkok_context: lp.places.bangkok_context,
-          google_rating: lp.places.google_rating,
-          phone: lp.places.phone,
-          website: lp.places.website,
-          hours_open: lp.places.hours_open,
-          photo_references: lp.places.photo_references
+      const places: EnrichedListPlace[] = [];
+      
+      // Process places for this list
+      if (listData.list_places && listData.list_places.length > 0) {
+        for (const listPlace of listData.list_places) {
+          if (listPlace.enriched_places) {
+            const place = Array.isArray(listPlace.enriched_places) 
+              ? listPlace.enriched_places[0] 
+              : listPlace.enriched_places;
+            
+            // Include places that are operational or have unknown status (null)
+            if (place && (place.business_status === 'OPERATIONAL' || place.business_status === null)) {
+              places.push({
+                list_id: listPlace.list_id,
+                place_id: listPlace.place_id,
+                added_at: listPlace.added_at,
+                notes: listPlace.notes,
+                personal_rating: listPlace.personal_rating,
+                visit_count: listPlace.visit_count,
+                sort_order: listPlace.sort_order,
+                place: place as EnrichedPlace
+              });
+            }
+          }
         }
-      }));
+      }
+
+      // Sort places by sort_order
+      places.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
       return {
-        id: list.id,
-        user_id: list.user_id,
-        name: list.name,
-        is_default: false,
-        visibility: 'curated' as const,
-        auto_generated: false,
-        created_at: list.created_at,
-        description: list.description,
-        list_type: list.list_type,
-        icon: list.icon,
-        color: list.color,
-        type: 'curated' as const,
-        is_curated: true,
-        publisher_name: list.publisher_name,
-        publisher_logo_url: list.publisher_logo_url,
-        external_link: list.external_link,
-        location_scope: list.location_scope,
-        curator_priority: list.curator_priority,
-        places: places,
-        place_count: places.length,
+        id: listData.id,
+        user_id: listData.user_id,
+        name: listData.name,
+        auto_generated: listData.auto_generated,
+        visibility: listData.visibility,
+        description: listData.description,
+        list_type: listData.list_type,
+        icon: listData.icon,
+        color: listData.color,
+        type: listData.type,
+        is_default: listData.is_default,
+        is_curated: listData.is_curated,
+        publisher_name: listData.publisher_name,
+        publisher_logo_url: listData.publisher_logo_url,
+        external_link: listData.external_link,
+        location_scope: listData.location_scope,
+        curator_priority: listData.curator_priority,
+        created_at: listData.created_at,
+        places,
+        place_count: places.length
       };
+
     } catch (error) {
       console.error('Error getting curated list details:', error);
-      throw new ListError('Failed to get curated list details', 'GET_CURATED_DETAILS_ERROR');
-    }
-  }
-
-  // 6. UTILITY METHODS
-
-  /**
-   * Gets list statistics for a user
-   */
-  async getListStats(userId: string): Promise<{
-    totalLists: number;
-    userLists: number;
-    smartLists: number;
-    totalPlaces: number;
-    favoritesCount: number;
-  }> {
-    try {
-      const { data: lists, error } = await supabase
-        .from('lists')
-        .select('id, auto_generated, is_default')
-        .eq('user_id', userId);
-
-      if (error) throw error;
-
-      const { data: totalPlaces, error: placesError } = await supabase
-        .from('list_places')
-        .select('place_id', { count: 'exact' })
-        .in('list_id', lists?.map(l => l.id) || []);
-
-      if (placesError) throw placesError;
-
-      const userLists = lists?.filter(l => !l.auto_generated).length || 0;
-      const smartLists = lists?.filter(l => l.auto_generated).length || 0;
-      const favoritesCount = lists?.find(l => l.is_default) ? 1 : 0;
-
-      return {
-        totalLists: lists?.length || 0,
-        userLists,
-        smartLists,
-        totalPlaces: totalPlaces?.length || 0,
-        favoritesCount
-      };
-    } catch (error) {
-      console.error('Error getting list stats:', error);
-      throw new ListError('Failed to get list statistics', 'STATS_ERROR');
-    }
-  }
-
-  /**
-   * Checks if a place exists in any of user's lists
-   */
-  async isPlaceInUserLists(userId: string, googlePlaceId: string): Promise<{
-    inLists: boolean;
-    listNames: string[];
-  }> {
-    try {
-      const { data, error } = await supabase
-        .from('enriched_list_places')
-        .select('list_name')
-        .eq('user_id', userId)
-        .eq('google_place_id', googlePlaceId);
-
-      if (error) throw error;
-
-      const listNames = [...new Set(data?.map(d => d.list_name) || [])];
-
-      return {
-        inLists: listNames.length > 0,
-        listNames
-      };
-    } catch (error) {
-      console.error('Error checking if place is in user lists:', error);
-      return { inLists: false, listNames: [] };
+      throw new ListError('Failed to get curated list details', 'GET_CURATED_LIST_DETAILS_ERROR');
     }
   }
 }
 
 // Export singleton instance
-export const enhancedListsService = new EnhancedListsService();
-export default enhancedListsService; 
+export const listsService = new ListsService();

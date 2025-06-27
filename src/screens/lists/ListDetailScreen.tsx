@@ -9,8 +9,7 @@ import {
   RefreshControl,
   Switch,
   Modal,
-  Animated,
-  PanResponder
+  Share as RNShare
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -29,28 +28,15 @@ import {
   CheckCircle,
   Heart,
   Coffee,
-  Briefcase,
-  Map,
-  MessageSquare,
-  MoreVertical,
-  Route,
-  TrendingUp,
   Calendar,
   Target,
   Utensils,
   Camera,
-  Music,
-  ShoppingBag,
-  Plane,
-  Home,
-  Users,
-  Book,
-  Gamepad2,
-  Dumbbell,
-  Sparkles,
-  ExternalLink
+  TrendingUp,
+  Award,
+  MoreVertical
 } from 'lucide-react-native';
-import { Colors } from '../../constants/Colors';
+import { DarkTheme } from '../../constants/theme';
 import { Spacing } from '../../constants/Spacing';
 import { 
   Typography, 
@@ -65,29 +51,22 @@ import {
   LoadingState,
   EmptyState
 } from '../../components/common';
+import { PlaceCard } from '../../components/places';
 import { useAuth } from '../../services/auth-context';
 import { 
-  enhancedListsService, 
+  listsService, 
   ListWithPlaces, 
   EnrichedListPlace,
-  EnhancedPlace,
-  ListError,
-  PlaceError 
+  ListError
 } from '../../services/listsService';
-import { ListsCache } from '../../services/listsCache';
-import { ListDetailsCache } from '../../services/listDetailsCache';
-import { checkInUtils, ThumbsRating } from '../../services/checkInsService';
-import { userRatingsService, UserRatingType, UserPlaceRating } from '../../services/userRatingsService';
+import { userRatingsService, UserRatingType } from '../../services/userRatingsService';
+import { checkInsService } from '../../services/checkInsService';
 import Toast from '../../components/ui/Toast';
 import type { ListsStackScreenProps } from '../../navigation/types';
-import { 
-  Swipeable,
-  GestureHandlerRootView 
-} from 'react-native-gesture-handler';
 
 type ListDetailScreenProps = ListsStackScreenProps<'ListDetail'>;
 
-type SortOption = 'date_added' | 'rating' | 'distance' | 'visit_count' | 'name';
+type SortOption = 'date_added' | 'rating' | 'visit_count' | 'name' | 'distance';
 
 interface SortConfig {
   key: SortOption;
@@ -119,7 +98,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
   const [isPublic, setIsPublic] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('date_added');
   const [showSortModal, setShowSortModal] = useState(false);
-  const [userRatings, setUserRatings] = useState<Record<string, UserPlaceRating>>({});
+  const [userRatings, setUserRatings] = useState<Record<string, UserRatingType>>({});
   
   // Toast state
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' }>({
@@ -154,166 +133,163 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       }
 
       if (user && listId) {
-  
-        // Only reload if cache is invalid or missing
-        ListDetailsCache.hasCache(listId, user.id).then(hasValidCache => {
-          if (!hasValidCache) {
-            console.log(`No valid cache for list ${listId}, reloading...`);
-            loadListData();
-          } else {
-            // Using cached list data
-          }
-        });
+        loadListData();
       }
     }, [user, listId])
   );
 
+  /**
+   * Load list data - simplified with Google Place IDs
+   */
   const loadListData = async (forceRefresh = false) => {
     if (!user?.id) return;
     
     try {
       setLoading(true);
       
-      // Try to load from cache first (unless forcing refresh)
-      if (!forceRefresh) {
-        const cachedData = await ListDetailsCache.getCachedListDetails(listId, user.id);
-        if (cachedData) {
-      
-          setList(cachedData.list);
-          setEditedName(cachedData.list.name);
-          setEditedDescription(cachedData.list.description || '');
-          setIsPublic(cachedData.list.visibility === 'public');
-          setUserRatings(cachedData.userRatings);
-          setLoading(false);
-          return;
-        }
-      }
-      
-      // Load fresh data from API
-      let currentList;
-      
-      // Add timeout for slow connections
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 15000)
-      );
-      
-      if (listType === 'curated') {
-        // Load curated list details directly
-        const dataPromise = enhancedListsService.getCuratedListDetails(listId);
-        currentList = await Promise.race([dataPromise, timeoutPromise]) as any;
-      } else {
-        // Load user lists
-        const dataPromise = enhancedListsService.getUserLists(user.id);
-        const lists = await Promise.race([dataPromise, timeoutPromise]) as any;
-        currentList = lists.find((l: any) => l.id === listId);
-      }
-      
-      if (currentList) {
-        setList(currentList);
-        setEditedName(currentList.name);
-        setEditedDescription(currentList.description || '');
-        setIsPublic(currentList.visibility === 'public');
+      // Load list with places - much simpler with Google Place IDs
+      const [listWithPlaces, userRatingsData] = await Promise.all([
+        // Get list with enriched places
+        loadListWithPlaces(),
         
-        // Load user ratings for places in this list
-        const ratingsMap: Record<string, UserPlaceRating> = {};
-        for (const listPlace of currentList.places) {
-          const rating = await userRatingsService.getUserRating(user.id, listPlace.place.id);
-          if (rating) {
-            ratingsMap[listPlace.place.id] = rating;
-          }
-        }
-        setUserRatings(ratingsMap);
-        
-        // Save to cache
-        await ListDetailsCache.saveListDetails(listId, currentList, ratingsMap, user.id);
+        // Get user ratings for all places in the list
+        loadUserRatingsForList()
+      ]);
+      
+      if (listWithPlaces) {
+        setList(listWithPlaces);
+        setEditedName(listWithPlaces.name);
+        setEditedDescription(listWithPlaces.description || '');
+        setIsPublic(listWithPlaces.visibility === 'public');
+        setUserRatings(userRatingsData);
       } else {
         Alert.alert('Error', 'List not found');
         navigation.goBack();
       }
     } catch (error) {
       console.error('Error loading list:', error);
-      if (error instanceof Error && error.message === 'Request timeout') {
-        Alert.alert(
-          'Slow Connection', 
-          'Loading is taking longer than usual. Please check your internet connection and try again.',
-          [
-            { text: 'Retry', onPress: () => loadListData() },
-            { text: 'Go Back', onPress: () => navigation.goBack() }
-          ]
-        );
-      } else {
-        Alert.alert('Error', 'Failed to load list');
-      }
+      showToast('Failed to load list', 'error');
     } finally {
       setLoading(false);
     }
   };
 
+  /**
+   * Load list with places using the new simplified service
+   */
+  const loadListWithPlaces = async (): Promise<ListWithPlaces | null> => {
+    if (listType === 'curated') {
+      // Load curated lists with places
+      const curatedLists = await listsService.getCuratedLists();
+      return curatedLists.find(l => l.id === listId) || null;
+    } else {
+      // Load user lists with places
+      const lists = await listsService.getUserListsWithPlaces(user!.id);
+      return lists.find(l => l.id === listId) || null;
+    }
+  };
+
+  /**
+   * Load user ratings for all places in the list - simplified with Google Place IDs
+   */
+  const loadUserRatingsForList = async (): Promise<Record<string, UserRatingType>> => {
+    try {
+      let currentList: ListWithPlaces | null = null;
+      
+      if (listType === 'curated') {
+        // For curated lists, get from curated lists
+        const curatedLists = await listsService.getCuratedLists();
+        currentList = curatedLists.find(l => l.id === listId) || null;
+      } else {
+        // For user lists, get from user lists
+        const lists = await listsService.getUserListsWithPlaces(user!.id);
+        currentList = lists.find(l => l.id === listId) || null;
+      }
+      
+      if (!currentList) return {};
+      
+      // Extract Google Place IDs
+      const googlePlaceIds = currentList.places.map(p => p.place_id);
+      
+      // Get ratings for all places at once
+      const ratingsMap = await userRatingsService.getUserRatingsForPlaces(user!.id, googlePlaceIds);
+      
+      // Convert to record format
+      const result: Record<string, UserRatingType> = {};
+      ratingsMap.forEach((rating, googlePlaceId) => {
+        result[googlePlaceId] = rating;
+      });
+      
+      return result;
+    } catch (error) {
+      console.error('Error loading user ratings:', error);
+      return {};
+    }
+  };
+
+  /**
+   * Handle refresh
+   */
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadListData(true); // Force refresh from API
+    await loadListData(true);
     setRefreshing(false);
   };
 
+  /**
+   * Handle list editing
+   */
   const handleSaveEdit = async () => {
-    if (!list || !user?.id) return;
+    if (!editedName.trim()) {
+      showToast('List name cannot be empty', 'error');
+      return;
+    }
     
     try {
-      await enhancedListsService.updateList(list.id, {
+      await listsService.updateList(listId, {
         name: editedName.trim(),
         description: editedDescription.trim(),
         visibility: isPublic ? 'public' : 'private',
       });
       
-      // Invalidate caches since list was updated
-      if (user?.id) {
-        await ListsCache.invalidateCache();
-        await ListDetailsCache.invalidateListCache(list.id);
-      }
-      
       setIsEditing(false);
-      await loadListData();
-      Alert.alert('Success', 'List updated successfully');
+      showToast('List updated successfully');
+      
+      // Update local state
+      if (list) {
+        setList({
+          ...list,
+          name: editedName.trim(),
+          description: editedDescription.trim(),
+          visibility: isPublic ? 'public' : 'private',
+        });
+      }
     } catch (error) {
       console.error('Error updating list:', error);
-      if (error instanceof ListError) {
-        Alert.alert('Error', error.message);
-      } else {
-        Alert.alert('Error', 'Failed to update list');
-      }
+      showToast('Failed to update list', 'error');
     }
   };
 
-  const handleDeleteList = async () => {
-    if (!list) return;
-    
+  /**
+   * Handle list deletion
+   */
+  const handleDeleteList = () => {
     Alert.alert(
       'Delete List',
-      `Are you sure you want to delete "${list.name}"? This cannot be undone.`,
+      `Are you sure you want to delete "${list?.name}"? This action cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
+        { 
+          text: 'Delete', 
           style: 'destructive',
           onPress: async () => {
             try {
-              await enhancedListsService.deleteList(list.id);
-              
-              // Invalidate caches since list was deleted
-              if (user?.id) {
-                await ListsCache.invalidateCache();
-                await ListDetailsCache.invalidateListCache(list.id);
-              }
-              
-              Alert.alert('Success', 'List deleted');
+              await listsService.deleteList(listId);
+              showToast('List deleted successfully');
               navigation.goBack();
             } catch (error) {
               console.error('Error deleting list:', error);
-              if (error instanceof ListError) {
-                Alert.alert('Error', error.message);
-              } else {
-                Alert.alert('Error', 'Failed to delete list');
-              }
+              showToast('Failed to delete list', 'error');
             }
           }
         }
@@ -321,29 +297,41 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
     );
   };
 
-  const handleRemovePlace = async (placeId: string, placeName: string) => {
-    if (!list) return;
-    
+  /**
+   * Handle adding places to list
+   */
+  const handleAddPlace = () => {
+    navigation.navigate('AddPlaceToList', {
+      listId,
+      listName: list?.name || 'List',
+    });
+  };
+
+  /**
+   * Handle removing place from list
+   */
+  const handleRemovePlace = async (googlePlaceId: string, placeName: string) => {
     Alert.alert(
       'Remove Place',
       `Remove "${placeName}" from this list?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
+        { 
+          text: 'Remove', 
           style: 'destructive',
           onPress: async () => {
             try {
-              await enhancedListsService.removePlaceFromList(list.id, placeId);
+              await listsService.removePlaceFromList(listId, googlePlaceId);
+              showToast('Place removed from list');
               
-              // Update caches optimistically since a place was removed
-              if (user?.id) {
-                await ListsCache.invalidateCache();
-                await ListDetailsCache.removePlaceFromCache(list.id, placeId, user.id);
+              // Update local state
+              if (list) {
+                setList({
+                  ...list,
+                  places: list.places.filter(p => p.place_id !== googlePlaceId),
+                  place_count: list.place_count - 1
+                });
               }
-              
-              await loadListData();
-              showToast(`"${placeName}" removed from list`, 'success');
             } catch (error) {
               console.error('Error removing place:', error);
               showToast('Failed to remove place', 'error');
@@ -354,187 +342,90 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
     );
   };
 
-  const handleUpdatePlaceRating = async (placeId: string, rating: UserRatingType | null) => {
-    if (!user?.id) return;
-    
+  /**
+   * Handle check-in for a place
+   */
+  const handleCheckIn = async (googlePlaceId: string, placeName: string) => {
     try {
-      if (rating) {
-        // Set the rating
-        await userRatingsService.setUserRating(user.id, placeId, rating);
-      } else {
-        // Remove the rating
-        await userRatingsService.removeUserRating(user.id, placeId);
-      }
-      
-      // Update local state and cache optimistically
-      const newRatings = { ...userRatings };
-      let newRating: UserPlaceRating | null = null;
-      
-      if (rating) {
-        newRating = {
-          id: '', // Will be set by the service
-          user_id: user.id,
-          place_id: placeId,
-          rating_type: rating,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        newRatings[placeId] = newRating;
-      } else {
-        delete newRatings[placeId];
-      }
-      
-      setUserRatings(newRatings);
-      
-      // Update cache optimistically
-      if (list?.id) {
-        await ListDetailsCache.updateRatingInCache(list.id, placeId, newRating, user.id);
-      }
+      await checkInsService.createCheckIn(user!.id, {
+        place_id: googlePlaceId, // Direct Google Place ID usage!
+        rating: 'thumbs_up',
+        comment: `Visited ${placeName}`,
+        photos: [],
+        tags: []
+      });
+      showToast('Check-in created successfully');
     } catch (error) {
-      console.error('Error updating place rating:', error);
-      Alert.alert('Error', 'Failed to update rating');
+      console.error('Error creating check-in:', error);
+      showToast('Failed to create check-in', 'error');
     }
   };
 
-  const handleNavigateToPlace = (place: EnrichedListPlace) => {
+  /**
+   * Handle place selection/navigation
+   */
+  const handlePlacePress = (googlePlaceId: string, placeName: string) => {
     navigation.navigate('PlaceInListDetail', {
-      placeId: place.place.id,
-      listId: listId,
-      listName: list?.name || initialListName
-    });
-  };
-
-  const handleAddPlaces = () => {
-    navigation.navigate('AddPlaceToList', {
+      placeId: googlePlaceId,
       listId: listId,
       listName: list?.name || initialListName,
     });
   };
 
-  const handleShare = () => {
-    Alert.alert('Coming Soon', 'List sharing functionality will be implemented next');
-  };
-
-  const handleGetDirections = (place: EnrichedListPlace) => {
-    Alert.alert('Coming Soon', 'Directions functionality will be implemented next');
-  };
-
-  const handleCheckIn = (place: EnrichedListPlace) => {
-    // TODO: Navigate to check-in functionality
-    Alert.alert('Coming Soon', 'Check-in functionality will be implemented next');
-  };
-
-  const handleRoutePlanning = () => {
-    Alert.alert('Coming Soon', 'Route planning functionality will be implemented next');
-  };
-
-  const getSortedPlaces = (places: EnrichedListPlace[]): EnrichedListPlace[] => {
-    return [...places].sort((a, b) => {
-      switch (sortBy) {
-        case 'date_added':
-          return new Date(b.added_at).getTime() - new Date(a.added_at).getTime();
-        case 'rating':
-          return (b.personal_rating || 0) - (a.personal_rating || 0);
-        case 'visit_count':
-          return (b.visit_count || 0) - (a.visit_count || 0);
-        case 'name':
-          return a.place.name.localeCompare(b.place.name);
-        default:
-          return 0;
-      }
-    });
-  };
-
-  const getVisitedStats = () => {
-    if (!list) return { visited: 0, total: 0 };
+  /**
+   * Handle sharing list
+   */
+  const handleShareList = async () => {
+    if (!list) return;
     
-    const visited = list.places.filter(p => (p.visit_count || 0) > 0).length;
-    return { visited, total: list.places.length };
-  };
-
-  const getListIcon = () => {
-    if (!list) return MapPin;
-    
-    switch (list.icon) {
-      case 'heart': return Heart;
-      case 'coffee': return Coffee;
-      case 'briefcase': return Briefcase;
-      case 'star': return Star;
-      case 'sparkles': return Sparkles;
-      case 'utensils': return Utensils;
-      case 'camera': return Camera;
-      case 'music': return Music;
-      case 'shopping-bag': return ShoppingBag;
-      case 'plane': return Plane;
-      case 'home': return Home;
-      case 'users': return Users;
-      case 'book': return Book;
-      case 'gamepad-2': return Gamepad2;
-      case 'dumbbell': return Dumbbell;
-      case 'clock': return Clock;
-      case 'trending-up': return TrendingUp;
-      case 'map-pin': return MapPin;
-      default: return MapPin;
-    }
-  };
-
-  // Utility function to abbreviate Bangkok addresses
-  const abbreviateAddress = (address: string): string => {
-    if (!address) return '';
-    
-    // Special handling for building/mall addresses with floor information
-    // Pattern: "BuildingName Floor/Market Floor [street number] Soi/Road..."
-    const buildingFloorPattern = /^([^,]+(?:Market Floor|Floor|Mall|Plaza|Center))\s+(\d+\s+(?:Soi|Thanon|Road)[^,]*)/i;
-    const buildingFloorMatch = address.match(buildingFloorPattern);
-    
-    if (buildingFloorMatch) {
-      const buildingInfo = buildingFloorMatch[1].trim();
-      const streetInfo = buildingFloorMatch[2].trim();
+    try {
+      const message = `Check out my "${list.name}" list on Placemarks!\n\n${list.places.slice(0, 3).map(p => `• ${p.place.name}`).join('\n')}${list.places.length > 3 ? `\n...and ${list.places.length - 3} more places` : ''}`;
       
-      // Clean up the building info
-      const cleanBuildingInfo = buildingInfo
-        .replace(/\bMarket Floor\b/g, 'Market Floor')
-        .replace(/\bFloor\b/g, 'Floor');
-        
-      // Clean up the street info and add Bangkok
-      const cleanStreetInfo = streetInfo
-        .replace(/\bSoi\b/g, 'Soi')
-        .replace(/\bThanon\b/g, 'Rd')
-        .replace(/\bRoad\b/g, 'Rd');
+      await RNShare.share({
+        message,
+        title: `${list.name} - Placemarks List`,
+      });
+    } catch (error) {
+      console.error('Error sharing list:', error);
+      showToast('Failed to share list', 'error');
+    }
+  };
+
+  /**
+   * Sort places based on selected option
+   */
+  const getSortedPlaces = (): EnrichedListPlace[] => {
+    if (!list?.places) return [];
+    
+    const places = [...list.places];
+    
+    switch (sortBy) {
+      case 'date_added':
+        return places.sort((a, b) => new Date(b.added_at).getTime() - new Date(a.added_at).getTime());
       
-      return `${cleanBuildingInfo}\n${cleanStreetInfo}, Bangkok`;
+      case 'rating':
+        return places.sort((a, b) => {
+          const ratingA = userRatings[a.place_id];
+          const ratingB = userRatings[b.place_id];
+          const scoreA = ratingA === 'thumbs_up' ? 3 : ratingA === 'neutral' ? 2 : ratingA === 'thumbs_down' ? 1 : 0;
+          const scoreB = ratingB === 'thumbs_up' ? 3 : ratingB === 'neutral' ? 2 : ratingB === 'thumbs_down' ? 1 : 0;
+          return scoreB - scoreA;
+        });
+      
+      case 'visit_count':
+        return places.sort((a, b) => (b.visit_count || 0) - (a.visit_count || 0));
+      
+      case 'name':
+        return places.sort((a, b) => a.place.name.localeCompare(b.place.name));
+      
+      default:
+        return places;
     }
-    
-    // Common Bangkok abbreviations for regular addresses
-    let abbreviated = address
-      .replace(/Bangkok \d{5}, Thailand$/, 'Bangkok') // Remove postal code and Thailand
-      .replace(/, Bangkok Metropolis,.*$/, ', Bangkok') // Remove "Bangkok Metropolis" suffix
-      .replace(/, Krung Thep Maha Nakhon.*$/, ', Bangkok') // Replace Thai name with Bangkok
-      .replace(/\bRoad\b/g, 'Rd') // Abbreviate Road
-      .replace(/\bStreet\b/g, 'St') // Abbreviate Street
-      .replace(/\bSubdistrict\b/g, '') // Remove Subdistrict
-      .replace(/\bDistrict\b/g, '') // Remove District
-      .replace(/\bBangkok \d{5}\b/g, 'Bangkok') // Remove postal codes
-      .replace(/,\s*,/g, ',') // Remove double commas
-      .replace(/^,\s*|,\s*$/g, ''); // Remove leading/trailing commas
-    
-    // If still too long, take first part + last part
-    if (abbreviated.length > 50) {
-      const parts = abbreviated.split(',').map(p => p.trim());
-      if (parts.length > 2) {
-        abbreviated = `${parts[0]}, ${parts[parts.length - 1]}`;
-      }
-    }
-    
-    return abbreviated;
   };
 
   if (loading) {
     return (
-      <SafeAreaView style={{ 
-        flex: 1, 
-        backgroundColor: Colors.semantic.backgroundPrimary 
-      }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: DarkTheme.colors.semantic.systemBackground }}>
         <LoadingState message="Loading list..." />
       </SafeAreaView>
     );
@@ -542,13 +433,10 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
 
   if (!list) {
     return (
-      <SafeAreaView style={{ 
-        flex: 1, 
-        backgroundColor: Colors.semantic.backgroundPrimary 
-      }}>
-        <EmptyState 
+      <SafeAreaView style={{ flex: 1, backgroundColor: DarkTheme.colors.semantic.systemBackground }}>
+        <EmptyState
           title="List Not Found"
-          description="This list could not be loaded"
+          description="This list doesn't exist or you don't have access to it."
           primaryAction={{
             title: "Go Back",
             onPress: () => navigation.goBack()
@@ -558,805 +446,353 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
     );
   }
 
-  const ListIcon = getListIcon();
-  const sortedPlaces = getSortedPlaces(list.places);
-  const { visited, total } = getVisitedStats();
-  const isFavorites = list.is_default;
+  const sortedPlaces = getSortedPlaces();
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView 
-        style={{ 
-          flex: 1, 
-          backgroundColor: Colors.semantic.backgroundPrimary 
-        }}
-        edges={['bottom', 'left', 'right']}
-      >
-        {/* Sticky Header */}
-        <View style={{
-          backgroundColor: Colors.semantic.backgroundPrimary,
-          paddingHorizontal: Spacing.layout.screenPadding,
-          paddingTop: Spacing.sm,
-          paddingBottom: Spacing.md,
-          borderBottomWidth: 1,
-          borderBottomColor: Colors.semantic.borderPrimary,
-        }}>
-          {isEditing ? (
-            // Edit Mode
-            <View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: DarkTheme.colors.semantic.systemBackground }}>
+      {/* Sticky Header */}
+      <View style={{
+        backgroundColor: DarkTheme.colors.semantic.systemBackground,
+        paddingHorizontal: Spacing.lg,
+        paddingTop: Spacing.sm,
+        paddingBottom: Spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: DarkTheme.colors.semantic.separator,
+      }}>
+        {isEditing ? (
+          // Edit Mode
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md }}>
+              <TouchableOpacity
+                onPress={() => navigation.goBack()}
+                style={{ padding: Spacing.xs, marginRight: Spacing.sm }}
+              >
+                <ArrowLeft size={24} color={DarkTheme.colors.semantic.label} strokeWidth={2} />
+              </TouchableOpacity>
               <TextInput
                 value={editedName}
                 onChangeText={setEditedName}
                 style={{
                   fontSize: 24,
                   fontWeight: '700',
-                  color: Colors.semantic.textPrimary,
-                  backgroundColor: Colors.semantic.backgroundSecondary,
+                  color: DarkTheme.colors.semantic.label,
+                  backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
                   paddingHorizontal: Spacing.sm,
                   paddingVertical: Spacing.xs,
                   borderRadius: 8,
-                  marginBottom: Spacing.md,
+                  flex: 1,
                 }}
                 placeholder="List name"
-                placeholderTextColor={Colors.semantic.textTertiary}
+                placeholderTextColor={DarkTheme.colors.semantic.tertiaryLabel}
               />
-
-              <TextInput
-                value={editedDescription}
-                onChangeText={setEditedDescription}
-                style={{
-                  backgroundColor: Colors.semantic.backgroundSecondary,
-                  paddingHorizontal: Spacing.sm,
-                  paddingVertical: Spacing.sm,
-                  borderRadius: 8,
-                  color: Colors.semantic.textSecondary,
-                  marginBottom: Spacing.md,
-                  minHeight: 60,
-                }}
-                placeholder="Add a description..."
-                placeholderTextColor={Colors.semantic.textTertiary}
-                multiline
-                textAlignVertical="top"
-              />
-
-              {!isFavorites && (
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: Spacing.md,
-                }}>
-                  <Body>Make list public</Body>
-                  <Switch
-                    value={isPublic}
-                    onValueChange={setIsPublic}
-                    trackColor={{ 
-                      false: Colors.neutral[600], 
-                      true: Colors.primary[500] 
-                    }}
-                    thumbColor={Colors.semantic.textPrimary}
-                  />
-                </View>
-              )}
-
-              <View style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-              }}>
-                <SecondaryButton
-                  title="Cancel"
-                  onPress={() => {
-                    setIsEditing(false);
-                    setEditedName(list.name);
-                    setEditedDescription(list.description || '');
-                    setIsPublic(list.visibility === 'public');
-                  }}
-                  size="sm"
-                />
-                <PrimaryButton
-                  title="Save"
-                  onPress={handleSaveEdit}
-                  size="sm"
-                />
-              </View>
             </View>
-          ) : (
-            // Display Mode
-            <View>
-              {/* Description */}
-              {list.description && (
-                <View style={{
-                  marginBottom: Spacing.sm,
-                  marginTop: 0,
-                  paddingTop: 0,
-                }}>
-                  <Body color="secondary">
-                    {list.description}
-                  </Body>
-                </View>
-              )}
 
-              {/* Curated List Publisher Info */}
-              {listType === 'curated' && list.publisher_name && (
-                <View style={{
-                  backgroundColor: Colors.semantic.backgroundSecondary,
-                  padding: Spacing.md,
-                  borderRadius: 12,
-                  marginBottom: Spacing.md,
-                }}>
-                  <View style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    marginBottom: Spacing.xs,
-                  }}>
-                    <SecondaryText style={{ 
-                      fontSize: 12,
-                      color: Colors.neutral[600],
-                      fontWeight: '500'
-                    }}>
-                      Curated by
-                    </SecondaryText>
-                  </View>
-                  <View style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}>
-                    <Body style={{ 
-                      fontWeight: '600',
-                      color: Colors.semantic.textPrimary
-                    }}>
-                      {list.publisher_name}
-                    </Body>
-                    {list.external_link && (
-                      <TouchableOpacity
-                        onPress={() => {
-                          // TODO: Open external link
-                          Alert.alert('External Link', `Open ${list.external_link}?`);
-                        }}
-                        style={{
-                          padding: Spacing.xs,
-                          borderWidth: 1,
-                          borderColor: Colors.accent.yellow,
-                          borderRadius: 6,
-                          backgroundColor: 'transparent',
-                        }}
-                      >
-                        <ExternalLink 
-                          size={16} 
-                          color={Colors.accent.yellow}
-                          strokeWidth={2}
-                        />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              )}
+            <TextInput
+              value={editedDescription}
+              onChangeText={setEditedDescription}
+              style={{
+                backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+                paddingHorizontal: Spacing.sm,
+                paddingVertical: Spacing.sm,
+                borderRadius: 8,
+                color: DarkTheme.colors.semantic.label,
+                marginBottom: Spacing.md,
+                minHeight: 60,
+              }}
+              placeholder="Add a description..."
+              placeholderTextColor={DarkTheme.colors.semantic.tertiaryLabel}
+              multiline
+              textAlignVertical="top"
+            />
 
-              {/* Progress Bar + Action Icons */}
+            {isEditable && (
               <View style={{
                 flexDirection: 'row',
                 alignItems: 'center',
+                justifyContent: 'space-between',
                 marginBottom: Spacing.md,
               }}>
-                <View style={{ flex: 1, marginRight: Spacing.md }}>
-                  <View style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    marginBottom: 4,
-                  }}>
-                    <SecondaryText style={{ 
-                      fontSize: 12,
-                      color: Colors.neutral[600] 
-                    }}>
-                      {total > 0 ? `${visited} of ${total} visited` : 'No places yet'}
-                    </SecondaryText>
-                  </View>
-                  <View style={{
-                    height: 4,
-                    backgroundColor: Colors.neutral[200],
-                    borderRadius: 2,
-                    overflow: 'hidden',
-                  }}>
-                    <View style={{
-                      height: '100%',
-                      width: total > 0 ? `${(visited / total) * 100}%` : '0%',
-                      backgroundColor: Colors.accent.green,
-                      borderRadius: 2,
-                    }} />
-                  </View>
-                </View>
-
-                {list.visibility === 'public' && (
-                  <View style={{
-                    backgroundColor: Colors.neutral[100],
-                    paddingHorizontal: Spacing.sm,
-                    paddingVertical: Spacing.xs,
-                    borderRadius: 8,
-                    marginRight: Spacing.sm,
-                  }}>
-                    <SecondaryText style={{ 
-                      color: Colors.neutral[600],
-                      fontSize: 12,
-                      fontWeight: '500' 
-                    }}>
-                      Public
-                    </SecondaryText>
-                  </View>
-                )}
-
-
-
-                {/* Action Icons */}
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                }}>
-                  {/* Only show share button for non-curated lists */}
-                  {listType !== 'curated' && (
-                    <TouchableOpacity
-                      onPress={handleShare}
-                      style={{
-                        padding: Spacing.sm,
-                        backgroundColor: 'transparent',
-                        borderRadius: 8,
-                        marginRight: Spacing.sm,
-                      }}
-                    >
-                      <Share 
-                        size={Spacing.iconSize.md} 
-                        color={Colors.accent.yellow}
-                        strokeWidth={2}
-                      />
-                    </TouchableOpacity>
-                  )}
-
-                  {/* Only show edit button for editable lists */}
-                  {(isEditable !== false && listType !== 'curated') && (
-                    <TouchableOpacity
-                      onPress={() => setIsEditing(!isEditing)}
-                      style={{
-                        padding: Spacing.sm,
-                        backgroundColor: 'transparent',
-                        borderRadius: 8,
-                      }}
-                    >
-                      <Edit3 
-                        size={Spacing.iconSize.md} 
-                        color={Colors.primary[500]}
-                        strokeWidth={2}
-                      />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-
-              {/* Places Section Header */}
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'flex-end',
-              }}>
-                <TouchableOpacity
-                  onPress={() => setShowSortModal(true)}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingHorizontal: Spacing.sm,
-                    paddingVertical: Spacing.xs,
-                    backgroundColor: Colors.semantic.backgroundSecondary,
-                    borderRadius: 8,
-                    marginRight: Spacing.sm,
+                <Body>Make list public</Body>
+                <Switch
+                  value={isPublic}
+                  onValueChange={setIsPublic}
+                  trackColor={{ 
+                    false: DarkTheme.colors.semantic.tertiarySystemBackground, 
+                    true: DarkTheme.colors.bangkok.gold 
                   }}
-                >
-                  <SortAsc 
-                    size={Spacing.iconSize.sm} 
-                    color={Colors.semantic.textSecondary}
-                    strokeWidth={2}
-                  />
-                  <SecondaryText style={{ marginLeft: Spacing.xs }}>
-                    Sort
-                  </SecondaryText>
-                </TouchableOpacity>
-
-                {/* Only show Add Places button for editable lists */}
-                {(isEditable !== false && listType !== 'curated') && (
-                  <PrimaryButton
-                    title="Add Places"
-                    onPress={handleAddPlaces}
-                    icon={Plus}
-                    size="sm"
-                  />
-                )}
-              </View>
-            </View>
-          )}
-        </View>
-
-        {/* Scrollable Places List */}
-        <ScrollView 
-          style={{ flex: 1 }}
-          contentContainerStyle={{ 
-            paddingHorizontal: Spacing.layout.screenPadding,
-            paddingTop: Spacing.md,
-            paddingBottom: Spacing.xl 
-          }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-          }
-        >
-          {/* Places List */}
-          {sortedPlaces.length > 0 ? (
-            <View>
-              {sortedPlaces.map((listPlace) => (
-                <PlaceCard
-                  key={listPlace.place.id}
-                  listPlace={listPlace}
-                  userRatings={userRatings}
-                  onRemove={() => handleRemovePlace(listPlace.place.id, listPlace.place.name)}
-                  onRatingChange={(rating) => handleUpdatePlaceRating(listPlace.place.id, rating)}
-                  onViewDetails={() => handleNavigateToPlace(listPlace)}
-                  onGetDirections={() => handleGetDirections(listPlace)}
-                  onCheckIn={() => handleCheckIn(listPlace)}
-                  isEditable={isEditable !== false && listType !== 'curated'}
-                  isCurated={listType === 'curated'}
+                  thumbColor={DarkTheme.colors.semantic.systemBackground}
                 />
-              ))}
-            </View>
-          ) : (
-            <EmptyState
-              title="No places yet"
-              description={`Start building your ${list.name} list by adding some places!`}
-              primaryAction={{
-                title: "Add Places",
-                onPress: handleAddPlaces
-              }}
-            />
-          )}
-        </ScrollView>
+              </View>
+            )}
 
-        {/* Sort Modal */}
-        <Modal
-          visible={showSortModal}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => setShowSortModal(false)}
-        >
-          <SafeAreaView style={{ 
-            flex: 1, 
-            backgroundColor: Colors.semantic.backgroundPrimary 
-          }}>
             <View style={{
               flexDirection: 'row',
-              alignItems: 'center',
               justifyContent: 'space-between',
-              paddingHorizontal: Spacing.layout.screenPadding,
-              paddingVertical: Spacing.md,
-              borderBottomWidth: 1,
-              borderBottomColor: Colors.semantic.borderPrimary,
             }}>
-              <Typography variant="headline" style={{ fontWeight: '600' }}>
-                Sort Places
-              </Typography>
-              <TouchableOpacity
-                onPress={() => setShowSortModal(false)}
-                style={{ padding: Spacing.xs }}
-              >
-                <Typography variant="body" style={{ color: Colors.primary[500] }}>
-                  Done
-                </Typography>
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ padding: Spacing.layout.screenPadding }}>
-              {sortOptions.map((option) => (
-                <TouchableOpacity
-                  key={option.key}
-                  onPress={() => {
-                    setSortBy(option.key);
-                    setShowSortModal(false);
-                  }}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingVertical: Spacing.md,
-                    borderBottomWidth: 1,
-                    borderBottomColor: Colors.semantic.borderPrimary,
-                  }}
-                >
-                  <option.icon 
-                    size={Spacing.iconSize.md} 
-                    color={sortBy === option.key ? Colors.primary[500] : Colors.semantic.textSecondary}
-                    strokeWidth={2}
-                  />
-                  <Body style={{ 
-                    marginLeft: Spacing.md,
-                    color: sortBy === option.key ? Colors.primary[500] : Colors.semantic.textPrimary,
-                    fontWeight: sortBy === option.key ? '600' : '400'
-                  }}>
-                    {option.label}
-                  </Body>
-                  {sortBy === option.key && (
-                    <CheckCircle 
-                      size={Spacing.iconSize.sm} 
-                      color={Colors.primary[500]}
-                      strokeWidth={2}
-                      style={{ marginLeft: 'auto' }}
-                    />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </SafeAreaView>
-        </Modal>
-
-        {/* Toast Notification */}
-        <Toast
-          visible={toast.visible}
-          message={toast.message}
-          type={toast.type}
-          onHide={hideToast}
-        />
-      </SafeAreaView>
-    </GestureHandlerRootView>
-  );
-}
-
-// Place Card Component
-interface PlaceCardProps {
-  listPlace: EnrichedListPlace;
-  userRatings: Record<string, UserPlaceRating>;
-  onRemove: () => void;
-  onRatingChange: (rating: UserRatingType | null) => void;
-  onViewDetails: () => void;
-  onGetDirections: () => void;
-  onCheckIn: () => void;
-  isEditable?: boolean;
-  isCurated?: boolean;
-}
-
-function PlaceCard({ 
-  listPlace, 
-  userRatings,
-  onRemove, 
-  onRatingChange, 
-  onViewDetails, 
-  onGetDirections, 
-  onCheckIn,
-  isEditable = true,
-  isCurated = false
-}: PlaceCardProps) {
-  const { place } = listPlace;
-  const hasVisited = (listPlace.visit_count || 0) > 0;
-  
-  // Get user rating from the ratings map
-  const userRating = userRatings[place.id];
-  const currentRating = userRating?.rating_type;
-
-  // Enhanced category icon function that works with stored place data
-  const getCategoryIconForPlace = (place: EnhancedPlace): string => {
-    // First, try to use the full google_types array if available (best option)
-    if (place.google_types && place.google_types.length > 0) {
-      return checkInUtils.getCategoryIcon(undefined, place.google_types, place.name) || '📍';
-    }
-    
-    // Fallback to primary_type if available
-    if (place.primary_type) {
-      return checkInUtils.getCategoryIcon(place.primary_type, undefined, place.name) || '📍';
-    }
-    
-    // Legacy fallback: map place_type to appropriate categories
-    const placeType = place.place_type?.toLowerCase();
-    
-    if (!placeType) {
-      return '📍'; // Default pin for unknown types
-    }
-    
-    // Map common place types to appropriate categories
-    if (placeType.includes('restaurant') || placeType.includes('food') || placeType.includes('meal_takeaway')) {
-      return checkInUtils.getCategoryIcon(undefined, ['restaurant'], place.name);
-    }
-    if (placeType.includes('cafe') || placeType.includes('coffee')) {
-      return checkInUtils.getCategoryIcon(undefined, ['cafe'], place.name);
-    }
-    if (placeType.includes('shopping') || placeType.includes('store') || placeType.includes('clothing_store') || placeType.includes('department_store')) {
-      return checkInUtils.getCategoryIcon(undefined, ['shopping_mall'], place.name);
-    }
-    if (placeType.includes('hotel') || placeType.includes('lodging')) {
-      return checkInUtils.getCategoryIcon(undefined, ['lodging'], place.name);
-    }
-    if (placeType.includes('hospital') || placeType.includes('pharmacy') || placeType.includes('doctor')) {
-      return checkInUtils.getCategoryIcon(undefined, ['hospital'], place.name);
-    }
-    if (placeType.includes('gas_station')) {
-      return checkInUtils.getCategoryIcon(undefined, ['gas_station'], place.name);
-    }
-    if (placeType.includes('bank') || placeType.includes('atm') || placeType.includes('finance')) {
-      return checkInUtils.getCategoryIcon(undefined, ['bank'], place.name);
-    }
-    if (placeType.includes('gym') || placeType.includes('spa') || placeType.includes('beauty_salon')) {
-      return checkInUtils.getCategoryIcon(undefined, ['gym'], place.name);
-    }
-    if (placeType.includes('tourist_attraction') || placeType.includes('museum') || placeType.includes('art_gallery')) {
-      return checkInUtils.getCategoryIcon(undefined, ['tourist_attraction'], place.name);
-    }
-    if (placeType.includes('park') || placeType.includes('campground')) {
-      return checkInUtils.getCategoryIcon(undefined, ['park'], place.name);
-    }
-    if (placeType.includes('school') || placeType.includes('university') || placeType.includes('library')) {
-      return checkInUtils.getCategoryIcon(undefined, ['school'], place.name);
-    }
-    if (placeType.includes('church') || placeType.includes('temple') || placeType.includes('hindu_temple') || placeType.includes('mosque')) {
-      return checkInUtils.getCategoryIcon(undefined, ['church'], place.name);
-    }
-    if (placeType.includes('night_club') || placeType.includes('bar') || placeType.includes('liquor_store')) {
-      return checkInUtils.getCategoryIcon(undefined, ['night_club'], place.name);
-    }
-    if (placeType.includes('movie_theater') || placeType.includes('amusement_park')) {
-      return checkInUtils.getCategoryIcon(undefined, ['movie_theater'], place.name);
-    }
-    if (placeType.includes('subway_station') || placeType.includes('train_station') || placeType.includes('transit_station')) {
-      return checkInUtils.getCategoryIcon(undefined, ['subway_station'], place.name);
-    }
-    if (placeType.includes('car_repair') || placeType.includes('car_wash')) {
-      return checkInUtils.getCategoryIcon(undefined, ['car_repair'], place.name);
-    }
-    if (placeType.includes('supermarket') || placeType.includes('grocery')) {
-      return checkInUtils.getCategoryIcon(undefined, ['supermarket'], place.name);
-    }
-    if (placeType.includes('establishment') || placeType.includes('point_of_interest')) {
-      return '📍'; // Generic pin for broad categories
-    }
-    
-    // Final fallback to the original function with place_type
-    return checkInUtils.getCategoryIcon(place.place_type, undefined, place.name) || '📍';
-  };
-
-  // Utility function to abbreviate Bangkok addresses
-  const abbreviateAddress = (address: string): string => {
-    if (!address) return '';
-    
-    // Special handling for building/mall addresses with floor information
-    // Pattern: "BuildingName Floor/Market Floor [street number] Soi/Road..."
-    const buildingFloorPattern = /^([^,]+(?:Market Floor|Floor|Mall|Plaza|Center))\s+(\d+\s+(?:Soi|Thanon|Road)[^,]*)/i;
-    const buildingFloorMatch = address.match(buildingFloorPattern);
-    
-    if (buildingFloorMatch) {
-      const buildingInfo = buildingFloorMatch[1].trim();
-      const streetInfo = buildingFloorMatch[2].trim();
-      
-      // Clean up the building info
-      const cleanBuildingInfo = buildingInfo
-        .replace(/\bMarket Floor\b/g, 'Market Floor')
-        .replace(/\bFloor\b/g, 'Floor');
-        
-      // Clean up the street info and add Bangkok
-      const cleanStreetInfo = streetInfo
-        .replace(/\bSoi\b/g, 'Soi')
-        .replace(/\bThanon\b/g, 'Rd')
-        .replace(/\bRoad\b/g, 'Rd');
-      
-      return `${cleanBuildingInfo}\n${cleanStreetInfo}, Bangkok`;
-    }
-    
-    // Common Bangkok abbreviations for regular addresses
-    let abbreviated = address
-      .replace(/Bangkok \d{5}, Thailand$/, 'Bangkok') // Remove postal code and Thailand
-      .replace(/, Bangkok Metropolis,.*$/, ', Bangkok') // Remove "Bangkok Metropolis" suffix
-      .replace(/, Krung Thep Maha Nakhon.*$/, ', Bangkok') // Replace Thai name with Bangkok
-      .replace(/\bRoad\b/g, 'Rd') // Abbreviate Road
-      .replace(/\bStreet\b/g, 'St') // Abbreviate Street
-      .replace(/\bSubdistrict\b/g, '') // Remove Subdistrict
-      .replace(/\bDistrict\b/g, '') // Remove District
-      .replace(/\bBangkok \d{5}\b/g, 'Bangkok') // Remove postal codes
-      .replace(/,\s*,/g, ',') // Remove double commas
-      .replace(/^,\s*|,\s*$/g, ''); // Remove leading/trailing commas
-    
-    // If still too long, take first part + last part
-    if (abbreviated.length > 50) {
-      const parts = abbreviated.split(',').map(p => p.trim());
-      if (parts.length > 2) {
-        abbreviated = `${parts[0]}, ${parts[parts.length - 1]}`;
-      }
-    }
-    
-    return abbreviated;
-  };
-
-  const renderThumbsRating = (currentRating: UserRatingType | null, onPress: (rating: UserRatingType | null) => void) => {
-    const ratings: { rating: UserRatingType; emoji: string }[] = [
-      { rating: 'thumbs_down', emoji: '👎' },
-      { rating: 'neutral', emoji: '😐' },
-      { rating: 'thumbs_up', emoji: '👍' },
-    ];
-
-    return (
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        {ratings.map(({ rating, emoji }) => {
-          const isSelected = currentRating === rating;
-          return (
-            <TouchableOpacity
-              key={rating}
-              onPress={() => onPress(isSelected ? null : rating)}
-              style={{
-                paddingHorizontal: Spacing.xs,
-                paddingVertical: 4,
-                marginRight: Spacing.xs,
-                borderRadius: 4,
-                backgroundColor: isSelected 
-                  ? checkInUtils.getRatingColor(rating) + '20' 
-                  : 'transparent',
-                borderWidth: isSelected ? 1 : 0,
-                borderColor: isSelected ? checkInUtils.getRatingColor(rating) : 'transparent',
-              }}
-            >
-              <Typography style={{ fontSize: 14 }}>
-                {emoji}
-              </Typography>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    );
-  };
-
-  // Render the delete action for swipe
-  const renderRightAction = () => {
-    return (
-      <TouchableOpacity
-        onPress={onRemove}
-        style={{
-          backgroundColor: Colors.semantic.error,
-          justifyContent: 'center',
-          alignItems: 'center',
-          width: 80,
-          borderRadius: 12,
-          marginBottom: Spacing.sm,
-        }}
-      >
-        <Trash2 
-          size={24} 
-          color="white"
-          strokeWidth={2}
-        />
-        <Typography style={{ 
-          color: 'white', 
-          fontSize: 12, 
-          marginTop: 4,
-          fontWeight: '600'
-        }}>
-          Delete
-        </Typography>
-      </TouchableOpacity>
-    );
-  };
-
-  const cardContent = (
-    <TouchableOpacity
-      onPress={onViewDetails}
-      activeOpacity={0.7}
-    >
-        <ElevatedCard 
-          padding="sm" 
-          style={{ 
-            marginBottom: Spacing.sm,
-            opacity: hasVisited ? 1 : 0.8,
-            borderLeftWidth: hasVisited ? 4 : 0,
-            borderLeftColor: hasVisited ? Colors.accent.green : 'transparent',
-          }}
-        >
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'flex-start',
-          }}>
-            {/* Category Icon */}
-            <View style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              backgroundColor: Colors.semantic.backgroundTertiary,
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: Spacing.md,
-              marginTop: 2, // Slight offset to align with text
-            }}>
-              <Typography variant="body" style={{ fontSize: 20 }}>
-                {getCategoryIconForPlace(place) || '📍'}
-              </Typography>
-            </View>
-
-            <View style={{ flex: 1 }}>
-              {/* Place name and visited indicator */}
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                marginBottom: Spacing.xs,
-              }}>
-                <Typography variant="headline" style={{ 
-                  fontWeight: '600',
-                  flex: 1,
-                  fontSize: 16,
-                }}>
-                  {place.name || 'Unknown Place'}
-                </Typography>
-                {hasVisited && (
-                  <CheckCircle 
-                    size={Spacing.iconSize.sm} 
-                    color={Colors.accent.green}
-                    strokeWidth={2}
-                  />
-                )}
-              </View>
-
-              {/* Address with abbreviation */}
-              {place.address && (
-                <Body color="secondary" style={{ 
-                  marginBottom: Spacing.xs,
-                  fontSize: 13,
-                }}>
-                  {abbreviateAddress(place.address)}
-                </Body>
-              )}
-
-
-
-              {/* Notes - enhanced styling to distinguish from address */}
-              {listPlace.notes && (
-                <View style={{
-                  backgroundColor: Colors.semantic.backgroundSecondary,
-                  paddingHorizontal: Spacing.sm,
-                  paddingVertical: Spacing.xs,
-                  borderRadius: 8,
-                  marginTop: Spacing.xs,
-                  marginBottom: Spacing.xs,
-                  borderLeftWidth: 3,
-                  borderLeftColor: Colors.accent.yellow + '60',
-                }}>
-                  <Body style={{ 
-                    fontSize: 13,
-                    fontStyle: 'italic',
-                    color: Colors.semantic.textSecondary,
-                    lineHeight: 18,
-                  }}>
-                    "{listPlace.notes}"
-                  </Body>
-                </View>
-              )}
+              <SecondaryButton
+                title="Cancel"
+                onPress={() => {
+                  setIsEditing(false);
+                  setEditedName(list.name);
+                  setEditedDescription(list.description || '');
+                  setIsPublic(list.visibility === 'public');
+                }}
+                style={{ flex: 1, marginRight: Spacing.sm }}
+              />
+              <PrimaryButton
+                title="Save"
+                onPress={handleSaveEdit}
+                style={{ flex: 1 }}
+              />
             </View>
           </View>
-
-          {/* Bottom row: Added date + Actions (only show for non-curated lists) */}
-          {!isCurated && (
+        ) : (
+          // Display Mode
+          <View>
+            {/* Navigation and Title Row */}
             <View style={{
               flexDirection: 'row',
-              justifyContent: 'space-between',
               alignItems: 'center',
-              marginTop: Spacing.xs,
-              paddingTop: Spacing.xs,
-              borderTopWidth: 1,
-              borderTopColor: Colors.semantic.borderPrimary + '30',
+              justifyContent: 'space-between',
+              marginBottom: Spacing.sm,
             }}>
-              {/* De-emphasized added date */}
-              <Typography style={{ 
-                fontSize: 11,
-                color: Colors.semantic.textTertiary,
-              }}>
-                Added {new Date(listPlace.added_at).toLocaleDateString()}
-              </Typography>
-
-
+              <TouchableOpacity
+                onPress={() => navigation.goBack()}
+                style={{ padding: Spacing.xs }}
+              >
+                <ArrowLeft size={24} color={DarkTheme.colors.semantic.label} strokeWidth={2} />
+              </TouchableOpacity>
+              
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <Body style={{ fontWeight: '600', fontSize: 18 }}>{list.name}</Body>
+                <SecondaryText style={{ fontSize: 12 }}>
+                  {list.places.length} {list.places.length === 1 ? 'place' : 'places'}
+                </SecondaryText>
+              </View>
+              
+              <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+                <TouchableOpacity
+                  onPress={() => setShowSortModal(true)}
+                  style={{ padding: Spacing.xs }}
+                >
+                  <SortAsc size={20} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                </TouchableOpacity>
+                
+                {isEditable && (
+                  <TouchableOpacity
+                    onPress={handleAddPlace}
+                    style={{ padding: Spacing.xs }}
+                  >
+                    <Plus size={20} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                  </TouchableOpacity>
+                )}
+                
+                {isEditable && (
+                  <TouchableOpacity
+                    onPress={() => setIsEditing(!isEditing)}
+                    style={{ padding: Spacing.xs }}
+                  >
+                    <Edit3 size={20} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                  </TouchableOpacity>
+                )}
+                
+                <TouchableOpacity
+                  onPress={handleShareList}
+                  style={{ padding: Spacing.xs }}
+                >
+                  <Share size={20} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                </TouchableOpacity>
+              </View>
             </View>
-          )}
-        </ElevatedCard>
-    </TouchableOpacity>
-  );
 
-  return isEditable ? (
-    <Swipeable renderRightActions={renderRightAction}>
-      {cardContent}
-    </Swipeable>
-  ) : (
-    cardContent
+            {/* Description */}
+            {list.description && (
+              <View style={{ marginBottom: Spacing.sm }}>
+                <Body style={{ color: DarkTheme.colors.semantic.secondaryLabel }}>
+                  {list.description}
+                </Body>
+              </View>
+            )}
+          </View>
+        )}
+      </View>
+
+
+
+      {/* Places List */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: Spacing.lg }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={DarkTheme.colors.bangkok.gold}
+          />
+        }
+      >
+        {sortedPlaces.length === 0 ? (
+          <EmptyState
+            title="No Places Yet"
+            description="Start building your list by adding some amazing places!"
+            primaryAction={isEditable ? {
+              title: "Add Place",
+              onPress: handleAddPlace
+            } : undefined}
+          />
+        ) : (
+          <View style={{ paddingVertical: Spacing.md, gap: Spacing.sm }}>
+            {sortedPlaces.map((listPlace, index) => (
+              <View key={`${listPlace.place_id}-${index}`} style={{ position: 'relative' }}>
+                <PlaceCard
+                  googlePlaceId={listPlace.place_id}
+                  place={listPlace.place}
+                  name={listPlace.place.name}
+                  address={listPlace.place.formatted_address}
+                  distance=""
+                  onCheckIn={handleCheckIn}
+                  onPress={() => handlePlacePress(listPlace.place_id, listPlace.place.name)}
+                  showCheckInButton={false}
+                />
+                
+                {/* Remove button for editable lists */}
+                {isEditable && (
+                  <TouchableOpacity
+                    onPress={() => handleRemovePlace(listPlace.place_id, listPlace.place.name)}
+                    style={{
+                      position: 'absolute',
+                      top: Spacing.sm,
+                      right: Spacing.sm,
+                      backgroundColor: DarkTheme.colors.status.error + '20',
+                      padding: Spacing.xs,
+                      borderRadius: DarkTheme.borderRadius.sm,
+                    }}
+                  >
+                    <Trash2 size={16} color={DarkTheme.colors.status.error} strokeWidth={2} />
+                  </TouchableOpacity>
+                )}
+                
+                {/* User rating indicator */}
+                {userRatings[listPlace.place_id] && (
+                  <View style={{
+                    position: 'absolute',
+                    bottom: Spacing.sm,
+                    left: Spacing.sm,
+                    backgroundColor: DarkTheme.colors.semantic.systemBackground + 'E6',
+                    paddingHorizontal: Spacing.xs,
+                    paddingVertical: 2,
+                    borderRadius: DarkTheme.borderRadius.xs,
+                  }}>
+                    <Body style={{ fontSize: 16 }}>
+                      {userRatings[listPlace.place_id] === 'thumbs_up' ? '👍' : 
+                       userRatings[listPlace.place_id] === 'thumbs_down' ? '👎' : '👌'}
+                    </Body>
+                  </View>
+                )}
+                
+                {/* Notes preview */}
+                {listPlace.notes && (
+                  <View style={{
+                    backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
+                    marginTop: Spacing.xs,
+                    padding: Spacing.sm,
+                    borderRadius: DarkTheme.borderRadius.sm,
+                  }}>
+                    <SecondaryText style={{ fontSize: 12, fontStyle: 'italic' }}>
+                      "{listPlace.notes}"
+                    </SecondaryText>
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Sort Modal */}
+      <Modal
+        visible={showSortModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowSortModal(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          justifyContent: 'flex-end',
+        }}>
+          <View style={{
+            backgroundColor: DarkTheme.colors.semantic.systemBackground,
+            borderTopLeftRadius: DarkTheme.borderRadius.lg,
+            borderTopRightRadius: DarkTheme.borderRadius.lg,
+            paddingTop: Spacing.lg,
+            paddingBottom: Spacing.xl,
+          }}>
+            <View style={{
+              alignItems: 'center',
+              marginBottom: Spacing.lg,
+              paddingHorizontal: Spacing.lg,
+            }}>
+              <Title3>Sort Places</Title3>
+            </View>
+            
+            {sortOptions.map((option) => (
+              <TouchableOpacity
+                key={option.key}
+                onPress={() => {
+                  setSortBy(option.key);
+                  setShowSortModal(false);
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: Spacing.lg,
+                  paddingVertical: Spacing.md,
+                  backgroundColor: sortBy === option.key 
+                    ? DarkTheme.colors.bangkok.gold + '20' 
+                    : 'transparent',
+                }}
+              >
+                <option.icon 
+                  size={20} 
+                  color={sortBy === option.key ? DarkTheme.colors.bangkok.gold : DarkTheme.colors.semantic.secondaryLabel}
+                  strokeWidth={2} 
+                />
+                <Body style={{ 
+                  marginLeft: Spacing.sm,
+                  color: sortBy === option.key ? DarkTheme.colors.bangkok.gold : DarkTheme.colors.semantic.label
+                }}>
+                  {option.label}
+                </Body>
+                {sortBy === option.key && (
+                  <View style={{ marginLeft: 'auto' }}>
+                    <CheckCircle size={20} color={DarkTheme.colors.bangkok.gold} strokeWidth={2} />
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+            
+            <TouchableOpacity
+              onPress={() => setShowSortModal(false)}
+              style={{
+                alignItems: 'center',
+                marginTop: Spacing.lg,
+                paddingHorizontal: Spacing.lg,
+              }}
+            >
+              <SecondaryText>Cancel</SecondaryText>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Toast */}
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={hideToast}
+      />
+    </SafeAreaView>
   );
-} 
+}

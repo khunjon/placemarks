@@ -17,8 +17,8 @@ import {
 import { DarkTheme } from '../../constants/theme';
 import { UserProfileHeader, SettingItem, AchievementSection } from '../../components/profile';
 import { useAuth } from '../../services/auth-context';
-import { checkInsService, CheckInWithPlace } from '../../services/checkInsService';
-import { enhancedListsService } from '../../services/listsService';
+import { checkInsService, EnrichedCheckIn } from '../../services/checkInsService';
+import { listsService } from '../../services/listsService';
 import type { ProfileStackScreenProps } from '../../navigation/types';
 
 type ProfileScreenProps = ProfileStackScreenProps<'Profile'>;
@@ -26,6 +26,7 @@ type ProfileScreenProps = ProfileStackScreenProps<'Profile'>;
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const { user, loading } = useAuth();
   const [userStats, setUserStats] = useState({
+    totalCheckIns: 0,
     checkInsThisMonth: 0,
     totalPlacesVisited: 0,
     listsCreated: 0,
@@ -44,24 +45,26 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     try {
       setLoadingStats(true);
       
-      // Get check-ins for this month
-      const { data: checkIns } = await checkInsService.getCheckIns(user.id);
+      // Get all check-ins
+      const checkIns = await checkInsService.getUserCheckIns(user.id);
+
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
-      const checkInsThisMonth = checkIns?.filter((checkIn: CheckInWithPlace) => {
+      const checkInsThisMonth = checkIns?.filter((checkIn: EnrichedCheckIn) => {
         const checkInDate = new Date(checkIn.timestamp);
         return checkInDate.getMonth() === currentMonth && checkInDate.getFullYear() === currentYear;
       }).length || 0;
 
       // Get total unique places visited (from check-ins)
-      const uniquePlaces = new Set(checkIns?.map((checkIn: CheckInWithPlace) => checkIn.place_id) || []);
+      const uniquePlaces = new Set(checkIns?.map((checkIn: EnrichedCheckIn) => checkIn.place_id) || []);
       const totalPlacesVisited = uniquePlaces.size;
 
       // Get user's lists
-      const lists = await enhancedListsService.getUserLists(user.id);
+      const lists = await listsService.getUserLists(user.id);
       const listsCreated = lists?.filter((list: any) => list.type === 'user').length || 0;
 
       setUserStats({
+        totalCheckIns: checkIns?.length || 0,
         checkInsThisMonth,
         totalPlacesVisited,
         listsCreated,
@@ -171,9 +174,9 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           <SettingItem
             icon={Calendar}
             iconColor={DarkTheme.colors.accent.orange}
-            title="Check-ins This Month"
-            subtitle={new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-            value={loadingStats ? '...' : userStats.checkInsThisMonth.toString()}
+            title="Total Check-ins"
+            subtitle="All-time count"
+            value={loadingStats ? '...' : userStats.totalCheckIns.toString()}
             showArrow={false}
           />
           

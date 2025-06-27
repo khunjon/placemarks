@@ -12,23 +12,30 @@ import { PlaceSuggestion, Location } from '../../types';
 import { placesService } from '../../services/places';
 
 interface PlaceAutocompleteProps {
+  // Updated callback to provide Google Place ID directly
   onPlaceSelect: (suggestion: PlaceSuggestion) => void;
+  onGooglePlaceIdSelect?: (googlePlaceId: string, placeName: string) => void;
   placeholder?: string;
   location?: Location;
   style?: any;
   inputStyle?: any;
   listStyle?: any;
   maxResults?: number;
+  clearOnSelect?: boolean;
+  showFullAddress?: boolean;
 }
 
 export default function PlaceAutocomplete({
   onPlaceSelect,
+  onGooglePlaceIdSelect,
   placeholder = 'Search places in Bangkok...',
   location,
   style,
   inputStyle,
   listStyle,
   maxResults = 5,
+  clearOnSelect = true,
+  showFullAddress = true,
 }: PlaceAutocompleteProps) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
@@ -74,9 +81,19 @@ export default function PlaceAutocomplete({
   }, [query, location, maxResults]);
 
   const handlePlaceSelect = (suggestion: PlaceSuggestion) => {
-    setQuery(suggestion.main_text);
+    // Set input text to the selected place name
+    if (clearOnSelect) {
+      setQuery(suggestion.main_text);
+    }
     setShowSuggestions(false);
+    
+    // Call both callbacks for backwards compatibility
     onPlaceSelect(suggestion);
+    
+    // New callback that provides Google Place ID directly
+    if (onGooglePlaceIdSelect) {
+      onGooglePlaceIdSelect(suggestion.place_id, suggestion.main_text);
+    }
   };
 
   const handleInputFocus = () => {
@@ -92,6 +109,12 @@ export default function PlaceAutocomplete({
     }, 150);
   };
 
+  const clearInput = () => {
+    setQuery('');
+    setSuggestions([]);
+    setShowSuggestions(false);
+  };
+
   const renderSuggestion = ({ item }: { item: PlaceSuggestion }) => (
     <TouchableOpacity
       style={styles.suggestionItem}
@@ -102,9 +125,17 @@ export default function PlaceAutocomplete({
         <Text style={styles.mainText} numberOfLines={1}>
           {item.main_text}
         </Text>
-        <Text style={styles.secondaryText} numberOfLines={1}>
-          {item.secondary_text}
-        </Text>
+        {showFullAddress && (
+          <Text style={styles.secondaryText} numberOfLines={1}>
+            {item.secondary_text}
+          </Text>
+        )}
+        {/* Google Place ID for debugging - remove in production */}
+        {__DEV__ && (
+          <Text style={styles.debugText} numberOfLines={1}>
+            ID: {item.place_id}
+          </Text>
+        )}
       </View>
       <View style={styles.suggestionIcon}>
         <Text style={styles.iconText}>📍</Text>
@@ -130,6 +161,15 @@ export default function PlaceAutocomplete({
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="small" color="#4A90E2" />
           </View>
+        )}
+        {query.length > 0 && !loading && (
+          <TouchableOpacity
+            onPress={clearInput}
+            style={styles.clearButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Text style={styles.clearButtonText}>✕</Text>
+          </TouchableOpacity>
         )}
       </View>
 
@@ -192,6 +232,20 @@ const styles = StyleSheet.create({
   loadingContainer: {
     marginLeft: 8,
   },
+  clearButton: {
+    marginLeft: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#CCCCCC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearButtonText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
   suggestionsContainer: {
     position: 'absolute',
     top: 52,
@@ -233,6 +287,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666666',
   },
+  debugText: {
+    fontSize: 10,
+    color: '#999999',
+    marginTop: 2,
+    fontFamily: 'monospace',
+  },
   suggestionIcon: {
     marginLeft: 12,
   },
@@ -253,4 +313,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999999',
   },
-}); 
+});

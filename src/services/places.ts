@@ -1,7 +1,5 @@
-import { Place, PlaceDetails, PlaceSuggestion, Location, PlaceSearchParams, BangkokContext, CityContext } from '../types';
-import { cacheManager } from './cacheManager';
-import { Database } from '../types/supabase';
-import { cityCategorizer } from './cityCategorizer';
+import { Place, EnrichedPlace, PlaceDetails, PlaceSuggestion, Location, PlaceSearchParams } from '../types';
+import { supabase } from './supabase';
 
 interface GooglePlaceResult {
   place_id: string;
@@ -12,10 +10,15 @@ interface GooglePlaceResult {
       lat: number;
       lng: number;
     };
+    viewport?: {
+      northeast: { lat: number; lng: number };
+      southwest: { lat: number; lng: number };
+    };
   };
   types: string[];
   price_level?: number;
   rating?: number;
+  user_ratings_total?: number;
   photos?: Array<{
     photo_reference: string;
     height: number;
@@ -25,7 +28,9 @@ interface GooglePlaceResult {
     open_now: boolean;
     weekday_text: string[];
   };
+  current_opening_hours?: any;
   formatted_phone_number?: string;
+  international_phone_number?: string;
   website?: string;
   reviews?: Array<{
     author_name: string;
@@ -33,6 +38,8 @@ interface GooglePlaceResult {
     text: string;
     time: number;
   }>;
+  business_status?: string;
+  plus_code?: any;
 }
 
 interface GoogleAutocompleteResult {
@@ -43,20 +50,6 @@ interface GoogleAutocompleteResult {
     secondary_text: string;
   };
 }
-
-// Type definitions based on Supabase schema
-export type PlaceRow = Database['public']['Tables']['places']['Row'];
-export type PlaceInsert = Database['public']['Tables']['places']['Insert'];
-export type PlaceUpdate = Database['public']['Tables']['places']['Update'];
-
-export interface PlaceWithDistance extends PlaceRow {
-  distance?: string;
-}
-
-export interface NearbyPlace extends PlaceRow {
-  distance: number; // in kilometers
-}
-
 
 export class PlacesService {
   private apiKey: string;
@@ -71,13 +64,15 @@ export class PlacesService {
     }
   }
 
-  // Search nearby places with caching
-  async searchNearbyPlaces(location: Location, radius: number, type?: string): Promise<Place[]> {
+  /**
+   * Search nearby places and cache results in google_places_cache
+   */
+  async searchNearbyPlaces(location: Location, radius: number, type?: string): Promise<EnrichedPlace[]> {
     try {
-      // First check cache for recent searches in this area
-      const cachedPlaces = await cacheManager.places.getNearby(location, radius, type);
+      // First check for cached places in the area
+      const cachedPlaces = await this.getCachedNearbyPlaces(location, radius, type);
       if (cachedPlaces.length > 0) {
-        console.log('🗄️ CACHE HIT: Retrieved nearby places from local cache', {
+        console.log('🗄️ CACHE HIT: Retrieved nearby places from cache', {
           location: `${location.latitude},${location.longitude}`,
           radius: radius,
           type: type || 'all',
@@ -103,7 +98,8 @@ export class PlacesService {
         url: `${url}?${params}`,
         location: `${location.latitude},${location.longitude}`,
         radius: radius,
-        type: type || 'all'
+        type: type || 'all',
+        cost: '$0.032 per 1000 calls - PAID'
       });
 
       const response = await fetch(`${url}?${params}`);
@@ -119,25 +115,28 @@ export class PlacesService {
         throw new Error(`Google Places API error: ${data.status}`);
       }
 
-      // Convert Google results to our Place format and cache them
-      const places: Place[] = [];
+      // Cache all results and return enriched places
+      const enrichedPlaces: EnrichedPlace[] = [];
       for (const result of data.results) {
-        const place = await this.convertGoogleResultToPlace(result);
-        places.push(place);
-        await cacheManager.places.store(place);
+        await this.cacheGooglePlace(result);
+        const enrichedPlace = await this.getEnrichedPlace(result.place_id);
+        if (enrichedPlace) {
+          enrichedPlaces.push(enrichedPlace);
+        }
       }
 
-      return places;
+      return enrichedPlaces;
     } catch (error) {
       console.error('Error searching nearby places:', error);
       throw error;
     }
   }
 
-  // Autocomplete with cached suggestions
+  /**
+   * Get autocomplete suggestions with caching
+   */
   async getPlaceAutocomplete(query: string, location?: Location): Promise<PlaceSuggestion[]> {
     try {
-      // Add input validation and debugging
       if (!query || typeof query !== 'string') {
         console.error('❌ INVALID QUERY: Invalid autocomplete query', { query, type: typeof query });
         throw new Error('Invalid query provided to autocomplete');
@@ -145,20 +144,14 @@ export class PlacesService {
 
       const sanitizedQuery = query.trim();
       if (sanitizedQuery.length < 2) {
-        console.log('🔍 SHORT QUERY: Query too short for autocomplete', { query: sanitizedQuery, length: sanitizedQuery.length });
+        console.log('🔍 SHORT QUERY: Query too short for autocomplete', { query: sanitizedQuery });
         return [];
       }
 
-      console.log('🔍 AUTOCOMPLETE REQUEST: Processing query', {
-        originalQuery: query,
-        sanitizedQuery: sanitizedQuery,
-        queryLength: sanitizedQuery.length,
-        stackTrace: new Error().stack?.split('\n').slice(1, 4).join(' <- ')
-      });
-
-      // Check cache for recent autocomplete results
-      const cachedSuggestions = await this.getCachedAutocomplete(sanitizedQuery);
+      // Check cache
+      const cachedSuggestions = this.getCachedAutocomplete(sanitizedQuery);
       if (cachedSuggestions.length > 0) {
+        console.log('🗄️ CACHE HIT: Autocomplete suggestions from cache');
         return cachedSuggestions;
       }
 
@@ -166,7 +159,7 @@ export class PlacesService {
       const params = new URLSearchParams({
         input: sanitizedQuery,
         key: this.apiKey,
-        components: 'country:th', // Restrict to Thailand
+        components: 'country:th', // Thailand only
       });
 
       if (location) {
@@ -176,7 +169,6 @@ export class PlacesService {
 
       console.log('🟢 GOOGLE API CALL: Autocomplete from Google Places API', {
         query: sanitizedQuery,
-        location: location ? `${location.latitude},${location.longitude}` : 'none',
         cost: '$0.00283 per 1000 calls - PAID'
       });
 
@@ -184,12 +176,7 @@ export class PlacesService {
       const data = await response.json();
 
       if (data.status !== 'OK') {
-        console.error('❌ GOOGLE API ERROR:', {
-          status: data.status,
-          query: sanitizedQuery,
-          error_message: data.error_message || 'No error message provided',
-          available_alternatives: data.available_alternatives || 'None'
-        });
+        console.error('❌ GOOGLE API ERROR:', { status: data.status, query: sanitizedQuery });
         throw new Error(`Google Places Autocomplete API error: ${data.status}`);
       }
 
@@ -200,229 +187,287 @@ export class PlacesService {
         secondary_text: prediction.structured_formatting.secondary_text,
       }));
 
-      // Cache the autocomplete results
-      await this.cacheAutocomplete(sanitizedQuery, suggestions);
+      // Cache suggestions
+      this.cacheAutocomplete(sanitizedQuery, suggestions);
 
+      console.log('🟢 AUTOCOMPLETE SUCCESS:', { query: sanitizedQuery, resultCount: suggestions.length });
       return suggestions;
     } catch (error) {
-      console.error('Error getting place autocomplete:', error);
+      console.error('Error in autocomplete:', error);
       throw error;
     }
   }
 
-  // Get detailed place information
-  async getPlaceDetails(placeId: string, forRecommendations = false): Promise<PlaceDetails> {
+  /**
+   * Get enriched place details (combines Google data with editorial content)
+   */
+  async getEnrichedPlace(googlePlaceId: string): Promise<EnrichedPlace | null> {
     try {
-      // First check local places cache
-      const cachedPlace = await cacheManager.places.get(placeId);
-      if (cachedPlace) {
-        console.log('🗄️ CACHE HIT: Retrieved place from local places cache', {
-          placeId: placeId.substring(0, 20) + '...',
-          name: cachedPlace.name,
-          cost: '$0.000 - FREE!'
-        });
-        
-        // Enrich with Google Places data if available (use soft expiry for recommendations)
-        const googleData = await cacheManager.googlePlaces.get(placeId, false, forRecommendations);
-        if (googleData) {
-          return this.enrichPlaceDetailsWithGoogleData(
-            this.convertPlaceToDetails(cachedPlace),
-            googleData
-          );
-        }
-        return this.convertPlaceToDetails(cachedPlace);
+      const { data: place, error } = await supabase
+        .from('enriched_places')
+        .select('*')
+        .eq('google_place_id', googlePlaceId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        throw error;
       }
 
-      // Use Google Places cache (handles API calls intelligently, use soft expiry for recommendations)
-      const googleData = await cacheManager.googlePlaces.get(placeId, false, forRecommendations);
-      if (!googleData) {
-        throw new Error(`Place not found: ${placeId}`);
+      return place || null;
+    } catch (error) {
+      console.error('Error getting enriched place:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get place details from cache or fetch from Google API
+   */
+  async getPlaceDetails(googlePlaceId: string): Promise<PlaceDetails | null> {
+    try {
+      // First try to get from cache
+      let place = await this.getPlaceFromCache(googlePlaceId);
+      
+      if (!place) {
+        // If not in cache, fetch from Google Places API
+        place = await this.fetchAndCacheGooglePlace(googlePlaceId);
       }
 
-      // Convert Google data to our Place format and cache locally
-      const place = await this.convertGoogleCacheToPlace(googleData);
-      await cacheManager.places.store(place);
+      if (!place) {
+        return null;
+      }
 
-      return this.convertPlaceToDetails(place);
+      // Convert to PlaceDetails format
+      return this.convertCachedPlaceToDetails(place);
     } catch (error) {
       console.error('Error getting place details:', error);
-      throw error;
+      return null;
     }
   }
 
-  // Multi-city place categorization (new method)
-  async categorizePlace(place: Place, cityCode?: string): Promise<CityContext> {
-    return cityCategorizer.categorizePlace(place, cityCode);
+  /**
+   * Get multiple enriched places by Google Place IDs
+   */
+  async getEnrichedPlaces(googlePlaceIds: string[]): Promise<EnrichedPlace[]> {
+    try {
+      const { data: places, error } = await supabase
+        .from('enriched_places')
+        .select('*')
+        .in('google_place_id', googlePlaceIds);
+
+      if (error) throw error;
+      return places || [];
+    } catch (error) {
+      console.error('Error getting enriched places:', error);
+      return [];
+    }
   }
 
-  // Bangkok-specific categorization (legacy method for backward compatibility)
-  // @deprecated Use categorizePlace() instead
-  async categorizeBangkokPlace(place: Place): Promise<BangkokContext> {
-    return cityCategorizer.categorizeBangkokPlace(place);
+  /**
+   * Cache a Google Place result in google_places_cache
+   */
+  async cacheGooglePlace(googleResult: GooglePlaceResult): Promise<void> {
+    try {
+      const cacheData = {
+        google_place_id: googleResult.place_id,
+        name: googleResult.name,
+        formatted_address: googleResult.formatted_address,
+        geometry: googleResult.geometry,
+        types: googleResult.types,
+        rating: googleResult.rating,
+        user_ratings_total: googleResult.user_ratings_total,
+        price_level: googleResult.price_level,
+        formatted_phone_number: googleResult.formatted_phone_number,
+        international_phone_number: googleResult.international_phone_number,
+        website: googleResult.website,
+        opening_hours: googleResult.opening_hours,
+        current_opening_hours: googleResult.current_opening_hours,
+        photos: googleResult.photos,
+        reviews: googleResult.reviews,
+        business_status: googleResult.business_status || 'OPERATIONAL',
+        plus_code: googleResult.plus_code,
+        cached_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
+        last_accessed: new Date().toISOString(),
+        access_count: 1,
+        has_basic_data: true,
+        has_contact_data: !!(googleResult.formatted_phone_number || googleResult.website),
+        has_hours_data: !!googleResult.opening_hours,
+        has_photos_data: !!(googleResult.photos && googleResult.photos.length > 0),
+        has_reviews_data: !!(googleResult.reviews && googleResult.reviews.length > 0),
+        photo_urls: googleResult.photos?.map(photo => 
+          `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo.photo_reference}&key=${this.apiKey}`
+        ) || []
+      };
+
+      await supabase
+        .from('google_places_cache')
+        .upsert(cacheData, { onConflict: 'google_place_id' });
+
+    } catch (error) {
+      console.error('Error caching Google place:', error);
+    }
   }
 
-  // Get cache statistics (delegated to cache service)
-  async getCacheStats() {
-    return cacheManager.places.getStats();
+  /**
+   * Get place from google_places_cache
+   */
+  private async getPlaceFromCache(googlePlaceId: string): Promise<any | null> {
+    try {
+      const { data: place, error } = await supabase
+        .from('google_places_cache')
+        .select('*')
+        .eq('google_place_id', googlePlaceId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+
+      // Update last_accessed if found
+      if (place) {
+        await supabase
+          .from('google_places_cache')
+          .update({ 
+            last_accessed: new Date().toISOString(),
+            access_count: (place.access_count || 0) + 1
+          })
+          .eq('google_place_id', googlePlaceId);
+      }
+
+      return place;
+    } catch (error) {
+      console.error('Error getting place from cache:', error);
+      return null;
+    }
   }
 
-  // Clear expired cache entries (delegated to cache service)
-  async clearExpiredCache() {
-    return cacheManager.places.clearExpired();
+  /**
+   * Fetch place from Google API and cache it
+   */
+  private async fetchAndCacheGooglePlace(googlePlaceId: string): Promise<any | null> {
+    try {
+      const url = `${this.baseUrl}/details/json`;
+      const params = new URLSearchParams({
+        place_id: googlePlaceId,
+        key: this.apiKey,
+        fields: 'place_id,name,formatted_address,geometry,types,rating,user_ratings_total,price_level,formatted_phone_number,international_phone_number,website,opening_hours,current_opening_hours,photos,reviews,business_status,plus_code'
+      });
+
+      console.log('🟢 GOOGLE API CALL: Place Details from Google Places API', {
+        place_id: googlePlaceId,
+        cost: '$0.017 per 1000 calls - PAID'
+      });
+
+      const response = await fetch(`${url}?${params}`);
+      const data = await response.json();
+
+      if (data.status !== 'OK') {
+        console.error('❌ GOOGLE API ERROR:', { status: data.status, place_id: googlePlaceId });
+        return null;
+      }
+
+      // Cache the result
+      await this.cacheGooglePlace(data.result);
+      
+      // Return the cached place
+      return await this.getPlaceFromCache(googlePlaceId);
+    } catch (error) {
+      console.error('Error fetching place from Google API:', error);
+      return null;
+    }
   }
 
-  // Cache autocomplete results with intelligent key matching
-  private async cacheAutocomplete(query: string, suggestions: PlaceSuggestion[]): Promise<void> {
-    const cacheKey = query.toLowerCase().trim();
-    this.autocompleteCache.set(cacheKey, {
+  /**
+   * Get cached nearby places from database
+   */
+  private async getCachedNearbyPlaces(location: Location, radius: number, type?: string): Promise<EnrichedPlace[]> {
+    try {
+      // Use PostGIS to find nearby places
+      const radiusInMeters = radius;
+      const point = `POINT(${location.longitude} ${location.latitude})`;
+      
+      let query = supabase
+        .from('enriched_places')
+        .select('*')
+        .filter('business_status', 'eq', 'OPERATIONAL');
+
+      // Add type filter if specified
+      if (type) {
+        query = query.contains('types', [type]);
+      }
+
+      // Note: For proper geospatial queries, you would use:
+      // .rpc('nearby_places', { point, radius: radiusInMeters })
+      // But for simplicity, we'll return recent cached places
+      
+      const { data: places, error } = await query
+        .order('cached_at', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      return places || [];
+    } catch (error) {
+      console.error('Error getting cached nearby places:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Convert cached place to PlaceDetails format
+   */
+  private convertCachedPlaceToDetails(cachedPlace: any): PlaceDetails {
+    return {
+      google_place_id: cachedPlace.google_place_id,
+      name: cachedPlace.name,
+      formatted_address: cachedPlace.formatted_address,
+      geometry: cachedPlace.geometry,
+      formatted_phone_number: cachedPlace.formatted_phone_number,
+      international_phone_number: cachedPlace.international_phone_number,
+      website: cachedPlace.website,
+      opening_hours: cachedPlace.opening_hours,
+      current_opening_hours: cachedPlace.current_opening_hours,
+      price_level: cachedPlace.price_level,
+      rating: cachedPlace.rating,
+      user_ratings_total: cachedPlace.user_ratings_total,
+      photos: cachedPlace.photos,
+      photo_urls: cachedPlace.photo_urls,
+      reviews: cachedPlace.reviews?.map((review: any) => ({
+        author_name: review.author_name,
+        rating: review.rating,
+        text: review.text,
+        time: review.time
+      })) || [],
+      types: cachedPlace.types,
+      business_status: cachedPlace.business_status,
+      // Add computed coordinates for backwards compatibility
+      coordinates: cachedPlace.geometry?.location ? 
+        [cachedPlace.geometry.location.lng, cachedPlace.geometry.location.lat] : 
+        [0, 0]
+    };
+  }
+
+  /**
+   * Cache autocomplete suggestions
+   */
+  private cacheAutocomplete(query: string, suggestions: PlaceSuggestion[]): void {
+    this.autocompleteCache.set(query, {
       suggestions,
       timestamp: Date.now()
     });
-
-    // Clean up old cache entries periodically
-    if (this.autocompleteCache.size > 100) {
-      const now = Date.now();
-      for (const [key, value] of this.autocompleteCache.entries()) {
-        if (now - value.timestamp > this.AUTOCOMPLETE_CACHE_DURATION) {
-          this.autocompleteCache.delete(key);
-        }
-      }
-    }
   }
 
-  // Get cached autocomplete results with smart matching
-  private async getCachedAutocomplete(query: string): Promise<PlaceSuggestion[]> {
-    const cacheKey = query.toLowerCase().trim();
-    const cached = this.autocompleteCache.get(cacheKey);
-    
+  /**
+   * Get cached autocomplete suggestions
+   */
+  private getCachedAutocomplete(query: string): PlaceSuggestion[] {
+    const cached = this.autocompleteCache.get(query);
     if (cached && (Date.now() - cached.timestamp) < this.AUTOCOMPLETE_CACHE_DURATION) {
-      console.log('🗄️ AUTOCOMPLETE CACHE HIT: Using cached suggestions', {
-        query: query,
-        resultCount: cached.suggestions.length,
-        cost: '$0.000 - FREE!',
-        cacheAge: `${Math.round((Date.now() - cached.timestamp) / 1000)}s ago`
-      });
       return cached.suggestions;
     }
-
-    // Try to find a shorter query that might have similar results
-    for (const [cachedQuery, cachedData] of this.autocompleteCache.entries()) {
-      if (query.toLowerCase().startsWith(cachedQuery) && 
-          cachedQuery.length >= 3 && 
-          query.length - cachedQuery.length <= 2 &&
-          (Date.now() - cachedData.timestamp) < this.AUTOCOMPLETE_CACHE_DURATION) {
-        
-        console.log('🗄️ AUTOCOMPLETE SMART CACHE: Using similar cached query', {
-          originalQuery: query,
-          cachedQuery: cachedQuery,
-          resultCount: cachedData.suggestions.length,
-          cost: '$0.000 - FREE!',
-          reason: 'Similar query likely has same results'
-        });
-        
-        // Cache this query too for faster future access
-        this.autocompleteCache.set(cacheKey, {
-          suggestions: cachedData.suggestions,
-          timestamp: Date.now()
-        });
-        
-        return cachedData.suggestions;
-      }
-    }
-
     return [];
-  }
-
-  // Convert Google Places result to our Place format
-  private async convertGoogleResultToPlace(result: GooglePlaceResult): Promise<Place> {
-    const place: Place = {
-      id: '', // Will be set by database
-      google_place_id: result.place_id,
-      name: result.name,
-      address: result.formatted_address,
-      coordinates: [result.geometry.location.lng, result.geometry.location.lat],
-      place_type: result.types.join(','),
-      price_level: result.price_level,
-    };
-
-    // Add city context (default to Bangkok)
-    place.city_context = await this.categorizePlace(place, 'BKK');
-    // Legacy Bangkok context for backward compatibility
-    place.bangkok_context = await this.categorizeBangkokPlace(place);
-
-    return place;
-  }
-
-  // Convert Place to PlaceDetails
-  private convertPlaceToDetails(place: Place): PlaceDetails {
-    return {
-      id: place.id,
-      google_place_id: place.google_place_id,
-      name: place.name,
-      address: place.address,
-      coordinates: place.coordinates,
-      price_level: place.price_level,
-      types: place.place_type ? place.place_type.split(',') : [],
-      city_context: place.city_context,
-      bangkok_context: place.bangkok_context, // Legacy field
-      // Additional details would be populated from Google Places Details API
-    };
-  }
-
-  // Enrich PlaceDetails with Google Places cache data
-  private enrichPlaceDetailsWithGoogleData(placeDetails: PlaceDetails, googleData: any): PlaceDetails {
-    return {
-      ...placeDetails,
-      // Enrich with Google Places data
-      rating: googleData.rating || placeDetails.rating,
-      address: googleData.formatted_address || placeDetails.address,
-      phone_number: googleData.formatted_phone_number,
-      website: googleData.website,
-      opening_hours: googleData.opening_hours?.weekday_text || placeDetails.opening_hours,
-      photos: googleData.photos?.map((photo: any) => photo.photo_reference) || placeDetails.photos,
-      reviews: googleData.reviews || placeDetails.reviews,
-      types: googleData.types || placeDetails.types,
-    };
-  }
-
-  // Convert Google Places cache entry to our Place format
-  private async convertGoogleCacheToPlace(googleData: any): Promise<Place> {
-    const coordinates: [number, number] = googleData.geometry?.location ? 
-      [googleData.geometry.location.lng, googleData.geometry.location.lat] : 
-      [0, 0];
-
-    const place: Place = {
-      id: '', // Will be set by database
-      google_place_id: googleData.google_place_id,
-      name: googleData.name || 'Unknown Place',
-      address: googleData.formatted_address || '',
-      coordinates,
-      place_type: googleData.types ? googleData.types.join(',') : '',
-      price_level: googleData.price_level,
-    };
-
-    // Add city context (default to Bangkok)
-    place.city_context = await this.categorizePlace(place, 'BKK');
-    // Legacy Bangkok context for backward compatibility
-    place.bangkok_context = await this.categorizeBangkokPlace(place);
-
-    return place;
-  }
-
-  // Calculate distance between two points (Haversine formula)
-  private calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-    const R = 6371; // Earth's radius in kilometers
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLng / 2) * Math.sin(dLng / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
   }
 }
 
 // Export singleton instance
 export const placesService = new PlacesService();
-
- 

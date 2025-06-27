@@ -19,7 +19,7 @@ export type CheckInStackParamList = {
   };
   // PlaceDetails screen removed - check-in search results navigate directly to CheckInForm
   CheckInForm: {
-    placeId: string;
+    placeId: string; // Google Place ID
     placeName: string;
     placeType: string;
   };
