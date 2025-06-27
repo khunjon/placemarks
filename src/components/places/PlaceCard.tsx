@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { MapPin, Star, Coffee, ShoppingBag, Building, TreePine, Camera, Utensils } from 'lucide-react-native';
 import { DarkTheme } from '../../constants/theme';
 import { LocationBadge } from '../ui';
@@ -75,6 +75,33 @@ const getTypeColor = (type: PlaceCardProps['type']) => {
     default:
       return DarkTheme.colors.semantic.secondaryLabel;
   }
+};
+
+// Helper function to shorten addresses
+const shortenAddress = (address: string): string => {
+  if (!address) return '';
+  
+  // Split by commas and filter out empty parts
+  const parts = address.split(',').map(part => part.trim()).filter(part => part.length > 0);
+  
+  if (parts.length <= 2) return address; // Already short enough
+  
+  // Remove the first part (usually street number/name) and keep the rest
+  // This typically gives us: District, City, Country
+  return parts.slice(1).join(', ');
+};
+
+// Helper function to shorten place names
+const shortenPlaceName = (name: string): string => {
+  if (!name) return '';
+  
+  // Find the first dash and cut off everything after it
+  const dashIndex = name.indexOf(' - ');
+  if (dashIndex !== -1) {
+    return name.substring(0, dashIndex).trim();
+  }
+  
+  return name;
 };
 
 // Helper function to infer place type from Google Places API types
@@ -169,30 +196,52 @@ export default function PlaceCard({
           borderColor: DarkTheme.colors.semantic.separator,
           borderWidth: 1,
           borderRadius: DarkTheme.borderRadius.md,
-          padding: DarkTheme.spacing.md,
+          padding: 8,
           marginBottom: DarkTheme.spacing.sm,
           ...DarkTheme.shadows.small,
         },
         style
       ]}
     >
-      {/* Header Row */}
+      {/* Title Row */}
+      <Text 
+        style={[
+          DarkTheme.typography.headline,
+          { 
+            color: DarkTheme.colors.semantic.label,
+            marginBottom: 4
+          }
+        ]}
+        numberOfLines={1}
+      >
+        {shortenPlaceName(placeData.name)}
+      </Text>
+
+      {/* Image and Details Row */}
       <View style={{
         flexDirection: 'row',
         alignItems: 'flex-start',
-        justifyContent: 'space-between',
-        marginBottom: DarkTheme.spacing.sm,
+        marginBottom: 4,
       }}>
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          flex: 1,
-        }}>
+        {place?.photo_reference ? (
+          <Image
+            source={{ uri: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=128&photoreference=${place.photo_reference}&key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}` }}
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 8,
+              marginRight: DarkTheme.spacing.sm,
+            }}
+            onError={() => {
+              // Fallback handled by conditional rendering below
+            }}
+          />
+        ) : (
           <View 
             style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
+              width: 56,
+              height: 56,
+              borderRadius: 8,
               alignItems: 'center',
               justifyContent: 'center',
               marginRight: DarkTheme.spacing.sm,
@@ -200,107 +249,63 @@ export default function PlaceCard({
             }}
           >
             <TypeIcon 
-              size={20} 
+              size={24} 
               color={typeColor}
               strokeWidth={2}
             />
           </View>
-          
-          <View style={{ flex: 1 }}>
+        )}
+        
+        <View style={{ flex: 1 }}>
+          {/* Category and Status Row */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
             <Text 
               style={[
-                DarkTheme.typography.headline,
+                DarkTheme.typography.caption1,
                 { 
-                  color: DarkTheme.colors.semantic.label,
-                  marginBottom: DarkTheme.spacing.xs 
+                  color: typeColor,
+                  textTransform: 'capitalize',
+                  fontWeight: '600',
+                  marginRight: DarkTheme.spacing.sm
                 }
               ]}
-              numberOfLines={1}
             >
-              {placeData.name}
+              {placeData.type}
             </Text>
             
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text 
-                style={[
-                  DarkTheme.typography.caption1,
-                  { 
-                    color: typeColor,
-                    textTransform: 'capitalize',
-                    fontWeight: '600' 
-                  }
-                ]}
-              >
-                {placeData.type}
-              </Text>
-              
-              {placeData.isOpen !== undefined && (
-                <>
-                  <View 
-                    style={{
-                      width: 4,
-                      height: 4,
-                      borderRadius: 2,
-                      marginHorizontal: DarkTheme.spacing.xs,
-                      backgroundColor: DarkTheme.colors.semantic.separator,
-                    }}
-                  />
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <View 
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: 4,
-                        marginRight: 4,
-                        backgroundColor: placeData.isOpen 
-                          ? DarkTheme.colors.status.success 
-                          : DarkTheme.colors.status.error,
-                      }}
-                    />
-                    <Text 
-                      style={[
-                        DarkTheme.typography.caption1,
-                        { 
-                          color: placeData.isOpen 
-                            ? DarkTheme.colors.status.success 
-                            : DarkTheme.colors.status.error 
-                        }
-                      ]}
-                    >
-                      {placeData.isOpen ? 'Open' : 'Closed'}
-                    </Text>
-                  </View>
-                </>
-              )}
-            </View>
-          </View>
-        </View>
-        
-        <View style={{ alignItems: 'flex-end' }}>
-          <View style={{ 
-            flexDirection: 'row', 
-            alignItems: 'center', 
-            marginBottom: 4 
-          }}>
-            <MapPin 
-              size={12} 
-              color={DarkTheme.colors.semantic.tertiaryLabel}
-            />
-            <Text 
-              style={[
-                DarkTheme.typography.caption2,
-                { 
-                  color: DarkTheme.colors.semantic.tertiaryLabel,
-                  marginLeft: DarkTheme.spacing.xs 
-                }
-              ]}
-            >
-              {placeData.distance}
-            </Text>
+            {placeData.isOpen !== undefined && (
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View 
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: 3,
+                    marginRight: 4,
+                    backgroundColor: placeData.isOpen 
+                      ? DarkTheme.colors.status.success 
+                      : DarkTheme.colors.status.error,
+                  }}
+                />
+                <Text 
+                  style={[
+                    DarkTheme.typography.caption1,
+                    { 
+                      color: placeData.isOpen 
+                        ? DarkTheme.colors.status.success 
+                        : DarkTheme.colors.status.error,
+                      fontSize: 11
+                    }
+                  ]}
+                >
+                  {placeData.isOpen ? 'Open' : 'Closed'}
+                </Text>
+              </View>
+            )}
           </View>
           
+          {/* Rating Row */}
           {placeData.rating && (
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
               <Star 
                 size={12} 
                 color={DarkTheme.colors.accent.yellow}
@@ -308,10 +313,11 @@ export default function PlaceCard({
               />
               <Text 
                 style={[
-                  DarkTheme.typography.caption2,
+                  DarkTheme.typography.caption1,
                   { 
-                    color: DarkTheme.colors.semantic.tertiaryLabel,
-                    marginLeft: DarkTheme.spacing.xs 
+                    color: DarkTheme.colors.semantic.label,
+                    marginLeft: 4,
+                    fontWeight: '600'
                   }
                 ]}
               >
@@ -319,8 +325,22 @@ export default function PlaceCard({
               </Text>
             </View>
           )}
+          
+          {/* Address Row */}
+          <Text 
+            style={[
+              DarkTheme.typography.caption1,
+              { 
+                color: DarkTheme.colors.semantic.tertiaryLabel,
+              }
+            ]}
+            numberOfLines={1}
+          >
+            {shortenAddress(placeData.address)}
+          </Text>
         </View>
       </View>
+
 
       {/* Description */}
       <Text 
@@ -328,7 +348,7 @@ export default function PlaceCard({
           DarkTheme.typography.subhead,
           { 
             color: DarkTheme.colors.semantic.secondaryLabel,
-            marginBottom: DarkTheme.spacing.sm 
+            marginBottom: 4
           }
         ]}
         numberOfLines={2}
@@ -336,30 +356,6 @@ export default function PlaceCard({
         {placeData.description}
       </Text>
 
-      {/* Address */}
-      <View style={{ 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        marginBottom: DarkTheme.spacing.sm 
-      }}>
-        <MapPin 
-          size={14} 
-          color={DarkTheme.colors.semantic.tertiaryLabel}
-        />
-        <Text 
-          style={[
-            DarkTheme.typography.caption1,
-            { 
-              color: DarkTheme.colors.semantic.tertiaryLabel,
-              marginLeft: DarkTheme.spacing.xs,
-              flex: 1 
-            }
-          ]}
-          numberOfLines={1}
-        >
-          {placeData.address}
-        </Text>
-      </View>
 
       {/* Badges and Check-in Button */}
       <View style={{ 
@@ -372,15 +368,6 @@ export default function PlaceCard({
             <LocationBadge 
               type="bts" 
               value={placeData.btsStation} 
-              size="small" 
-              style={{ marginRight: DarkTheme.spacing.sm }}
-            />
-          )}
-          
-          {placeData.priceLevel && (
-            <LocationBadge 
-              type="price" 
-              value={placeData.priceLevel} 
               size="small" 
             />
           )}

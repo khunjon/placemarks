@@ -1,5 +1,6 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { CommonActions } from '@react-navigation/native';
 import { MapPin, Shuffle, List, User } from 'lucide-react-native';
 import { Colors } from '../constants/Colors';
 
@@ -68,6 +69,22 @@ export default function BottomTabNavigator() {
             />
           ),
         }}
+        listeners={({ navigation, route }) => ({
+          tabPress: (e) => {
+            // Check if we're already on this tab
+            const state = navigation.getState();
+            const tabIndex = state.routes.findIndex(r => r.name === route.name);
+            const isTabFocused = state.index === tabIndex;
+            
+            if (isTabFocused) {
+              // If already on this tab, reset its stack
+              e.preventDefault();
+              navigation.navigate('DecideStack', {
+                screen: 'Decide',
+              });
+            }
+          },
+        })}
       />
       
       <Tab.Screen
@@ -84,6 +101,22 @@ export default function BottomTabNavigator() {
             />
           ),
         }}
+        listeners={({ navigation, route }) => ({
+          tabPress: (e) => {
+            // Check if we're already on this tab
+            const state = navigation.getState();
+            const tabIndex = state.routes.findIndex(r => r.name === route.name);
+            const isTabFocused = state.index === tabIndex;
+            
+            if (isTabFocused) {
+              // If already on this tab, reset its stack
+              e.preventDefault();
+              navigation.navigate('ListsStack', {
+                screen: 'Lists',
+              });
+            }
+          },
+        })}
       />
       
       <Tab.Screen
@@ -100,6 +133,22 @@ export default function BottomTabNavigator() {
             />
           ),
         }}
+        listeners={({ navigation, route }) => ({
+          tabPress: (e) => {
+            // Check if we're already on this tab
+            const state = navigation.getState();
+            const tabIndex = state.routes.findIndex(r => r.name === route.name);
+            const isTabFocused = state.index === tabIndex;
+            
+            if (isTabFocused) {
+              // If already on this tab, reset its stack
+              e.preventDefault();
+              navigation.navigate('CheckInStack', {
+                screen: 'CheckIn',
+              });
+            }
+          },
+        })}
       />
       
       <Tab.Screen
@@ -116,6 +165,22 @@ export default function BottomTabNavigator() {
             />
           ),
         }}
+        listeners={({ navigation, route }) => ({
+          tabPress: (e) => {
+            // Check if we're already on this tab
+            const state = navigation.getState();
+            const tabIndex = state.routes.findIndex(r => r.name === route.name);
+            const isTabFocused = state.index === tabIndex;
+            
+            if (isTabFocused) {
+              // If already on this tab, reset its stack
+              e.preventDefault();
+              navigation.navigate('ProfileStack', {
+                screen: 'Profile',
+              });
+            }
+          },
+        })}
       />
     </Tab.Navigator>
   );

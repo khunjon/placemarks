@@ -86,7 +86,7 @@ export default function ListsStackNavigator() {
         component={ListDetailScreen}
         options={({ route }) => ({
           title: route.params.listName,
-          headerShown: true,
+          headerShown: route.params.listType !== 'curated',
         })}
       />
       

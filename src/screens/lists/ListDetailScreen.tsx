@@ -449,16 +449,20 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
   const sortedPlaces = getSortedPlaces();
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: DarkTheme.colors.semantic.systemBackground }}>
-      {/* Sticky Header */}
-      <View style={{
-        backgroundColor: DarkTheme.colors.semantic.systemBackground,
-        paddingHorizontal: Spacing.lg,
-        paddingTop: Spacing.sm,
-        paddingBottom: Spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: DarkTheme.colors.semantic.separator,
-      }}>
+    <SafeAreaView 
+      style={{ flex: 1, backgroundColor: DarkTheme.colors.semantic.systemBackground }} 
+      edges={['left', 'right', 'bottom']}
+    >
+      {/* Sticky Header - Progress bar for all lists */}
+      {(
+        <View style={{
+          backgroundColor: DarkTheme.colors.semantic.systemBackground,
+          paddingHorizontal: Spacing.lg,
+          paddingTop: 8,
+          paddingBottom: 8,
+          borderBottomWidth: 1,
+          borderBottomColor: DarkTheme.colors.semantic.separator,
+        }}>
         {isEditing ? (
           // Edit Mode
           <View>
@@ -547,75 +551,88 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
             </View>
           </View>
         ) : (
-          // Display Mode
+          // Display Mode - Progress Bar
           <View>
-            {/* Navigation and Title Row */}
+            {/* Progress Bar */}
             <View style={{
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
-              marginBottom: Spacing.sm,
             }}>
-              <TouchableOpacity
-                onPress={() => navigation.goBack()}
-                style={{ padding: Spacing.xs }}
-              >
-                <ArrowLeft size={24} color={DarkTheme.colors.semantic.label} strokeWidth={2} />
-              </TouchableOpacity>
-              
-              <View style={{ flex: 1, alignItems: 'center' }}>
-                <Body style={{ fontWeight: '600', fontSize: 18 }}>{list.name}</Body>
-                <SecondaryText style={{ fontSize: 12 }}>
-                  {list.places.length} {list.places.length === 1 ? 'place' : 'places'}
-                </SecondaryText>
+              <View style={{ flex: 1 }}>
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  marginBottom: 4,
+                }}>
+                  <Body style={{ fontWeight: '600', fontSize: 15 }}>Places Visited</Body>
+                  <View style={{
+                    backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 10,
+                    marginLeft: Spacing.sm,
+                  }}>
+                    <SecondaryText style={{ fontSize: 11, fontWeight: '600' }}>
+                      {userRatings && Object.keys(userRatings).length > 0 ? Object.keys(userRatings).length : 0} / {list.places.length}
+                    </SecondaryText>
+                  </View>
+                </View>
+                
+                {/* Progress Bar */}
+                <View style={{
+                  height: 4,
+                  backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                }}>
+                  <View style={{
+                    height: '100%',
+                    backgroundColor: DarkTheme.colors.bangkok.gold,
+                    width: `${list.places.length > 0 ? (Object.keys(userRatings).length / list.places.length) * 100 : 0}%`,
+                    borderRadius: 2,
+                  }} />
+                </View>
               </View>
               
-              <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+              <View style={{ flexDirection: 'row', gap: Spacing.xs, marginLeft: Spacing.sm }}>
                 <TouchableOpacity
                   onPress={() => setShowSortModal(true)}
-                  style={{ padding: Spacing.xs }}
+                  style={{ padding: 4 }}
                 >
-                  <SortAsc size={20} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                  <SortAsc size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
                 </TouchableOpacity>
                 
                 {isEditable && (
                   <TouchableOpacity
                     onPress={handleAddPlace}
-                    style={{ padding: Spacing.xs }}
+                    style={{ padding: 4 }}
                   >
-                    <Plus size={20} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                    <Plus size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
                   </TouchableOpacity>
                 )}
                 
                 {isEditable && (
                   <TouchableOpacity
                     onPress={() => setIsEditing(!isEditing)}
-                    style={{ padding: Spacing.xs }}
+                    style={{ padding: 4 }}
                   >
-                    <Edit3 size={20} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                    <Edit3 size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
                   </TouchableOpacity>
                 )}
                 
                 <TouchableOpacity
                   onPress={handleShareList}
-                  style={{ padding: Spacing.xs }}
+                  style={{ padding: 4 }}
                 >
-                  <Share size={20} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                  <Share size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
                 </TouchableOpacity>
               </View>
             </View>
-
-            {/* Description */}
-            {list.description && (
-              <View style={{ marginBottom: Spacing.sm }}>
-                <Body style={{ color: DarkTheme.colors.semantic.secondaryLabel }}>
-                  {list.description}
-                </Body>
-              </View>
-            )}
           </View>
         )}
-      </View>
+        </View>
+      )}
 
 
 
