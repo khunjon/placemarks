@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { MapPin, Star, Coffee, ShoppingBag, Building, TreePine, Camera, Utensils } from 'lucide-react-native';
 import { DarkTheme } from '../../constants/theme';
 import { LocationBadge } from '../ui';
@@ -223,38 +223,23 @@ export default function PlaceCard({
         alignItems: 'flex-start',
         marginBottom: 4,
       }}>
-        {place?.photo_reference ? (
-          <Image
-            source={{ uri: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=128&photoreference=${place.photo_reference}&key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}` }}
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 8,
-              marginRight: DarkTheme.spacing.sm,
-            }}
-            onError={() => {
-              // Fallback handled by conditional rendering below
-            }}
+        <View 
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 8,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: DarkTheme.spacing.sm,
+            backgroundColor: `${typeColor}20`,
+          }}
+        >
+          <TypeIcon 
+            size={24} 
+            color={typeColor}
+            strokeWidth={2}
           />
-        ) : (
-          <View 
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 8,
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: DarkTheme.spacing.sm,
-              backgroundColor: `${typeColor}20`,
-            }}
-          >
-            <TypeIcon 
-              size={24} 
-              color={typeColor}
-              strokeWidth={2}
-            />
-          </View>
-        )}
+        </View>
         
         <View style={{ flex: 1 }}>
           {/* Category and Status Row */}
