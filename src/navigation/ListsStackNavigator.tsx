@@ -36,8 +36,8 @@ function PlaceDetailScreenWrapper({ navigation, route }: ListsStackScreenProps<'
   const adaptedRoute = {
     ...route,
     params: {
-      googlePlaceId: route.params.placeId, // Map placeId to googlePlaceId
-      placeName: 'Loading...', // PlaceDetailScreen will load the actual name
+      ...route.params, // Preserve all original params
+      googlePlaceId: route.params.placeId, // Map placeId to googlePlaceId for backward compatibility
       source: 'list' as const,
     }
   };

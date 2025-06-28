@@ -899,23 +899,7 @@ export class ListsService {
             personal_rating,
             visit_count,
             sort_order,
-            enriched_places (
-              google_place_id,
-              name,
-              formatted_address,
-              geometry,
-              rating,
-              price_level,
-              formatted_phone_number,
-              website,
-              opening_hours,
-              photo_urls,
-              primary_image_url,
-              display_description,
-              is_featured,
-              has_editorial_content,
-              business_status
-            )
+            enriched_places (*)
           )
         `)
         .eq('is_curated', true)
@@ -959,23 +943,7 @@ export class ListsService {
                     personal_rating: listPlace.personal_rating,
                     visit_count: listPlace.visit_count,
                     sort_order: listPlace.sort_order,
-                    place: {
-                      google_place_id: place.google_place_id,
-                      name: place.name,
-                      formatted_address: place.formatted_address || '',
-                      geometry: place.geometry,
-                      rating: place.rating,
-                      price_level: place.price_level,
-                      formatted_phone_number: place.formatted_phone_number,
-                      website: place.website,
-                      opening_hours: place.opening_hours,
-                      photo_urls: place.photo_urls,
-                      primary_image_url: place.primary_image_url,
-                      display_description: place.display_description,
-                      is_featured: place.is_featured,
-                      has_editorial_content: place.has_editorial_content,
-                      business_status: place.business_status
-                    } as EnrichedPlace
+                    place: place as EnrichedPlace // Use complete data from enriched_places view
                   };
                   
                   places.push(enrichedListPlace);
