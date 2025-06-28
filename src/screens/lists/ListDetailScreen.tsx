@@ -689,23 +689,6 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                   </TouchableOpacity>
                 )}
                 
-                {/* User rating indicator */}
-                {userRatings[listPlace.place_id] && (
-                  <View style={{
-                    position: 'absolute',
-                    bottom: Spacing.sm,
-                    left: Spacing.sm,
-                    backgroundColor: DarkTheme.colors.semantic.systemBackground + 'E6',
-                    paddingHorizontal: Spacing.xs,
-                    paddingVertical: 2,
-                    borderRadius: DarkTheme.borderRadius.xs,
-                  }}>
-                    <Body style={{ fontSize: 16 }}>
-                      {userRatings[listPlace.place_id] === 'thumbs_up' ? '👍' : 
-                       userRatings[listPlace.place_id] === 'thumbs_down' ? '👎' : '👌'}
-                    </Body>
-                  </View>
-                )}
                 
                 {/* Notes preview */}
                 {listPlace.notes && (
