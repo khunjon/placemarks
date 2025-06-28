@@ -22,7 +22,8 @@ function CreateListScreenWrapper({ navigation }: ListsStackScreenProps<'CreateLi
     <CreateListScreen
       onClose={() => navigation.goBack()}
       onSave={(listData) => {
-        // Handle save logic here
+        // TODO: Implement list creation
+        // Use: await listsService.createList(userId, listData.name, { ...options })
         console.log('Saving list:', listData);
         navigation.goBack();
       }}

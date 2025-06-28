@@ -133,14 +133,16 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     if (!user?.id) return;
     
     try {
-      const newList = await listsService.createList({
-        user_id: user.id,
-        name: listData.name,
-        description: listData.description,
-        visibility: 'private', // Default to private
-        icon: listData.icon,
-        color: listData.color,
-      });
+      const newList = await listsService.createList(
+        user.id,
+        listData.name,
+        {
+          description: listData.description,
+          visibility: 'private', // Default to private
+          icon: listData.icon,
+          color: listData.color,
+        }
+      );
 
       // Reload lists to get the complete data with places
       await loadUserLists();
