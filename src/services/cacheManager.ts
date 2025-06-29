@@ -7,6 +7,7 @@ import { placesCacheService } from './placesCache';
 import { googlePlacesCache, GooglePlacesCacheEntry, GooglePlacesCacheStats } from './googlePlacesCache';
 import { LocationCache } from './locationCache';
 import { ListsCache } from './listsCache';
+import { ListDetailsCache } from './listDetailsCache';
 import { checkInSearchCache } from './checkInSearchCache';
 
 /**
@@ -249,6 +250,104 @@ export class CacheManager {
   };
 
   /**
+   * List details cache operations (individual list with places and ratings)
+   */
+  listDetails = {
+    /**
+     * Get cached list details for a specific list
+     */
+    get: async (listId: string, userId: string) => {
+      return ListDetailsCache.getCachedListDetails(listId, userId);
+    },
+
+    /**
+     * Save list details to cache
+     */
+    store: async (
+      listId: string,
+      list: ListWithPlaces,
+      userRatings: Record<string, any>,
+      userId: string
+    ): Promise<void> => {
+      return ListDetailsCache.saveListDetails(listId, list, userRatings, userId);
+    },
+
+    /**
+     * Update user rating in cache (optimistic update)
+     */
+    updateRating: async (
+      listId: string,
+      placeId: string,
+      rating: any,
+      userId: string
+    ): Promise<void> => {
+      return ListDetailsCache.updateRatingInCache(listId, placeId, rating, userId);
+    },
+
+    /**
+     * Update place notes in cache (optimistic update)
+     */
+    updateNotes: async (
+      listId: string,
+      placeId: string,
+      notes: string,
+      userId: string
+    ): Promise<void> => {
+      return ListDetailsCache.updatePlaceNotesInCache(listId, placeId, notes, userId);
+    },
+
+    /**
+     * Remove place from cache (optimistic update)
+     */
+    removePlace: async (
+      listId: string,
+      placeId: string,
+      userId: string
+    ): Promise<void> => {
+      return ListDetailsCache.removePlaceFromCache(listId, placeId, userId);
+    },
+
+    /**
+     * Update list metadata in cache
+     */
+    updateMetadata: async (
+      listId: string,
+      updates: Partial<ListWithPlaces>,
+      userId: string
+    ): Promise<void> => {
+      return ListDetailsCache.updateListMetadataInCache(listId, updates, userId);
+    },
+
+    /**
+     * Check if we have cached list details
+     */
+    hasCache: async (listId: string, userId: string): Promise<boolean> => {
+      return ListDetailsCache.hasCache(listId, userId);
+    },
+
+    /**
+     * Get cache status for debugging
+     */
+    getStatus: async (listId: string, userId: string) => {
+      return ListDetailsCache.getCacheStatus(listId, userId);
+    },
+
+    /**
+     * Clear cached list details for a specific list
+     */
+    clear: async (listId: string): Promise<void> => {
+      return ListDetailsCache.clearListCache(listId);
+    },
+
+    /**
+     * Invalidate cache for a specific list
+     */
+    invalidate: async (listId: string): Promise<void> => {
+      return ListDetailsCache.invalidateListCache(listId);
+    }
+  };
+
+  /**
    * Search cache operations (check-in search with smart matching)
    */
   search = {
@@ -386,5 +485,6 @@ export {
   googlePlacesCache,
   LocationCache,
   ListsCache,
+  ListDetailsCache,
   checkInSearchCache
 };

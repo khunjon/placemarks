@@ -61,6 +61,7 @@ import {
 } from '../../services/listsService';
 import { userRatingsService, UserRatingType } from '../../services/userRatingsService';
 import { checkInsService } from '../../services/checkInsService';
+import { cacheManager } from '../../services/cacheManager';
 import Toast from '../../components/ui/Toast';
 import type { ListsStackScreenProps } from '../../navigation/types';
 
@@ -133,39 +134,50 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       }
 
       if (user && listId) {
-        loadListData();
+        console.log('ListDetailScreen focused, checking cache...');
+        // Only refresh if we don't have recent cached data
+        cacheManager.listDetails.hasCache(listId, user.id).then(hasCache => {
+          if (!hasCache) {
+            // No cache, do a normal load
+            loadListData();
+          } else {
+            // We have cache, just do a background refresh
+            loadListDataInBackground();
+          }
+        });
       }
     }, [user, listId])
   );
 
   /**
-   * Load list data - simplified with Google Place IDs
+   * Load list data with caching - optimized to eliminate redundant API calls
    */
   const loadListData = async (forceRefresh = false) => {
     if (!user?.id) return;
     
     try {
-      setLoading(true);
-      
-      // Load list with places - much simpler with Google Place IDs
-      const [listWithPlaces, userRatingsData] = await Promise.all([
-        // Get list with enriched places
-        loadListWithPlaces(),
-        
-        // Get user ratings for all places in the list
-        loadUserRatingsForList()
-      ]);
-      
-      if (listWithPlaces) {
-        setList(listWithPlaces);
-        setEditedName(listWithPlaces.name);
-        setEditedDescription(listWithPlaces.description || '');
-        setIsPublic(listWithPlaces.visibility === 'public');
-        setUserRatings(userRatingsData);
-      } else {
-        Alert.alert('Error', 'List not found');
-        navigation.goBack();
+      // Check cache first if not forcing refresh
+      if (!forceRefresh) {
+        const cached = await cacheManager.listDetails.get(listId, user.id);
+        if (cached) {
+          console.log('ListDetailScreen: Using cached list details');
+          // Immediately show cached data
+          setList(cached.list);
+          setEditedName(cached.list.name);
+          setEditedDescription(cached.list.description || '');
+          setIsPublic(cached.list.visibility === 'public');
+          setUserRatings(cached.userRatings);
+          setLoading(false);
+          
+          // Load fresh data in background without showing loading state
+          loadListDataInBackground();
+          return;
+        }
       }
+      
+      // No cache or force refresh - show loading and fetch fresh data
+      setLoading(true);
+      await loadFreshListData();
     } catch (error) {
       console.error('Error loading list:', error);
       showToast('Failed to load list', 'error');
@@ -175,7 +187,60 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
   };
 
   /**
-   * Load list with places using the new simplified service
+   * Load fresh list data and cache it - optimized single API call
+   */
+  const loadFreshListData = async (): Promise<void> => {
+    try {
+      // Load list with places in single API call
+      const listWithPlaces = await loadListWithPlaces();
+      
+      if (!listWithPlaces) {
+        Alert.alert('Error', 'List not found');
+        navigation.goBack();
+        return;
+      }
+      
+      // Extract Google Place IDs for ratings lookup
+      const googlePlaceIds = listWithPlaces.places.map(p => p.place_id);
+      
+      // Get user ratings for all places
+      const ratingsMap = await userRatingsService.getUserRatingsForPlaces(user!.id, googlePlaceIds);
+      
+      // Convert ratings to record format
+      const userRatingsData: Record<string, UserRatingType> = {};
+      ratingsMap.forEach((rating, googlePlaceId) => {
+        userRatingsData[googlePlaceId] = rating;
+      });
+      
+      // Update state
+      setList(listWithPlaces);
+      setEditedName(listWithPlaces.name);
+      setEditedDescription(listWithPlaces.description || '');
+      setIsPublic(listWithPlaces.visibility === 'public');
+      setUserRatings(userRatingsData);
+      
+      // Cache the loaded data
+      await cacheManager.listDetails.store(listId, listWithPlaces, userRatingsData, user.id);
+    } catch (error) {
+      console.error('Error loading fresh list data:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Load fresh data in background without affecting UI loading state
+   */
+  const loadListDataInBackground = async (): Promise<void> => {
+    try {
+      await loadFreshListData();
+    } catch (error) {
+      console.warn('Background list refresh failed:', error);
+      // Don't show error to user for background refresh failures
+    }
+  };
+
+  /**
+   * Load list with places using the simplified service
    */
   const loadListWithPlaces = async (): Promise<ListWithPlaces | null> => {
     if (listType === 'curated') {
@@ -190,45 +255,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
   };
 
   /**
-   * Load user ratings for all places in the list - simplified with Google Place IDs
-   */
-  const loadUserRatingsForList = async (): Promise<Record<string, UserRatingType>> => {
-    try {
-      let currentList: ListWithPlaces | null = null;
-      
-      if (listType === 'curated') {
-        // For curated lists, get from curated lists
-        const curatedLists = await listsService.getCuratedLists();
-        currentList = curatedLists.find(l => l.id === listId) || null;
-      } else {
-        // For user lists, get from user lists
-        const lists = await listsService.getUserListsWithPlaces(user!.id);
-        currentList = lists.find(l => l.id === listId) || null;
-      }
-      
-      if (!currentList) return {};
-      
-      // Extract Google Place IDs
-      const googlePlaceIds = currentList.places.map(p => p.place_id);
-      
-      // Get ratings for all places at once
-      const ratingsMap = await userRatingsService.getUserRatingsForPlaces(user!.id, googlePlaceIds);
-      
-      // Convert to record format
-      const result: Record<string, UserRatingType> = {};
-      ratingsMap.forEach((rating, googlePlaceId) => {
-        result[googlePlaceId] = rating;
-      });
-      
-      return result;
-    } catch (error) {
-      console.error('Error loading user ratings:', error);
-      return {};
-    }
-  };
-
-  /**
-   * Handle refresh
+   * Handle refresh - force refresh from API and update cache
    */
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -257,12 +284,22 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       
       // Update local state
       if (list) {
-        setList({
+        const updatedList = {
           ...list,
           name: editedName.trim(),
           description: editedDescription.trim(),
           visibility: isPublic ? 'public' : 'private',
-        });
+        };
+        setList(updatedList);
+        
+        // Update cache with new metadata
+        if (user?.id) {
+          await cacheManager.listDetails.updateMetadata(listId, {
+            name: editedName.trim(),
+            description: editedDescription.trim(),
+            visibility: isPublic ? 'public' : 'private',
+          }, user.id);
+        }
       }
     } catch (error) {
       console.error('Error updating list:', error);
@@ -285,6 +322,12 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
           onPress: async () => {
             try {
               await listsService.deleteList(listId);
+              
+              // Clear cache for this list
+              if (user?.id) {
+                await cacheManager.listDetails.clear(listId);
+              }
+              
               showToast('List deleted successfully');
               navigation.goBack();
             } catch (error) {
@@ -324,13 +367,19 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
               await listsService.removePlaceFromList(listId, googlePlaceId);
               showToast('Place removed from list');
               
-              // Update local state
+              // Update local state immediately
               if (list) {
-                setList({
+                const updatedList = {
                   ...list,
                   places: list.places.filter(p => p.place_id !== googlePlaceId),
                   place_count: list.place_count - 1
-                });
+                };
+                setList(updatedList);
+                
+                // Update cache with optimistic update
+                if (user?.id) {
+                  await cacheManager.listDetails.removePlace(listId, googlePlaceId, user.id);
+                }
               }
             } catch (error) {
               console.error('Error removing place:', error);
@@ -423,7 +472,8 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
     }
   };
 
-  if (loading) {
+  // Only show loading state if we have no data AND we're loading (first time load)
+  if (loading && !list) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: DarkTheme.colors.semantic.systemBackground }}>
         <LoadingState message="Loading list..." />
