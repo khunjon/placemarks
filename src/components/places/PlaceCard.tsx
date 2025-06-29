@@ -196,7 +196,7 @@ export default function PlaceCard({
           borderColor: DarkTheme.colors.semantic.separator,
           borderWidth: 1,
           borderRadius: DarkTheme.borderRadius.md,
-          padding: 8,
+          padding: 6,
           marginBottom: DarkTheme.spacing.sm,
           ...DarkTheme.shadows.small,
         },
@@ -221,7 +221,7 @@ export default function PlaceCard({
       <View style={{
         flexDirection: 'row',
         alignItems: 'flex-start',
-        marginBottom: 4,
+        marginBottom: placeData.description && placeData.description.trim() ? 4 : 2,
       }}>
         <View 
           style={{
@@ -327,70 +327,74 @@ export default function PlaceCard({
       </View>
 
 
-      {/* Description */}
-      <Text 
-        style={[
-          DarkTheme.typography.subhead,
-          { 
-            color: DarkTheme.colors.semantic.secondaryLabel,
-            marginBottom: 4
-          }
-        ]}
-        numberOfLines={2}
-      >
-        {placeData.description}
-      </Text>
+      {/* Description - only render if has content */}
+      {placeData.description && placeData.description.trim() && (
+        <Text 
+          style={[
+            DarkTheme.typography.subhead,
+            { 
+              color: DarkTheme.colors.semantic.secondaryLabel,
+              marginBottom: 4
+            }
+          ]}
+          numberOfLines={2}
+        >
+          {placeData.description}
+        </Text>
+      )}
 
 
-      {/* Badges and Check-in Button */}
-      <View style={{ 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        justifyContent: showCheckInButton ? 'space-between' : 'flex-start'
-      }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {placeData.btsStation && (
-            <LocationBadge 
-              type="bts" 
-              value={placeData.btsStation} 
-              size="small" 
-            />
+      {/* Badges and Check-in Button - only render if has content */}
+      {(placeData.btsStation || showCheckInButton) && (
+        <View style={{ 
+          flexDirection: 'row', 
+          alignItems: 'center', 
+          justifyContent: showCheckInButton ? 'space-between' : 'flex-start'
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {placeData.btsStation && (
+              <LocationBadge 
+                type="bts" 
+                value={placeData.btsStation} 
+                size="small" 
+              />
+            )}
+          </View>
+          
+          {showCheckInButton && (
+            <TouchableOpacity
+              onPress={handleCheckIn}
+              style={{
+                backgroundColor: DarkTheme.colors.bangkok.gold,
+                paddingHorizontal: DarkTheme.spacing.md,
+                paddingVertical: DarkTheme.spacing.sm,
+                borderRadius: DarkTheme.borderRadius.sm,
+                flexDirection: 'row',
+                alignItems: 'center',
+              }}
+              activeOpacity={0.8}
+            >
+              <Camera 
+                size={16} 
+                color={DarkTheme.colors.system.black}
+                strokeWidth={2}
+              />
+              <Text 
+                style={[
+                  DarkTheme.typography.callout,
+                  { 
+                    color: DarkTheme.colors.system.black,
+                    fontWeight: '600',
+                    marginLeft: DarkTheme.spacing.xs 
+                  }
+                ]}
+              >
+                Check In
+              </Text>
+            </TouchableOpacity>
           )}
         </View>
-        
-        {showCheckInButton && (
-          <TouchableOpacity
-            onPress={handleCheckIn}
-            style={{
-              backgroundColor: DarkTheme.colors.bangkok.gold,
-              paddingHorizontal: DarkTheme.spacing.md,
-              paddingVertical: DarkTheme.spacing.sm,
-              borderRadius: DarkTheme.borderRadius.sm,
-              flexDirection: 'row',
-              alignItems: 'center',
-            }}
-            activeOpacity={0.8}
-          >
-            <Camera 
-              size={16} 
-              color={DarkTheme.colors.system.black}
-              strokeWidth={2}
-            />
-            <Text 
-              style={[
-                DarkTheme.typography.callout,
-                { 
-                  color: DarkTheme.colors.system.black,
-                  fontWeight: '600',
-                  marginLeft: DarkTheme.spacing.xs 
-                }
-              ]}
-            >
-              Check In
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      )}
     </TouchableOpacity>
   );
 }
