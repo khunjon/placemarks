@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, ScrollView, Modal, Alert, RefreshControl, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Plus, List, Zap, Heart, TrendingUp, Clock, MapPin, ChevronRight } from 'lucide-react-native';
+import { Plus, List, Zap, Heart, TrendingUp, Clock, MapPin, ChevronRight, Bookmark } from 'lucide-react-native';
 import { Colors } from '../../constants/Colors';
 import { Spacing } from '../../constants/Spacing';
 import { DarkTheme } from '../../constants/theme';
@@ -35,7 +35,8 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
   // Track initial mount to prevent duplicate loading
   const isInitialMount = useRef(true);
   
-  const [userLists, setUserLists] = useState<ListWithPlaces[]>([]);
+  const [defaultLists, setDefaultLists] = useState<ListWithPlaces[]>([]);
+  const [customLists, setCustomLists] = useState<ListWithPlaces[]>([]);
   // Smart lists will be implemented later
   // const [smartLists, setSmartLists] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,9 +88,12 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     if (!user?.id) return;
     
     try {
-      // Load all user lists (includes default favorites)
-      const lists = await listsService.getUserListsWithPlaces(user.id);
-      setUserLists(lists);
+      // Load default lists (Favorites + Want to Go) and custom lists separately
+      const defaultListsData = await listsService.getDefaultLists(user.id);
+      const customListsData = await listsService.getCustomLists(user.id);
+      
+      setDefaultLists(defaultListsData);
+      setCustomLists(customListsData);
     } catch (error) {
       console.error('Error loading user lists:', error);
       Alert.alert('Error', 'Failed to load user lists');
@@ -107,12 +111,12 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     setRefreshing(false);
   };
 
-  const handleNavigateToList = (listId: string, listName: string) => {
+  const handleNavigateToList = (listId: string, listName: string, isEditable = true) => {
     navigation.navigate('ListDetail', {
       listId,
       listName,
       listType: 'user',
-      isEditable: true,
+      isEditable,
     });
   };
 
@@ -180,7 +184,9 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
   };
 
   const handleEditList = (listId: string) => {
-    const listToEdit = userLists.find(list => list.id === listId);
+    // Look for the list in both default and custom lists
+    const allLists = [...defaultLists, ...customLists];
+    const listToEdit = allLists.find(list => list.id === listId);
     if (listToEdit) {
       navigation.navigate('EditList', {
         listId: listToEdit.id,
@@ -194,12 +200,12 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
 
 
 
-  // Separate favorites from other user lists
-  const favoritesList = userLists.find(list => list.is_default);
-  const customLists = userLists.filter(list => !list.is_default);
+  // Get specific default lists
+  const favoritesList = defaultLists.find(list => list.default_list_type === 'favorites');
+  const wantToGoList = defaultLists.find(list => list.default_list_type === 'want_to_go');
 
-  // Convert to ListItemProps format
-  const userListsWithHandlers: ListItemProps[] = customLists.map(list => ({
+  // Convert custom lists to ListItemProps format
+  const customListsWithHandlers: ListItemProps[] = customLists.map(list => ({
     id: list.id,
     name: list.name,
     type: 'user' as const,
@@ -260,7 +266,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
-        {/* My Lists Section */}
+        {/* Default Lists Section */}
         <View style={{
           paddingHorizontal: Spacing.layout.screenPadding,
           paddingTop: Spacing.lg,
@@ -268,25 +274,15 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
         }}>
           <View style={{
             flexDirection: 'row',
-            alignItems: 'center',
-            marginBottom: Spacing.md,
+            justifyContent: 'space-between',
+            gap: Spacing.md,
           }}>
-            <List 
-              size={Spacing.iconSize.md} 
-              color={Colors.primary[500]}
-              strokeWidth={2}
-            />
-            <Title3 style={{ marginLeft: Spacing.sm }}>
-              My Lists
-            </Title3>
-          </View>
-
-          {/* Favorites List - Always shown first */}
-          {favoritesList && (
-            <View style={{ marginBottom: Spacing.md }}>
+            {/* Favorites List */}
+            {favoritesList && (
               <TouchableOpacity
-                onPress={() => handleNavigateToList(favoritesList.id, favoritesList.name)}
+                onPress={() => handleNavigateToList(favoritesList.id, favoritesList.name, false)}
                 activeOpacity={0.7}
+                style={{ flex: 1 }}
               >
                 <Card 
                   padding="md"
@@ -315,30 +311,106 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
                         <Typography variant="headline" style={{ 
                           marginLeft: Spacing.xs,
                           fontWeight: '600',
-                          color: '#EF4444'
+                          color: '#EF4444',
+                          fontSize: 15,
                         }}>
                           Favorites
                         </Typography>
                       </View>
-                      <Body color="secondary">
-                        {favoritesList.place_count} places • Your favorite spots
-                      </Body>
+                      <SecondaryText style={{ fontWeight: '600', fontSize: 12 }}>
+                        {favoritesList.place_count} {favoritesList.place_count === 1 ? 'place' : 'places'}
+                      </SecondaryText>
                     </View>
                     <ChevronRight 
-                      size={20} 
+                      size={18} 
                       color={Colors.neutral[400]}
                       strokeWidth={2}
                     />
                   </View>
                 </Card>
               </TouchableOpacity>
-            </View>
-          )}
+            )}
+
+            {/* Want to Go List */}
+            {wantToGoList && (
+              <TouchableOpacity
+                onPress={() => handleNavigateToList(wantToGoList.id, wantToGoList.name, false)}
+                activeOpacity={0.7}
+                style={{ flex: 1 }}
+              >
+                <Card 
+                  padding="md"
+                  style={{
+                    borderLeftWidth: 4,
+                    borderLeftColor: '#10B981',
+                  }}
+                >
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}>
+                    <View style={{ flex: 1 }}>
+                      <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        marginBottom: Spacing.xs,
+                      }}>
+                        <Bookmark 
+                          size={Spacing.iconSize.sm} 
+                          color="#10B981"
+                          fill="#10B981"
+                          strokeWidth={2}
+                        />
+                        <Typography variant="headline" style={{ 
+                          marginLeft: Spacing.xs,
+                          fontWeight: '600',
+                          color: '#10B981',
+                          fontSize: 15,
+                        }}>
+                          Want to Go
+                        </Typography>
+                      </View>
+                      <SecondaryText style={{ fontWeight: '600', fontSize: 12 }}>
+                        {wantToGoList.place_count} {wantToGoList.place_count === 1 ? 'place' : 'places'}
+                      </SecondaryText>
+                    </View>
+                    <ChevronRight 
+                      size={18} 
+                      color={Colors.neutral[400]}
+                      strokeWidth={2}
+                    />
+                  </View>
+                </Card>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* My Lists Section */}
+        <View style={{
+          paddingHorizontal: Spacing.layout.screenPadding,
+          marginBottom: Spacing.layout.sectionSpacing,
+        }}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginBottom: Spacing.md,
+          }}>
+            <List 
+              size={Spacing.iconSize.md} 
+              color={Colors.primary[500]}
+              strokeWidth={2}
+            />
+            <Title3 style={{ marginLeft: Spacing.sm }}>
+              My Lists
+            </Title3>
+          </View>
 
           {/* Custom Lists */}
-          {userListsWithHandlers.length > 0 ? (
+          {customListsWithHandlers.length > 0 ? (
             <View>
-              {userListsWithHandlers.map((list) => (
+              {customListsWithHandlers.map((list) => (
                 <ListItem
                   key={list.id}
                   {...list}
@@ -349,10 +421,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
             <ElevatedCard padding="lg">
               <View style={{ alignItems: 'center', paddingVertical: Spacing.lg }}>
                 <Body color="secondary" style={{ textAlign: 'center', marginBottom: Spacing.sm }}>
-                  {favoritesList?.place_count === 0 
-                    ? "Start by adding places to your Favorites, then create custom lists to organize them!"
-                    : "No custom lists yet"
-                  }
+                  No custom lists yet. Create lists to organize your places!
                 </Body>
                 <PrimaryButton
                   title="Create Your First List"

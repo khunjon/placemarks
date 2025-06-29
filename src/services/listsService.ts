@@ -10,6 +10,7 @@ export interface EnhancedList extends List {
   icon?: string;
   color?: string;
   type?: 'user' | 'auto' | 'curated';
+  default_list_type?: string;
 }
 
 export interface ListPlace {
@@ -103,6 +104,7 @@ export class ListsService {
           color,
           type,
           is_default,
+          default_list_type,
           is_curated,
           publisher_name,
           publisher_logo_url,
@@ -209,6 +211,7 @@ export class ListsService {
           color: list.color,
           type: list.type,
           is_default: list.is_default,
+          default_list_type: list.default_list_type,
           is_curated: list.is_curated,
           publisher_name: list.publisher_name,
           publisher_logo_url: list.publisher_logo_url,
@@ -226,6 +229,38 @@ export class ListsService {
       console.error('Error getting user lists with places:', error);
       throw new ListError('Failed to get user lists with places', 'GET_LISTS_WITH_PLACES_ERROR');
     }
+  }
+
+  /**
+   * Get default lists (Favorites and Want to Go) for a user
+   */
+  async getDefaultLists(userId: string): Promise<ListWithPlaces[]> {
+    const allLists = await this.getUserListsWithPlaces(userId);
+    return allLists.filter(list => list.is_default);
+  }
+
+  /**
+   * Get custom (non-default) lists for a user
+   */
+  async getCustomLists(userId: string): Promise<ListWithPlaces[]> {
+    const allLists = await this.getUserListsWithPlaces(userId);
+    return allLists.filter(list => !list.is_default);
+  }
+
+  /**
+   * Get favorites list for a user
+   */
+  async getFavoritesList(userId: string): Promise<ListWithPlaces | null> {
+    const allLists = await this.getUserListsWithPlaces(userId);
+    return allLists.find(list => list.is_default && list.default_list_type === 'favorites') || null;
+  }
+
+  /**
+   * Get want to go list for a user
+   */
+  async getWantToGoList(userId: string): Promise<ListWithPlaces | null> {
+    const allLists = await this.getUserListsWithPlaces(userId);
+    return allLists.find(list => list.is_default && list.default_list_type === 'want_to_go') || null;
   }
 
   /**

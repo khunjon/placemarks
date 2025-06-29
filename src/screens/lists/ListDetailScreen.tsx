@@ -603,14 +603,12 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                   <SortAsc size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
                 </TouchableOpacity>
                 
-                {isEditable && (
-                  <TouchableOpacity
-                    onPress={handleAddPlace}
-                    style={{ padding: 4 }}
-                  >
-                    <Plus size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity
+                  onPress={handleAddPlace}
+                  style={{ padding: 4 }}
+                >
+                  <Plus size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                </TouchableOpacity>
                 
                 {isEditable && (
                   <TouchableOpacity
@@ -621,12 +619,14 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                   </TouchableOpacity>
                 )}
                 
-                <TouchableOpacity
-                  onPress={handleShareList}
-                  style={{ padding: 4 }}
-                >
-                  <Share size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
-                </TouchableOpacity>
+                {isEditable && (
+                  <TouchableOpacity
+                    onPress={handleShareList}
+                    style={{ padding: 4 }}
+                  >
+                    <Share size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           </View>
