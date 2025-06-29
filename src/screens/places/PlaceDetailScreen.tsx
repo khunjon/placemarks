@@ -87,7 +87,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   const [place, setPlace] = useState<EnrichedPlace | null>(null);
   const [userRating, setUserRating] = useState<UserRatingType | null>(null);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
-  const [listsContainingPlace, setListsContainingPlace] = useState<EnrichedListPlace[]>([]);
+  const [listsContainingPlace, setListsContainingPlace] = useState<(EnrichedListPlace & { list_name: string })[]>([]);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Toast state
@@ -183,15 +183,18 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   /**
    * Get lists that contain this place
    */
-  const getListsContainingPlace = async (userId: string, googlePlaceId: string): Promise<EnrichedListPlace[]> => {
+  const getListsContainingPlace = async (userId: string, googlePlaceId: string): Promise<(EnrichedListPlace & { list_name: string })[]> => {
     try {
       const userLists = await listsService.getUserListsWithPlaces(userId);
-      const containingLists: EnrichedListPlace[] = [];
+      const containingLists: (EnrichedListPlace & { list_name: string })[] = [];
       
       userLists.forEach(list => {
         const placeInList = list.places.find(p => p.place_id === googlePlaceId);
         if (placeInList) {
-          containingLists.push(placeInList);
+          containingLists.push({
+            ...placeInList,
+            list_name: list.name
+          });
         }
       });
       
@@ -762,7 +765,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                   >
                     <Heart size={16} color={DarkTheme.colors.accent.red} strokeWidth={2} />
                     <View style={{ marginLeft: Spacing.sm, flex: 1 }}>
-                      <Body>Added to list on {new Date(listPlace.added_at).toLocaleDateString()}</Body>
+                      <Body>{listPlace.list_name}</Body>
                       {listPlace.notes && (
                         <SecondaryText style={{ marginTop: 2 }}>{listPlace.notes}</SecondaryText>
                       )}
