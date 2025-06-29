@@ -433,7 +433,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.md,
+        paddingVertical: Spacing.sm,
         borderBottomWidth: 1,
         borderBottomColor: DarkTheme.colors.semantic.separator,
       }}>
@@ -446,11 +446,6 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
         
         <View style={{ flex: 1, alignItems: 'center' }}>
           <Headline style={{ textAlign: 'center' }}>Place Details</Headline>
-          {source && (
-            <SecondaryText style={{ fontSize: 12 }}>
-              from {source === 'recommendation' ? 'recommendations' : source}
-            </SecondaryText>
-          )}
         </View>
         
         <TouchableOpacity
@@ -625,7 +620,6 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
 
             {/* Quick Info */}
             <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
-              <Title3 style={{ marginBottom: Spacing.md }}>Quick Info</Title3>
               
               {/* Hours */}
               {place.opening_hours && (
