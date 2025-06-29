@@ -159,7 +159,7 @@ export default function PlaceCard({
     googlePlaceId: place.google_place_id,
     name: place.name,
     type: place.types ? inferPlaceTypeFromGoogleTypes(place.types) : 'restaurant',
-    description: place.display_description || '',
+    description: (place.has_editorial_content && place.display_description) ? place.display_description : '',
     address: place.formatted_address,
     distance: distance || '',
     rating: place.rating,

@@ -75,12 +75,14 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   const googlePlaceId = routeParams.googlePlaceId || routeParams.placeId;
   const placeName = routeParams.placeName || routeParams.listName || 'Loading...';
   const source = routeParams.source || 'list';
+  const contextListId = routeParams.listId; // ID of the list user came from
+  const contextListName = routeParams.listName; // Name of the list user came from
   
   const { user } = useAuth();
   
   // Refs for keyboard handling
   const scrollViewRef = useRef<ScrollView>(null);
-  const textInputRef = useRef<TextInput>(null);
+  const noteInputRef = useRef<TextInput>(null);
   
   // State
   const [loading, setLoading] = useState(true);
@@ -89,6 +91,11 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [listsContainingPlace, setListsContainingPlace] = useState<(EnrichedListPlace & { list_name: string })[]>([]);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  
+  // Single note state for the context list
+  const [noteText, setNoteText] = useState<string>('');
+  const [isEditingNote, setIsEditingNote] = useState(false);
+  const [contextListPlace, setContextListPlace] = useState<(EnrichedListPlace & { list_name: string }) | null>(null);
 
   // Toast state
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' }>({
@@ -120,7 +127,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
     return unsubscribe;
   }, [navigation, user?.id]);
 
-  // Keyboard listeners
+  // Keyboard listeners - simplified to just track keyboard height
   useEffect(() => {
     const keyboardWillShow = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
@@ -171,6 +178,15 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       setUserRating(userRatingData?.rating_type || null);
       setCheckIns(checkInsData.filter(checkIn => checkIn.user_id === user.id));
       setListsContainingPlace(listsData);
+      
+      // Initialize note for the specific context list (if user came from a list)
+      if (contextListId) {
+        const contextList = listsData.find(listPlace => listPlace.list_id === contextListId);
+        if (contextList) {
+          setContextListPlace(contextList);
+          setNoteText(contextList.notes || '');
+        }
+      }
       
     } catch (error) {
       console.error('Error loading place details:', error);
@@ -277,6 +293,57 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
     
     // In a real app, you'd use React Native's Share API
     showToast('Share URL copied to clipboard');
+  };
+
+  /**
+   * Handle note editing
+   */
+  const handleEditNote = () => {
+    setIsEditingNote(true);
+    
+    // Focus the text input after a brief delay - let KeyboardAvoidingView handle positioning
+    setTimeout(() => {
+      noteInputRef.current?.focus();
+    }, 100);
+  };
+
+  const handleSaveNote = async () => {
+    if (!user?.id || !contextListPlace) return;
+    
+    try {
+      await listsService.updatePlaceInList(
+        contextListPlace.list_id,
+        googlePlaceId,
+        { notes: noteText.trim() || undefined }
+      );
+      
+      // Update local state
+      setIsEditingNote(false);
+      
+      // Update context list place
+      setContextListPlace(prev => prev ? { ...prev, notes: noteText.trim() || undefined } : null);
+      
+      // Update lists containing place
+      setListsContainingPlace(prev => 
+        prev.map(listPlace => 
+          listPlace.list_id === contextListPlace.list_id 
+            ? { ...listPlace, notes: noteText.trim() || undefined }
+            : listPlace
+        )
+      );
+      
+      showToast('Note saved');
+    } catch (error) {
+      console.error('Error saving note:', error);
+      showToast('Failed to save note', 'error');
+    }
+  };
+
+  const handleCancelNote = () => {
+    // Reset to original note
+    const originalNote = contextListPlace?.notes || '';
+    setNoteText(originalNote);
+    setIsEditingNote(false);
   };
 
   /**
@@ -397,13 +464,17 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       <KeyboardAvoidingView 
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        keyboardVerticalOffset={0}
       >
         <ScrollView 
           ref={scrollViewRef}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={{
+            paddingBottom: keyboardHeight > 0 ? keyboardHeight + 20 : 20,
+          }}
         >
           {/* Place Photos - prioritize editorial/featured images */}
           {(place.primary_image_url || place.photo_urls?.length > 0) && (
@@ -697,6 +768,115 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
               </ElevatedCard>
             )}
 
+            {/* Notes Section - Single note for the context list */}
+            {contextListPlace && (
+              <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md }}>
+                  <Title3>Note</Title3>
+                  <View style={{ marginLeft: Spacing.sm, flexDirection: 'row', alignItems: 'center' }}>
+                    <Heart size={12} color={DarkTheme.colors.accent.red} strokeWidth={2} />
+                    <SecondaryText style={{ marginLeft: Spacing.xs, fontSize: 12 }}>
+                      in {contextListPlace.list_name}
+                    </SecondaryText>
+                  </View>
+                </View>
+                
+                {/* Note Content */}
+                {isEditingNote ? (
+                  <View>
+                    <TextInput
+                      ref={noteInputRef}
+                      style={[
+                        {
+                          backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+                          borderColor: DarkTheme.colors.semantic.separator,
+                          borderWidth: 1,
+                          borderRadius: DarkTheme.borderRadius.sm,
+                          padding: Spacing.sm,
+                          color: DarkTheme.colors.semantic.label,
+                          fontSize: 16,
+                          minHeight: 80,
+                          textAlignVertical: 'top',
+                        }
+                      ]}
+                      placeholder="Add your note about this place..."
+                      placeholderTextColor={DarkTheme.colors.semantic.tertiaryLabel}
+                      multiline
+                      value={noteText}
+                      onChangeText={setNoteText}
+                    />
+                    
+                    {/* Edit Actions */}
+                    <View style={{ 
+                      flexDirection: 'row', 
+                      gap: Spacing.sm, 
+                      marginTop: Spacing.sm 
+                    }}>
+                      <TouchableOpacity
+                        onPress={handleSaveNote}
+                        style={{
+                          flex: 1,
+                          backgroundColor: DarkTheme.colors.accent.blue,
+                          paddingVertical: Spacing.sm,
+                          paddingHorizontal: Spacing.md,
+                          borderRadius: DarkTheme.borderRadius.sm,
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Body style={{ color: DarkTheme.colors.system.white, fontWeight: '600' }}>
+                          Save
+                        </Body>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity
+                        onPress={handleCancelNote}
+                        style={{
+                          flex: 1,
+                          backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+                          paddingVertical: Spacing.sm,
+                          paddingHorizontal: Spacing.md,
+                          borderRadius: DarkTheme.borderRadius.sm,
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Body style={{ color: DarkTheme.colors.semantic.label, fontWeight: '500' }}>
+                          Cancel
+                        </Body>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    onPress={handleEditNote}
+                    style={{
+                      backgroundColor: noteText 
+                        ? DarkTheme.colors.semantic.secondarySystemBackground 
+                        : DarkTheme.colors.semantic.tertiarySystemBackground,
+                      borderColor: DarkTheme.colors.semantic.separator,
+                      borderWidth: 1,
+                      borderRadius: DarkTheme.borderRadius.sm,
+                      padding: Spacing.sm,
+                      minHeight: 60,
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {noteText ? (
+                      <Body style={{ 
+                        color: DarkTheme.colors.semantic.label,
+                        lineHeight: 20 
+                      }}>
+                        {noteText}
+                      </Body>
+                    ) : (
+                      <SecondaryText style={{ fontStyle: 'italic' }}>
+                        Tap to add a note about this place in your {contextListPlace.list_name} list...
+                      </SecondaryText>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </ElevatedCard>
+            )}
+
             {/* Check-in History */}
             {checkIns.length > 0 && (
               <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
@@ -731,7 +911,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                   >
                     <CheckSquare size={18} color={DarkTheme.colors.accent.green} strokeWidth={2} />
                     <View style={{ marginLeft: Spacing.sm, flex: 1 }}>
-                      <Body>{new Date(checkIn.created_at).toLocaleDateString()}</Body>
+                      <Body>{checkIn.created_at ? new Date(checkIn.created_at).toLocaleDateString() : 'Unknown date'}</Body>
                       {checkIn.comment && (
                         <SecondaryText style={{ marginTop: 2 }}>{checkIn.comment}</SecondaryText>
                       )}
@@ -766,9 +946,6 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                     <Heart size={16} color={DarkTheme.colors.accent.red} strokeWidth={2} />
                     <View style={{ marginLeft: Spacing.sm, flex: 1 }}>
                       <Body>{listPlace.list_name}</Body>
-                      {listPlace.notes && (
-                        <SecondaryText style={{ marginTop: 2 }}>{listPlace.notes}</SecondaryText>
-                      )}
                     </View>
                   </View>
                 ))}
