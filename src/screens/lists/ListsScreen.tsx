@@ -25,6 +25,7 @@ import {
   listsService, 
   ListWithPlaces
 } from '../../services/listsService';
+import { cacheManager } from '../../services/cacheManager';
 import type { ListsStackScreenProps } from '../../navigation/types';
 
 type ListsScreenProps = ListsStackScreenProps<'Lists'>;
@@ -62,8 +63,16 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
 
       if (user) {
         console.log('ListsScreen focused, checking cache...');
-        // Reload lists when screen comes into focus
-        loadAllLists();
+        // Only refresh if we don't have recent cached data
+        cacheManager.lists.hasCache(user.id).then(hasCache => {
+          if (!hasCache) {
+            // No cache, do a normal load
+            loadAllLists();
+          } else {
+            // We have cache, just do a background refresh
+            loadUserListsInBackground();
+          }
+        });
       }
     }, [user])
   );
@@ -72,9 +81,26 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     if (!user?.id) return;
     
     try {
-      setLoading(true);
+      // Check cache first if not forcing refresh
+      if (!forceRefresh) {
+        const cached = await cacheManager.lists.get(user.id);
+        if (cached) {
+          console.log('ListsScreen: Using cached lists data');
+          // Immediately show cached data
+          const defaultListsData = cached.userLists.filter(list => list.is_default);
+          const customListsData = cached.userLists.filter(list => !list.is_default);
+          setDefaultLists(defaultListsData);
+          setCustomLists(customListsData);
+          setLoading(false);
+          
+          // Load fresh data in background without showing loading state
+          loadUserListsInBackground();
+          return;
+        }
+      }
       
-      // Load fresh data from API (caching handled internally)
+      // No cache or force refresh - show loading and fetch fresh data
+      setLoading(true);
       await loadUserLists();
     } catch (error) {
       console.error('Error loading lists:', error);
@@ -94,9 +120,34 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       
       setDefaultLists(defaultListsData);
       setCustomLists(customListsData);
+      
+      // Cache the loaded data
+      const allUserLists = [...defaultListsData, ...customListsData];
+      await cacheManager.lists.store(allUserLists, [], user.id);
     } catch (error) {
       console.error('Error loading user lists:', error);
       Alert.alert('Error', 'Failed to load user lists');
+    }
+  };
+
+  const loadUserListsInBackground = async () => {
+    if (!user?.id) return;
+    
+    try {
+      // Load fresh data silently in background
+      const defaultListsData = await listsService.getDefaultLists(user.id);
+      const customListsData = await listsService.getCustomLists(user.id);
+      
+      // Update state with fresh data
+      setDefaultLists(defaultListsData);
+      setCustomLists(customListsData);
+      
+      // Update cache with fresh data
+      const allUserLists = [...defaultListsData, ...customListsData];
+      await cacheManager.lists.store(allUserLists, [], user.id);
+    } catch (error) {
+      console.warn('Background list refresh failed:', error);
+      // Don't show error to user for background refresh failures
     }
   };
 
@@ -107,7 +158,8 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadAllLists(true); // Force refresh from API
+    // Force refresh from API and update cache
+    await loadAllLists(true);
     setRefreshing(false);
   };
 
@@ -148,11 +200,24 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
         }
       );
 
-      // Reload lists to get the complete data with places
-      await loadUserLists();
+      // Create a list with places structure for immediate UI update
+      const newListWithPlaces = {
+        ...newList,
+        places: [],
+        place_count: 0
+      };
+
+      // Immediately update the UI by adding to custom lists
+      setCustomLists(prev => [...prev, newListWithPlaces]);
+      
+      // Update cache with the new list
+      await cacheManager.lists.addList(newListWithPlaces, user.id);
       
       setShowCreateModal(false);
       Alert.alert('Success', `"${listData.name}" list created!`);
+      
+      // Reload lists in background to ensure data consistency
+      loadUserListsInBackground();
     } catch (error) {
       console.error('Error creating list:', error);
       Alert.alert('Error', 'Failed to create list');
@@ -171,8 +236,19 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
           onPress: async () => {
             try {
               await listsService.deleteList(listId);
-              await loadUserLists();
+              
+              // Immediately update UI by removing from state
+              setCustomLists(prev => prev.filter(list => list.id !== listId));
+              
+              // Update cache by removing the list
+              if (user?.id) {
+                await cacheManager.lists.removeList(listId, user.id);
+              }
+              
               Alert.alert('Success', 'List deleted');
+              
+              // Background refresh to ensure consistency
+              loadUserListsInBackground();
             } catch (error) {
               console.error('Error deleting list:', error);
               Alert.alert('Error', 'Failed to delete list');
@@ -220,7 +296,8 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     onEdit: () => handleEditList(list.id),
   }));
 
-  if (loading) {
+  // Only show loading state if we have no data AND we're loading (first time load)
+  if (loading && defaultLists.length === 0 && customLists.length === 0) {
     return (
       <SafeAreaView style={{ 
         flex: 1, 
