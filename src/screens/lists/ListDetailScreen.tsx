@@ -720,6 +720,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                   onCheckIn={handleCheckIn}
                   onPress={() => handlePlacePress(listPlace.place_id, listPlace.place.name)}
                   showCheckInButton={false}
+                  notes={listPlace.notes}
                 />
                 
                 {/* Remove button for editable lists */}
@@ -737,21 +738,6 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                   >
                     <Trash2 size={16} color={DarkTheme.colors.status.error} strokeWidth={2} />
                   </TouchableOpacity>
-                )}
-                
-                
-                {/* Notes preview */}
-                {listPlace.notes && (
-                  <View style={{
-                    backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
-                    marginTop: Spacing.xs,
-                    padding: Spacing.sm,
-                    borderRadius: DarkTheme.borderRadius.sm,
-                  }}>
-                    <SecondaryText style={{ fontSize: 12, fontStyle: 'italic' }}>
-                      "{listPlace.notes}"
-                    </SecondaryText>
-                  </View>
                 )}
               </View>
             ))}

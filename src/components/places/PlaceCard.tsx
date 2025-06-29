@@ -31,6 +31,9 @@ export interface PlaceCardProps {
   // UI options
   showCheckInButton?: boolean;
   
+  // Notes
+  notes?: string;
+  
   // Optional styling
   style?: any;
 }
@@ -152,6 +155,7 @@ export default function PlaceCard({
   onCheckIn,
   onPress,
   showCheckInButton = true,
+  notes,
   style,
 }: PlaceCardProps) {
   // Use place object data if provided, otherwise use individual props
@@ -325,6 +329,29 @@ export default function PlaceCard({
           </Text>
         </View>
       </View>
+
+      {/* Notes Section */}
+      {notes && notes.trim() && (
+        <View style={{
+          backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+          marginTop: 8,
+          padding: 8,
+          borderRadius: 6,
+        }}>
+          <Text 
+            style={[
+              DarkTheme.typography.caption1,
+              { 
+                color: DarkTheme.colors.semantic.secondaryLabel,
+                fontStyle: 'italic',
+                fontSize: 12
+              }
+            ]}
+          >
+            "{notes}"
+          </Text>
+        </View>
+      )}
 
 
       {/* Description - only render if has content */}
