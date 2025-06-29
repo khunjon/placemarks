@@ -216,11 +216,54 @@ export default function AddPlaceToListScreen({
   };
 
   /**
+   * Filter place types to show only useful ones
+   */
+  const getUsefulPlaceTypes = (types: string[]): string[] => {
+    const typeMap: { [key: string]: string } = {
+      restaurant: 'Restaurant',
+      cafe: 'Cafe',
+      bakery: 'Bakery',
+      bar: 'Bar',
+      shopping_mall: 'Shopping Mall',
+      store: 'Store',
+      clothing_store: 'Clothing Store',
+      book_store: 'Book Store',
+      grocery_or_supermarket: 'Grocery Store',
+      convenience_store: 'Convenience Store',
+      spa: 'Spa',
+      gym: 'Gym',
+      beauty_salon: 'Beauty Salon',
+      hospital: 'Hospital',
+      pharmacy: 'Pharmacy',
+      bank: 'Bank',
+      atm: 'ATM',
+      gas_station: 'Gas Station',
+      lodging: 'Hotel',
+      tourist_attraction: 'Attraction',
+      museum: 'Museum',
+      art_gallery: 'Art Gallery',
+      night_club: 'Night Club',
+      movie_theater: 'Cinema',
+      park: 'Park',
+      zoo: 'Zoo',
+      amusement_park: 'Amusement Park'
+    };
+
+    const usefulTypes = types
+      .filter(type => typeMap[type]) // Only include types we have mapped
+      .map(type => typeMap[type]) // Convert to display names
+      .slice(0, 2); // Limit to 2 types
+
+    return usefulTypes;
+  };
+
+  /**
    * Render search result item
    */
   const renderSearchResult = (result: SearchResult) => {
     const isAdded = addedPlaces.has(result.googlePlaceId) || result.isAdded;
     const isAdding = result.isAdding;
+    const usefulTypes = getUsefulPlaceTypes(result.types);
 
     return (
       <Card
@@ -228,40 +271,29 @@ export default function AddPlaceToListScreen({
         padding="md"
         style={{ marginBottom: Spacing.sm }}
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View style={{ flex: 1, marginRight: Spacing.md }}>
-            <Body style={{ fontWeight: '600', marginBottom: Spacing.xs }}>
-              {result.name}
-            </Body>
-            
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.xs }}>
-              <MapPin size={14} color={DarkTheme.colors.semantic.tertiaryLabel} strokeWidth={2} />
-              <SecondaryText style={{ marginLeft: Spacing.xs, flex: 1 }}>
-                {result.address}
-              </SecondaryText>
-            </View>
+        <View>
+          {/* Place Name */}
+          <Body style={{ fontWeight: '600', marginBottom: Spacing.xs }}>
+            {result.name}
+          </Body>
+          
+          {/* Address without pin icon */}
+          <SecondaryText style={{ marginBottom: Spacing.xs, lineHeight: 18 }}>
+            {result.address}
+          </SecondaryText>
 
-            {result.rating && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.xs }}>
-                <Star size={14} color={DarkTheme.colors.bangkok.gold} strokeWidth={2} fill={DarkTheme.colors.bangkok.gold} />
-                <SecondaryText style={{ marginLeft: Spacing.xs }}>
-                  {result.rating.toFixed(1)}
-                </SecondaryText>
-                {result.priceLevel && (
-                  <SecondaryText style={{ marginLeft: Spacing.sm }}>
-                    {'$'.repeat(result.priceLevel)}
-                  </SecondaryText>
-                )}
-              </View>
-            )}
+          {/* Place Types - only show useful ones */}
+          {usefulTypes.length > 0 && (
+            <SecondaryText style={{ 
+              fontSize: 12, 
+              color: DarkTheme.colors.semantic.tertiaryLabel,
+              marginBottom: Spacing.sm
+            }}>
+              {usefulTypes.join(' • ')}
+            </SecondaryText>
+          )}
 
-            {result.types.length > 0 && (
-              <SecondaryText style={{ fontSize: 12, color: DarkTheme.colors.semantic.tertiaryLabel }}>
-                {result.types.slice(0, 3).join(' • ')}
-              </SecondaryText>
-            )}
-          </View>
-
+          {/* Add Button - now full width */}
           <TouchableOpacity
             onPress={() => handleAddPlace(result)}
             disabled={isAdded || isAdding}
@@ -273,8 +305,9 @@ export default function AddPlaceToListScreen({
               paddingVertical: Spacing.sm,
               borderRadius: DarkTheme.borderRadius.sm,
               opacity: isAdded || isAdding ? 0.7 : 1,
-              minWidth: 80,
               alignItems: 'center',
+              flexDirection: 'row',
+              justifyContent: 'center',
             }}
           >
             {isAdding ? (
@@ -285,7 +318,8 @@ export default function AddPlaceToListScreen({
                 <SecondaryText style={{ 
                   color: DarkTheme.colors.semantic.systemBackground, 
                   marginLeft: Spacing.xs,
-                  fontSize: 12
+                  fontSize: 14,
+                  fontWeight: '600'
                 }}>
                   Added
                 </SecondaryText>
@@ -296,9 +330,10 @@ export default function AddPlaceToListScreen({
                 <SecondaryText style={{ 
                   color: DarkTheme.colors.semantic.systemBackground, 
                   marginLeft: Spacing.xs,
-                  fontSize: 12
+                  fontSize: 14,
+                  fontWeight: '600'
                 }}>
-                  Add
+                  Add to List
                 </SecondaryText>
               </View>
             )}

@@ -49,6 +49,7 @@ interface GoogleAutocompleteResult {
     main_text: string;
     secondary_text: string;
   };
+  types?: string[]; // Place types from Google API
 }
 
 export class PlacesService {
@@ -185,6 +186,7 @@ export class PlacesService {
         description: prediction.description,
         main_text: prediction.structured_formatting.main_text,
         secondary_text: prediction.structured_formatting.secondary_text,
+        types: prediction.types || [], // Include place types from API
       }));
 
       // Cache suggestions

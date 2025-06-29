@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { PlaceSuggestion, Location } from '../../types';
 import { placesService } from '../../services/places';
+import { DarkTheme } from '../../constants/theme';
 
 interface PlaceAutocompleteProps {
   // Updated callback to provide Google Place ID directly
@@ -115,33 +116,64 @@ export default function PlaceAutocomplete({
     setShowSuggestions(false);
   };
 
-  const renderSuggestion = ({ item }: { item: PlaceSuggestion }) => (
-    <TouchableOpacity
-      style={styles.suggestionItem}
-      onPress={() => handlePlaceSelect(item)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.suggestionContent}>
-        <Text style={styles.mainText} numberOfLines={1}>
-          {item.main_text}
-        </Text>
-        {showFullAddress && (
-          <Text style={styles.secondaryText} numberOfLines={1}>
-            {item.secondary_text}
-          </Text>
-        )}
-        {/* Google Place ID for debugging - remove in production */}
-        {__DEV__ && (
-          <Text style={styles.debugText} numberOfLines={1}>
-            ID: {item.place_id}
-          </Text>
-        )}
-      </View>
-      <View style={styles.suggestionIcon}>
-        <Text style={styles.iconText}>📍</Text>
-      </View>
-    </TouchableOpacity>
-  );
+  /**
+   * Filter place types to show only useful ones
+   */
+  const getUsefulPlaceTypes = (types: string[]): string[] => {
+    if (!types || types.length === 0) return [];
+    
+    const typeMap: { [key: string]: string } = {
+      restaurant: 'Restaurant',
+      cafe: 'Cafe',
+      bakery: 'Bakery',
+      bar: 'Bar',
+      shopping_mall: 'Shopping',
+      store: 'Store',
+      lodging: 'Hotel',
+      tourist_attraction: 'Attraction',
+      museum: 'Museum',
+      park: 'Park'
+    };
+
+    const usefulTypes = types
+      .filter(type => typeMap[type])
+      .map(type => typeMap[type])
+      .slice(0, 1); // Only show 1 type in autocomplete
+
+    return usefulTypes;
+  };
+
+  const renderSuggestion = ({ item }: { item: PlaceSuggestion }) => {
+    const usefulTypes = getUsefulPlaceTypes(item.types || []);
+    
+    return (
+      <TouchableOpacity
+        style={styles.suggestionItem}
+        onPress={() => handlePlaceSelect(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.suggestionContent}>
+          <View style={styles.suggestionHeader}>
+            <Text style={styles.mainText} numberOfLines={1}>
+              {item.main_text}
+            </Text>
+            {usefulTypes.length > 0 && (
+              <View style={styles.typeBadge}>
+                <Text style={styles.typeBadgeText}>
+                  {usefulTypes[0]}
+                </Text>
+              </View>
+            )}
+          </View>
+          {showFullAddress && (
+            <Text style={styles.secondaryText} numberOfLines={1}>
+              {item.secondary_text}
+            </Text>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={[styles.container, style]}>
@@ -151,7 +183,7 @@ export default function PlaceAutocomplete({
           value={query}
           onChangeText={setQuery}
           placeholder={placeholder}
-          placeholderTextColor="#999999"
+          placeholderTextColor={DarkTheme.colors.semantic.tertiaryLabel}
           onFocus={handleInputFocus}
           onBlur={handleInputBlur}
           autoCorrect={false}
@@ -159,7 +191,7 @@ export default function PlaceAutocomplete({
         />
         {loading && (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#4A90E2" />
+            <ActivityIndicator size="small" color={DarkTheme.colors.bangkok.gold} />
           </View>
         )}
         {query.length > 0 && !loading && (
@@ -209,41 +241,34 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
+    borderRadius: DarkTheme.borderRadius.md,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    paddingHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderColor: DarkTheme.colors.semantic.separator,
+    paddingHorizontal: DarkTheme.spacing.md,
+    ...DarkTheme.shadows.small,
   },
   input: {
     flex: 1,
     height: 48,
-    fontSize: 16,
-    color: '#1A1A1A',
+    ...DarkTheme.typography.body,
+    color: DarkTheme.colors.semantic.label,
   },
   loadingContainer: {
-    marginLeft: 8,
+    marginLeft: DarkTheme.spacing.sm,
   },
   clearButton: {
-    marginLeft: 8,
+    marginLeft: DarkTheme.spacing.sm,
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#CCCCCC',
+    backgroundColor: DarkTheme.colors.semantic.separator,
     alignItems: 'center',
     justifyContent: 'center',
   },
   clearButtonText: {
     fontSize: 12,
-    color: '#FFFFFF',
+    color: DarkTheme.colors.semantic.label,
     fontWeight: 'bold',
   },
   suggestionsContainer: {
@@ -251,66 +276,63 @@ const styles = StyleSheet.create({
     top: 52,
     left: 0,
     right: 0,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
+    borderRadius: DarkTheme.borderRadius.md,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: DarkTheme.colors.semantic.separator,
     maxHeight: 250,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
+    ...DarkTheme.shadows.medium,
     zIndex: 1001,
   },
   suggestionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: DarkTheme.spacing.md,
+    paddingVertical: DarkTheme.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: DarkTheme.colors.semantic.separator,
   },
   suggestionContent: {
     flex: 1,
   },
+  suggestionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
   mainText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#1A1A1A',
-    marginBottom: 2,
+    color: DarkTheme.colors.semantic.label,
+    flex: 1,
+    marginRight: DarkTheme.spacing.sm,
   },
   secondaryText: {
     fontSize: 14,
-    color: '#666666',
+    color: DarkTheme.colors.semantic.secondaryLabel,
   },
-  debugText: {
-    fontSize: 10,
-    color: '#999999',
-    marginTop: 2,
-    fontFamily: 'monospace',
+  typeBadge: {
+    backgroundColor: DarkTheme.colors.bangkok.gold + '20',
+    paddingHorizontal: DarkTheme.spacing.xs,
+    paddingVertical: 2,
+    borderRadius: DarkTheme.borderRadius.xs,
   },
-  suggestionIcon: {
-    marginLeft: 12,
-  },
-  iconText: {
-    fontSize: 16,
+  typeBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: DarkTheme.colors.bangkok.gold,
   },
   noResultsContainer: {
-    padding: 20,
+    padding: DarkTheme.spacing.lg,
     alignItems: 'center',
   },
   noResultsText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#666666',
+    color: DarkTheme.colors.semantic.secondaryLabel,
     marginBottom: 4,
   },
   noResultsSubtext: {
     fontSize: 14,
-    color: '#999999',
+    color: DarkTheme.colors.semantic.tertiaryLabel,
   },
 });

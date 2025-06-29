@@ -6,6 +6,7 @@ export interface PlaceSuggestion {
   description: string;
   main_text: string;
   secondary_text: string;
+  types?: string[]; // Google Places API types
 }
 
 /**
