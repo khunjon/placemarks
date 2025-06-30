@@ -106,7 +106,7 @@ export class PlacesService {
       const response = await fetch(`${url}?${params}`);
       const data = await response.json();
 
-      console.log('🟢 GOOGLE API RESPONSE: Nearby Search completed', {
+      console.log('📊 API RESPONSE: Nearby Search completed', {
         status: data.status,
         resultCount: data.results?.length || 0,
         cost: '$0.032 per 1000 calls - PAID'
@@ -192,7 +192,7 @@ export class PlacesService {
       // Cache suggestions
       this.cacheAutocomplete(sanitizedQuery, suggestions);
 
-      console.log('🟢 AUTOCOMPLETE SUCCESS:', { query: sanitizedQuery, resultCount: suggestions.length });
+      console.log('📝 AUTOCOMPLETE SUCCESS:', { query: sanitizedQuery, resultCount: suggestions.length });
       return suggestions;
     } catch (error) {
       console.error('Error in autocomplete:', error);
@@ -223,15 +223,44 @@ export class PlacesService {
   }
 
   /**
-   * Get place details from cache or fetch from Google API
+   * Check if a cached place has complete data for list addition
    */
-  async getPlaceDetails(googlePlaceId: string): Promise<PlaceDetails | null> {
+  private isPlaceDataComplete(cachedPlace: any): boolean {
+    if (!cachedPlace) return false;
+    
+    // Check essential fields for a complete place record
+    const hasBasicData = cachedPlace.name && cachedPlace.formatted_address && cachedPlace.geometry;
+    const hasDetailedData = cachedPlace.has_contact_data && cachedPlace.has_hours_data;
+    
+    // For list addition, we want contact info (phone/website) and hours when available
+    // Some places legitimately don't have websites or phones, so we check the flags
+    return hasBasicData && (
+      // Either has contact data or the API confirmed there's no contact data
+      (cachedPlace.formatted_phone_number || cachedPlace.website || cachedPlace.has_contact_data) &&
+      // Either has hours data or the API confirmed there are no hours
+      (cachedPlace.opening_hours || cachedPlace.has_hours_data)
+    );
+  }
+
+  /**
+   * Get place details from cache or fetch from Google API
+   * @param forceRefresh - If true, bypass cache even if place exists but has incomplete data
+   */
+  async getPlaceDetails(googlePlaceId: string, forceRefresh: boolean = false): Promise<PlaceDetails | null> {
     try {
       // First try to get from cache
       let place = await this.getPlaceFromCache(googlePlaceId);
       
-      if (!place) {
-        // If not in cache, fetch from Google Places API
+      if (!place || forceRefresh || !this.isPlaceDataComplete(place)) {
+        // If not in cache, force refresh requested, or data is incomplete, fetch from Google Places API
+        if (place && !this.isPlaceDataComplete(place)) {
+          console.log('🔄 CACHE REFRESH: Place has incomplete data, fetching detailed info', {
+            googlePlaceId,
+            hasContactData: place.has_contact_data,
+            hasHoursData: place.has_hours_data,
+            cost: '$0.017 per 1000 calls - PAID'
+          });
+        }
         place = await this.fetchAndCacheGooglePlace(googlePlaceId);
       }
 
@@ -362,12 +391,59 @@ export class PlacesService {
       });
 
       const response = await fetch(`${url}?${params}`);
+      
+      if (!response.ok) {
+        console.error('❌ GOOGLE API HTTP ERROR: Failed to fetch place details', {
+          place_id: googlePlaceId,
+          http_status: response.status,
+          http_status_text: response.statusText,
+          url: `${url}?place_id=${googlePlaceId}&key=***`,
+          cost: '$0.017 per 1000 calls - PAID (but failed)'
+        });
+        return null;
+      }
+
       const data = await response.json();
 
       if (data.status !== 'OK') {
-        console.error('❌ GOOGLE API ERROR:', { status: data.status, place_id: googlePlaceId });
+        const errorDetails = {
+          place_id: googlePlaceId,
+          google_status: data.status,
+          error_message: data.error_message || 'No error message provided',
+          cost: '$0.017 per 1000 calls - PAID (but failed)'
+        };
+
+        // Provide specific guidance based on error type
+        switch (data.status) {
+          case 'NOT_FOUND':
+            console.error('❌ GOOGLE API ERROR: Place not found - Place ID may be invalid or outdated', errorDetails);
+            break;
+          case 'INVALID_REQUEST':
+            console.error('❌ GOOGLE API ERROR: Invalid request - Check place ID format and API key permissions', errorDetails);
+            break;
+          case 'OVER_QUERY_LIMIT':
+            console.error('❌ GOOGLE API ERROR: API quota exceeded - Daily or per-second limits reached', errorDetails);
+            break;
+          case 'REQUEST_DENIED':
+            console.error('❌ GOOGLE API ERROR: Request denied - Check API key permissions and billing setup', errorDetails);
+            break;
+          case 'UNKNOWN_ERROR':
+            console.error('❌ GOOGLE API ERROR: Server error - Temporary issue, retry may help', errorDetails);
+            break;
+          default:
+            console.error('❌ GOOGLE API ERROR: Unexpected status', errorDetails);
+        }
         return null;
       }
+
+      console.log('📍 PLACE DETAILS SUCCESS: Place details fetched successfully', {
+        place_id: googlePlaceId,
+        place_name: data.result?.name || 'Unknown',
+        has_phone: !!data.result?.formatted_phone_number,
+        has_website: !!data.result?.website,
+        has_hours: !!data.result?.opening_hours,
+        cost: '$0.017 per 1000 calls - PAID'
+      });
 
       // Cache the result
       await this.cacheGooglePlace(data.result);
@@ -375,7 +451,12 @@ export class PlacesService {
       // Return the cached place
       return await this.getPlaceFromCache(googlePlaceId);
     } catch (error) {
-      console.error('Error fetching place from Google API:', error);
+      console.error('❌ NETWORK ERROR: Failed to fetch place from Google API', {
+        place_id: googlePlaceId,
+        error_message: error instanceof Error ? error.message : 'Unknown error',
+        error_type: error instanceof Error ? error.name : 'Unknown',
+        cost: '$0.017 per 1000 calls - PAID (but failed due to network)'
+      });
       return null;
     }
   }

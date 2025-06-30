@@ -88,6 +88,7 @@ export default function ListsStackNavigator() {
         options={({ route }) => ({
           title: route.params.listName,
           headerShown: route.params.listType !== 'curated',
+          headerBackTitle: '', // Remove the "Lists" text, show only back arrow
         })}
       />
       

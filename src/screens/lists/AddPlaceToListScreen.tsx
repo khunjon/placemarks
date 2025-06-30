@@ -48,6 +48,8 @@ interface SearchResult {
   priceLevel?: number;
   isAdding?: boolean;
   isAdded?: boolean;
+  // Keep original suggestion for proper caching
+  originalSuggestion: PlaceSuggestion;
 }
 
 export default function AddPlaceToListScreen({
@@ -146,6 +148,7 @@ export default function AddPlaceToListScreen({
           types: enrichedPlace.types,
           rating: enrichedPlace.rating,
           priceLevel: enrichedPlace.price_level,
+          originalSuggestion: suggestion,
         };
         
         setSearchResults([searchResult]);
@@ -157,6 +160,7 @@ export default function AddPlaceToListScreen({
           name: suggestion.main_text,
           address: suggestion.secondary_text,
           types: [],
+          originalSuggestion: suggestion,
         };
         
         setSearchResults([searchResult]);
@@ -186,8 +190,8 @@ export default function AddPlaceToListScreen({
         )
       );
 
-      // Add place to list using Google Place ID directly
-      await listsService.addPlaceToList(listId, searchResult.googlePlaceId);
+      // Add place to list using suggestion (ensures proper caching)
+      await listsService.addPlaceFromSuggestion(listId, searchResult.originalSuggestion);
 
       // Update UI
       setAddedPlaces(prev => new Set(prev).add(searchResult.googlePlaceId));
@@ -380,7 +384,8 @@ export default function AddPlaceToListScreen({
                 place_id: googlePlaceId,
                 description: placeName,
                 main_text: placeName,
-                secondary_text: ''
+                secondary_text: '',
+                types: [] // Add types field for PlaceSuggestion interface
               });
             }}
             location={userLocation}

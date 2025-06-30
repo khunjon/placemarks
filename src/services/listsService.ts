@@ -784,13 +784,46 @@ export class ListsService {
     }
   ): Promise<void> {
     try {
-      // First ensure the place is cached by fetching details
-      await placesService.getPlaceDetails(suggestion.place_id);
+      // Ensure the place is cached with complete details by forcing a refresh if data is incomplete
+      // This guarantees we have all metadata (phone, website, hours) when adding to lists
+      console.log('📝 LIST ADD: Ensuring complete place data before adding to list', {
+        place_id: suggestion.place_id,
+        main_text: suggestion.main_text
+      });
+      
+      const placeDetails = await placesService.getPlaceDetails(suggestion.place_id, false);
+      
+      // Check if place details were successfully fetched
+      if (!placeDetails) {
+        console.error('❌ PLACE FETCH FAILED: Could not retrieve place details from Google Places API', {
+          place_id: suggestion.place_id,
+          main_text: suggestion.main_text,
+          possible_causes: [
+            'Google Places API returned non-OK status',
+            'Place ID is invalid or outdated',
+            'API key permissions issue',
+            'Rate limiting or quota exceeded'
+          ]
+        });
+        throw new PlaceError(
+          `Could not retrieve details for "${suggestion.main_text}". This may be due to an invalid place ID or Google Places API issues.`,
+          'PLACE_DETAILS_FAILED'
+        );
+      }
       
       // Then add to list
       await this.addPlaceToList(listId, suggestion.place_id, options);
+      
+      console.log('✅ LIST ADD: Successfully added place to list with complete metadata', {
+        place_id: suggestion.place_id,
+        list_id: listId,
+        place_name: placeDetails.name
+      });
     } catch (error) {
       console.error('Error adding place from suggestion:', error);
+      if (error instanceof PlaceError) {
+        throw error; // Re-throw our custom errors with better messages
+      }
       throw new PlaceError('Failed to add place from suggestion', 'ADD_SUGGESTION_ERROR');
     }
   }
