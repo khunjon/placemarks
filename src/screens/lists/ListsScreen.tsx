@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, ScrollView, Modal, Alert, RefreshControl, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Plus, List, Zap, Heart, TrendingUp, Clock, MapPin, ChevronRight, Bookmark } from 'lucide-react-native';
+import { Plus, List, Zap, Heart, TrendingUp, Clock, MapPin, ChevronRight, Bookmark } from '../../components/icons';
 import { Colors } from '../../constants/Colors';
 import { Spacing } from '../../constants/Spacing';
 import { DarkTheme } from '../../constants/theme';
@@ -382,8 +382,6 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
                         <Heart 
                           size={Spacing.iconSize.sm} 
                           color="#EF4444"
-                          fill="#EF4444"
-                          strokeWidth={2}
                         />
                         <Typography variant="headline" style={{ 
                           marginLeft: Spacing.xs,
@@ -436,8 +434,6 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
                         <Bookmark 
                           size={Spacing.iconSize.sm} 
                           color="#10B981"
-                          fill="#10B981"
-                          strokeWidth={2}
                         />
                         <Typography variant="headline" style={{ 
                           marginLeft: Spacing.xs,

@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, View, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
-import { LucideIcon } from 'lucide-react-native';
+import { LucideIcon } from '../icons';
 import { Colors } from '../../constants/Colors';
 import { Spacing, BorderRadius, Shadows, Typography } from '../../constants/Spacing';
 

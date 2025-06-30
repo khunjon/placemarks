@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { MapPin, Clock, Star, MessageCircle, Camera } from 'lucide-react-native';
+import { MapPin, Clock, Star, MessageCircle, Camera } from '../icons';
 import { DarkTheme } from '../../constants/theme';
 import { LocationBadge } from '../ui';
 import { checkInUtils, ThumbsRating } from '../../services/checkInsService';

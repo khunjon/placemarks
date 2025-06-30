@@ -12,6 +12,7 @@ import {
   Share as RNShare
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { 
   ArrowLeft, 
@@ -21,7 +22,7 @@ import {
   Plus, 
   SortAsc, 
   MapPin, 
-  Star, 
+ 
   Clock, 
   Eye, 
   Navigation, 
@@ -34,8 +35,9 @@ import {
   Camera,
   TrendingUp,
   Award,
-  MoreVertical
-} from 'lucide-react-native';
+  MoreVertical,
+  Star
+} from '../../components/icons';
 import { DarkTheme } from '../../constants/theme';
 import { Spacing } from '../../constants/Spacing';
 import { 
@@ -816,11 +818,10 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                     : 'transparent',
                 }}
               >
-                <option.icon 
-                  size={20} 
-                  color={sortBy === option.key ? DarkTheme.colors.bangkok.gold : DarkTheme.colors.semantic.secondaryLabel}
-                  strokeWidth={2} 
-                />
+                {React.createElement(option.icon, {
+                  size: 20,
+                  color: sortBy === option.key ? DarkTheme.colors.bangkok.gold : DarkTheme.colors.semantic.secondaryLabel
+                })}
                 <Body style={{ 
                   marginLeft: Spacing.sm,
                   color: sortBy === option.key ? DarkTheme.colors.bangkok.gold : DarkTheme.colors.semantic.label

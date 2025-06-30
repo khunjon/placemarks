@@ -10,7 +10,7 @@ import {
   Clock, 
   ChevronRight,
   Sparkles
-} from 'lucide-react-native';
+} from '../icons';
 import { DarkTheme } from '../../constants/theme';
 
 export interface ListCardProps {

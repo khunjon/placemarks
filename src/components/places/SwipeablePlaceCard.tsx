@@ -1,6 +1,6 @@
 import React, { useRef, useState, useLayoutEffect } from 'react';
 import { View, Text, Alert, Animated, PanResponder, LayoutChangeEvent } from 'react-native';
-import { Trash2, Plus } from 'lucide-react-native';
+import { Trash2, Plus } from '../icons';
 import { DarkTheme } from '../../constants/theme';
 import PlaceCard, { PlaceCardProps } from './PlaceCard';
 

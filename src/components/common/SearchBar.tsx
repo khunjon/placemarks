@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, TextInput, TouchableOpacity, ViewStyle, TextStyle, StyleProp } from 'react-native';
-import { Search, X } from 'lucide-react-native';
+import { Search, X } from '../icons';
 import { Colors } from '../../constants/Colors';
 import { Spacing, BorderRadius, Typography } from '../../constants/Spacing';
 

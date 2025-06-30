@@ -25,7 +25,7 @@ import {
   Gamepad2,
   Dumbbell,
   Pin
-} from 'lucide-react-native';
+} from '../icons';
 import { DarkTheme } from '../../constants/theme';
 
 export interface ListItemProps {

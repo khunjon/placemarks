@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
 import { 
   X, 
   Check, 
   Heart, 
   Coffee, 
   Trophy, 
-  Briefcase, 
+  Briefcase,
   Star, 
+ 
   MapPin,
   Utensils,
   ShoppingBag,
@@ -17,7 +19,7 @@ import {
   Trees,
   Plane,
   Plus
-} from 'lucide-react-native';
+} from '../../components/icons';
 import { DarkTheme } from '../../constants/theme';
 import { listsService } from '../../services/listsService';
 import { useAuth } from '../../services/auth-context';

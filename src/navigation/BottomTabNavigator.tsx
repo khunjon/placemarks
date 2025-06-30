@@ -1,7 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { CommonActions } from '@react-navigation/native';
-import { MapPin, Shuffle, List, User } from 'lucide-react-native';
+import { MapPin, Shuffle, List, User } from '../components/icons';
 import { Colors } from '../constants/Colors';
 
 // Import stack navigators

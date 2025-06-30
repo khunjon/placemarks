@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image } from 'react-native';
-import { Edit3, User } from 'lucide-react-native';
+import { Edit3, User } from '../icons';
 import { DarkTheme } from '../../constants/theme';
 
 export interface UserProfileHeaderProps {
@@ -55,7 +55,7 @@ export default function UserProfileHeader({
           <User
             size={40}
             color={DarkTheme.colors.bangkok.gold}
-            strokeWidth={2}
+
           />
         )}
       </View>
@@ -104,7 +104,7 @@ export default function UserProfileHeader({
         <Edit3
           size={16}
           color={DarkTheme.colors.system.black}
-          strokeWidth={2}
+
         />
         <Text
           style={[
@@ -121,4 +121,4 @@ export default function UserProfileHeader({
       </TouchableOpacity>
     </View>
   );
-} 
+}

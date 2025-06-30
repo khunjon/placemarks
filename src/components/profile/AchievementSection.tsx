@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { Trophy, Award, Target, Coffee, MapPin, List, Star } from 'lucide-react-native';
+import { Trophy, Award, Target, Coffee, MapPin, List, Star } from '../icons';
 import { DarkTheme } from '../../constants/theme';
 import Achievement, { AchievementProps } from './Achievement';
 
@@ -88,7 +88,7 @@ export default function AchievementSection() {
   const completedAchievements = mockAchievements.filter(a => a.isCompleted);
   const inProgressAchievements = mockAchievements.filter(a => !a.isCompleted);
 
-  const filteredAchievements = 
+  const filteredAchievements =
     filter === 'completed' ? completedAchievements :
     filter === 'in-progress' ? inProgressAchievements :
     mockAchievements;
@@ -126,7 +126,7 @@ export default function AchievementSection() {
             <Trophy
               size={24}
               color={DarkTheme.colors.bangkok.gold}
-              strokeWidth={2}
+
             />
             <Text
               style={[
@@ -217,8 +217,8 @@ export default function AchievementSection() {
               key={filterType}
               onPress={() => setFilter(filterType)}
               style={{
-                backgroundColor: filter === filterType 
-                  ? DarkTheme.colors.bangkok.gold 
+                backgroundColor: filter === filterType
+                  ? DarkTheme.colors.bangkok.gold
                   : DarkTheme.colors.semantic.tertiarySystemFill,
                 paddingHorizontal: DarkTheme.spacing.md,
                 paddingVertical: DarkTheme.spacing.sm,
@@ -231,8 +231,8 @@ export default function AchievementSection() {
                 style={[
                   DarkTheme.typography.callout,
                   {
-                    color: filter === filterType 
-                      ? DarkTheme.colors.system.black 
+                    color: filter === filterType
+                      ? DarkTheme.colors.system.black
                       : DarkTheme.colors.semantic.secondaryLabel,
                     fontWeight: filter === filterType ? '600' : '500',
                     textTransform: 'capitalize',
@@ -283,4 +283,4 @@ export default function AchievementSection() {
       </ScrollView>
     </View>
   );
-} 
+}

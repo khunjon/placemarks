@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, ViewStyle } from 'react-native';
-import { LucideIcon } from 'lucide-react-native';
+import { LucideIcon } from '../icons';
 import { Colors } from '../../constants/Colors';
 import { Spacing } from '../../constants/Spacing';
 import Typography from './Typography';

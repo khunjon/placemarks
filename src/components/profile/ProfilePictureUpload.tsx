@@ -108,7 +108,7 @@ export default function ProfilePictureUpload({
     setUploading(true);
     try {
       const { data: avatarUrl, error } = await profileService.uploadAvatar(userId, imageUri);
-      
+
       if (error) {
         console.error('Upload error:', error);
         Alert.alert('Upload Error', `Failed to upload profile picture: ${error.message || 'Unknown error'}`);
@@ -175,7 +175,7 @@ export default function ProfilePictureUpload({
             <Text style={styles.placeholderText}>Add Photo</Text>
           </View>
         )}
-        
+
         {uploading && (
           <View style={styles.uploadingOverlay}>
             <ActivityIndicator size="large" color="#ffffff" />
@@ -273,4 +273,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-}); 
+});

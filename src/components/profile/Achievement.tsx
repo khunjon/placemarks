@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import { LucideIcon, Check } from 'lucide-react-native';
+import { LucideIcon, Check } from '../icons';
 import { DarkTheme } from '../../constants/theme';
 
 export interface AchievementProps {
@@ -51,8 +51,8 @@ export default function Achievement({
     <View
       style={{
         backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
-        borderColor: isCompleted 
-          ? `${iconColor}40` 
+        borderColor: isCompleted
+          ? `${iconColor}40`
           : DarkTheme.colors.semantic.separator,
         borderWidth: 1,
         borderRadius: DarkTheme.borderRadius.md,
@@ -92,7 +92,7 @@ export default function Achievement({
             <Icon
               size={24}
               color={iconColor}
-              strokeWidth={2}
+
             />
           </View>
 
@@ -116,7 +116,7 @@ export default function Achievement({
               <Check
                 size={12}
                 color={DarkTheme.colors.system.white}
-                strokeWidth={3}
+
               />
             </View>
           )}
@@ -289,4 +289,4 @@ export default function Achievement({
       </View>
     </View>
   );
-} 
+}

@@ -14,7 +14,13 @@
       "mcp__supabase__list_branches",
       "Bash(rm:*)",
       "mcp__supabase__generate_typescript_types",
-      "mcp__sequential-thinking__sequentialthinking"
+      "mcp__sequential-thinking__sequentialthinking",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(sed:*)",
+      "Bash(for:*)",
+      "Bash(do)",
+      "Bash(done)"
     ],
     "deny": []
   },

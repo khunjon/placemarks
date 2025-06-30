@@ -1,22 +1,23 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
 import { 
-  X, 
-  Check, 
   Heart, 
   Coffee, 
   Trophy, 
   Briefcase, 
-  Star, 
+  Star,
+  Utensils, 
+  ShoppingBag, 
+  Camera, 
+  Music, 
+  Trees, 
+  Plane, 
   MapPin,
-  Utensils,
-  ShoppingBag,
-  Camera,
-  Music,
-  Trees,
-  Plane
-} from 'lucide-react-native';
+  X,
+  Check
+} from '../../components/icons';
 import { DarkTheme } from '../../constants/theme';
 
 interface CreateListScreenProps {

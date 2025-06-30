@@ -12,7 +12,7 @@ import {
   Settings,
   Navigation,
   TreePine
-} from 'lucide-react-native';
+} from '../../components/icons';
 import { DarkTheme } from '../../constants/theme';
 import { UserProfileHeader, SettingItem } from '../../components/profile';
 import { useAuth } from '../../services/auth-context';

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Trophy, Star, MapPin, Users, Calendar, Target } from 'lucide-react-native';
+import { Trophy, Star, MapPin, Users, Calendar, Target } from '../../components/icons';
 import { Colors } from '../../constants/Colors';
 import { Spacing } from '../../constants/Spacing';
 import { 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { MapPin, Star, Coffee, ShoppingBag, Building, TreePine, Camera, Utensils } from 'lucide-react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { DarkTheme } from '../../constants/theme';
 import { LocationBadge } from '../ui';
 import { EnrichedPlace } from '../../types';
@@ -40,24 +40,24 @@ export interface PlaceCardProps {
   style?: any;
 }
 
-const getTypeIcon = (type: PlaceType) => {
+const getTypeIconProps = (type: PlaceType) => {
   switch (type) {
     case 'restaurant':
-      return Utensils;
+      return { family: 'MaterialIcons', name: 'restaurant' };
     case 'cafe':
-      return Coffee;
+      return { family: 'MaterialIcons', name: 'local-cafe' };
     case 'shopping':
-      return ShoppingBag;
+      return { family: 'MaterialIcons', name: 'shopping-cart' };
     case 'temple':
-      return Building;
+      return { family: 'MaterialIcons', name: 'account-balance' };
     case 'park':
-      return TreePine;
+      return { family: 'MaterialIcons', name: 'park' };
     case 'hotel':
-      return Building;
+      return { family: 'MaterialIcons', name: 'hotel' };
     case 'attraction':
-      return Star;
+      return { family: 'MaterialIcons', name: 'star' };
     default:
-      return MapPin;
+      return { family: 'MaterialIcons', name: 'place' };
   }
 };
 
@@ -170,7 +170,7 @@ export default function PlaceCard({
     btsStation
   };
 
-  const TypeIcon = getTypeIcon(placeData.type);
+  const iconProps = getTypeIconProps(placeData.type);
   const typeColor = getTypeColor(placeData.type);
 
   const handleCheckIn = () => {
@@ -225,10 +225,10 @@ export default function PlaceCard({
             backgroundColor: `${typeColor}20`,
           }}
         >
-          <TypeIcon 
+          <MaterialIcons 
+            name={iconProps.name as any}
             size={24} 
             color={typeColor}
-            strokeWidth={2}
           />
         </View>
         
@@ -282,10 +282,10 @@ export default function PlaceCard({
           {/* Rating Row */}
           {placeData.rating && (
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-              <Star 
+              <MaterialIcons 
+                name="star"
                 size={12} 
                 color={DarkTheme.colors.accent.yellow}
-                fill={DarkTheme.colors.accent.yellow}
               />
               <Text 
                 style={[
@@ -388,10 +388,10 @@ export default function PlaceCard({
               }}
               activeOpacity={0.8}
             >
-              <Camera 
+              <MaterialIcons 
+                name="camera-alt"
                 size={16} 
                 color={DarkTheme.colors.system.black}
-                strokeWidth={2}
               />
               <Text 
                 style={[

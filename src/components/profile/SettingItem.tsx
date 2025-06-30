@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { ChevronRight, LucideIcon } from 'lucide-react-native';
+import { ChevronRight, LucideIcon } from '../icons';
 import { DarkTheme } from '../../constants/theme';
 
 export interface SettingItemProps {
@@ -55,7 +55,6 @@ export default function SettingItem({
         <Icon
           size={18}
           color={iconColor}
-          strokeWidth={2}
         />
       </View>
 
@@ -73,7 +72,7 @@ export default function SettingItem({
         >
           {title}
         </Text>
-        
+
         {subtitle && (
           <Text
             style={[
@@ -108,9 +107,8 @@ export default function SettingItem({
         <ChevronRight
           size={20}
           color={DarkTheme.colors.semantic.tertiaryLabel}
-          strokeWidth={2}
         />
       )}
     </TouchableOpacity>
   );
-} 
+}

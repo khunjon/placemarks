@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Animated, Dimensions } from 'react-native';
-import { Check, X, Info, AlertCircle } from 'lucide-react-native';
+import { Check, X, Info, AlertCircle } from '../icons';
 import { Colors } from '../../constants/Colors';
 import { Spacing } from '../../constants/Spacing';
 

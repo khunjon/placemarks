@@ -10,7 +10,7 @@ import {
   ActivityIndicator 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { X, Check, Camera, User } from 'lucide-react-native';
+import { X, Check, Camera, User } from '../../components/icons';
 import * as ImagePicker from 'expo-image-picker';
 import { DarkTheme } from '../../constants/theme';
 import { useAuth } from '../../services/auth-context';

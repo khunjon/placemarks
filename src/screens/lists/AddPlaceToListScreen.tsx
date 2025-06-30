@@ -13,12 +13,11 @@ import {
   ArrowLeft,
   Search,
   MapPin,
-  Star,
   Plus,
   Check,
   Clock,
   Globe
-} from 'lucide-react-native';
+} from '../../components/icons';
 import { DarkTheme } from '../../constants/theme';
 import { Spacing } from '../../constants/Spacing';
 import {

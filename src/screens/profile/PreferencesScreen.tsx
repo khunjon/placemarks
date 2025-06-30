@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Settings, Bell, MapPin, Shield, Database } from 'lucide-react-native';
+import { Settings, Bell, MapPin, Shield, Database } from '../../components/icons';
 import { Colors } from '../../constants/Colors';
 import { Spacing } from '../../constants/Spacing';
 import { 
