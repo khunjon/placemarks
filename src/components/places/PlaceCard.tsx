@@ -4,6 +4,7 @@ import { MapPin, Star, Coffee, ShoppingBag, Building, TreePine, Camera, Utensils
 import { DarkTheme } from '../../constants/theme';
 import { LocationBadge } from '../ui';
 import { EnrichedPlace } from '../../types';
+import { PlaceType, inferPlaceTypeFromGoogleTypes } from '../../utils/placeTypeMapping';
 
 // Enhanced props interface that can accept either individual props or an EnrichedPlace object
 export interface PlaceCardProps {
@@ -12,7 +13,7 @@ export interface PlaceCardProps {
   
   // Core place data (can be provided individually or via place object)
   name: string;
-  type?: 'restaurant' | 'cafe' | 'shopping' | 'temple' | 'park' | 'hotel' | 'attraction';
+  type?: PlaceType;
   description?: string;
   address: string;
   distance?: string;
@@ -38,7 +39,7 @@ export interface PlaceCardProps {
   style?: any;
 }
 
-const getTypeIcon = (type: PlaceCardProps['type']) => {
+const getTypeIcon = (type: PlaceType) => {
   switch (type) {
     case 'restaurant':
       return Utensils;
@@ -59,7 +60,7 @@ const getTypeIcon = (type: PlaceCardProps['type']) => {
   }
 };
 
-const getTypeColor = (type: PlaceCardProps['type']) => {
+const getTypeColor = (type: PlaceType) => {
   switch (type) {
     case 'restaurant':
       return DarkTheme.colors.bangkok.market;
@@ -107,38 +108,7 @@ const shortenPlaceName = (name: string): string => {
   return name;
 };
 
-// Helper function to infer place type from Google Places API types
-const inferPlaceTypeFromGoogleTypes = (types: string[]): PlaceCardProps['type'] => {
-  if (!types || !Array.isArray(types) || types.length === 0) {
-    return 'restaurant'; // Default fallback
-  }
-  
-  const typeMap: { [key: string]: PlaceCardProps['type'] } = {
-    restaurant: 'restaurant',
-    food: 'restaurant',
-    meal_takeaway: 'restaurant',
-    meal_delivery: 'restaurant',
-    cafe: 'cafe',
-    shopping_mall: 'shopping',
-    store: 'shopping',
-    clothing_store: 'shopping',
-    hindu_temple: 'temple',
-    buddhist_temple: 'temple',
-    place_of_worship: 'temple',
-    park: 'park',
-    lodging: 'hotel',
-    tourist_attraction: 'attraction',
-    point_of_interest: 'attraction'
-  };
-
-  for (const type of types) {
-    if (typeMap[type]) {
-      return typeMap[type];
-    }
-  }
-  
-  return 'attraction'; // Default fallback
-};
+// Note: inferPlaceTypeFromGoogleTypes is now imported from utils/placeTypeMapping.ts
 
 export default function PlaceCard({
   googlePlaceId,

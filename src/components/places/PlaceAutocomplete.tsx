@@ -11,6 +11,7 @@ import {
 import { PlaceSuggestion, Location } from '../../types';
 import { placesService } from '../../services/places';
 import { DarkTheme } from '../../constants/theme';
+import { getPrimaryDisplayType } from '../../utils/placeTypeMapping';
 
 interface PlaceAutocompleteProps {
   // Updated callback to provide Google Place ID directly
@@ -117,34 +118,14 @@ export default function PlaceAutocomplete({
   };
 
   /**
-   * Filter place types to show only useful ones
+   * Get display type for autocomplete suggestions (using unified mapping)
    */
-  const getUsefulPlaceTypes = (types: string[]): string[] => {
-    if (!types || types.length === 0) return [];
-    
-    const typeMap: { [key: string]: string } = {
-      restaurant: 'Restaurant',
-      cafe: 'Cafe',
-      bakery: 'Bakery',
-      bar: 'Bar',
-      shopping_mall: 'Shopping',
-      store: 'Store',
-      lodging: 'Hotel',
-      tourist_attraction: 'Attraction',
-      museum: 'Museum',
-      park: 'Park'
-    };
-
-    const usefulTypes = types
-      .filter(type => typeMap[type])
-      .map(type => typeMap[type])
-      .slice(0, 1); // Only show 1 type in autocomplete
-
-    return usefulTypes;
+  const getDisplayTypeForSuggestion = (types: string[]): string => {
+    return getPrimaryDisplayType(types);
   };
 
   const renderSuggestion = ({ item }: { item: PlaceSuggestion }) => {
-    const usefulTypes = getUsefulPlaceTypes(item.types || []);
+    const displayType = getDisplayTypeForSuggestion(item.types || []);
     
     return (
       <TouchableOpacity
@@ -157,10 +138,10 @@ export default function PlaceAutocomplete({
             <Text style={styles.mainText} numberOfLines={1}>
               {item.main_text}
             </Text>
-            {usefulTypes.length > 0 && (
+            {displayType && (
               <View style={styles.typeBadge}>
                 <Text style={styles.typeBadgeText}>
-                  {usefulTypes[0]}
+                  {displayType}
                 </Text>
               </View>
             )}
