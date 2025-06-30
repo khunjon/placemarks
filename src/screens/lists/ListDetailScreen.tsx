@@ -51,7 +51,7 @@ import {
   LoadingState,
   EmptyState
 } from '../../components/common';
-import { PlaceCard } from '../../components/places';
+import { PlaceCard, SwipeablePlaceCard } from '../../components/places';
 import { useAuth } from '../../services/auth-context';
 import { 
   listsService, 
@@ -354,41 +354,82 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
    * Handle removing place from list
    */
   const handleRemovePlace = async (googlePlaceId: string, placeName: string) => {
-    Alert.alert(
-      'Remove Place',
-      `Remove "${placeName}" from this list?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Remove', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await listsService.removePlaceFromList(listId, googlePlaceId);
-              showToast('Place removed from list');
-              
-              // Update local state immediately
-              if (list) {
-                const updatedList = {
-                  ...list,
-                  places: list.places.filter(p => p.place_id !== googlePlaceId),
-                  place_count: list.place_count - 1
-                };
-                setList(updatedList);
-                
-                // Update cache with optimistic update
-                if (user?.id) {
-                  await cacheManager.listDetails.removePlace(listId, googlePlaceId, user.id);
-                }
-              }
-            } catch (error) {
-              console.error('Error removing place:', error);
-              showToast('Failed to remove place', 'error');
-            }
-          }
+    try {
+      await listsService.removePlaceFromList(listId, googlePlaceId);
+      showToast('Place removed from list');
+      
+      // Update local state immediately
+      if (list) {
+        const updatedList = {
+          ...list,
+          places: list.places.filter(p => p.place_id !== googlePlaceId),
+          place_count: list.place_count - 1
+        };
+        setList(updatedList);
+        
+        // Update cache with optimistic update
+        if (user?.id) {
+          await cacheManager.listDetails.removePlace(listId, googlePlaceId, user.id);
         }
-      ]
-    );
+      }
+    } catch (error) {
+      console.error('Error removing place:', error);
+      showToast('Failed to remove place', 'error');
+    }
+  };
+
+  /**
+   * Handle adding place to Want to Go list
+   */
+  const handleAddToWantToGo = async (googlePlaceId: string, placeName: string) => {
+    if (!user?.id) {
+      showToast('Please sign in to add places to Want to Go', 'error');
+      return;
+    }
+
+    try {
+      // Get user's Want to Go list
+      const wantToGoList = await listsService.getWantToGoList(user.id);
+      
+      if (!wantToGoList) {
+        showToast('Could not find Want to Go list', 'error');
+        return;
+      }
+
+      // Check if place is already in Want to Go list
+      const isAlreadyInList = wantToGoList.places?.some(p => p.place_id === googlePlaceId);
+      
+      if (isAlreadyInList) {
+        showToast(`"${placeName}" is already in your Want to Go list`);
+        return;
+      }
+
+      // Find the place data from current list
+      const placeToAdd = list?.places.find(p => p.place_id === googlePlaceId);
+      
+      if (!placeToAdd) {
+        showToast('Could not find place data', 'error');
+        return;
+      }
+
+      // Add place to Want to Go list
+      await listsService.addPlaceFromSuggestion(
+        wantToGoList.id,
+        {
+          place_id: googlePlaceId,
+          description: placeToAdd.place.formatted_address,
+          main_text: placeToAdd.place.name,
+          secondary_text: placeToAdd.place.formatted_address,
+          types: placeToAdd.place.types || [],
+        },
+        { }
+      );
+
+      showToast(`"${placeName}" added to Want to Go list`);
+    } catch (error) {
+      console.error('Error adding place to Want to Go:', error);
+      showToast('Failed to add place to Want to Go list', 'error');
+    }
   };
 
   /**
@@ -710,36 +751,22 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
         ) : (
           <View style={{ paddingVertical: Spacing.md, gap: Spacing.sm }}>
             {sortedPlaces.map((listPlace, index) => (
-              <View key={`${listPlace.place_id}-${index}`} style={{ position: 'relative' }}>
-                <PlaceCard
-                  googlePlaceId={listPlace.place_id}
-                  place={listPlace.place}
-                  name={listPlace.place.name}
-                  address={listPlace.place.formatted_address}
-                  distance=""
-                  onCheckIn={handleCheckIn}
-                  onPress={() => handlePlacePress(listPlace.place_id, listPlace.place.name)}
-                  showCheckInButton={false}
-                  notes={listPlace.notes}
-                />
-                
-                {/* Remove button for editable lists */}
-                {isEditable && (
-                  <TouchableOpacity
-                    onPress={() => handleRemovePlace(listPlace.place_id, listPlace.place.name)}
-                    style={{
-                      position: 'absolute',
-                      top: Spacing.sm,
-                      right: Spacing.sm,
-                      backgroundColor: DarkTheme.colors.status.error + '20',
-                      padding: Spacing.xs,
-                      borderRadius: DarkTheme.borderRadius.sm,
-                    }}
-                  >
-                    <Trash2 size={16} color={DarkTheme.colors.status.error} strokeWidth={2} />
-                  </TouchableOpacity>
-                )}
-              </View>
+              <SwipeablePlaceCard
+                key={`${listPlace.place_id}-${index}`}
+                googlePlaceId={listPlace.place_id}
+                place={listPlace.place}
+                name={listPlace.place.name}
+                address={listPlace.place.formatted_address}
+                distance=""
+                onCheckIn={handleCheckIn}
+                onPress={() => handlePlacePress(listPlace.place_id, listPlace.place.name)}
+                showCheckInButton={false}
+                notes={listPlace.notes}
+                onDelete={handleRemovePlace}
+                onAddToWantToGo={handleAddToWantToGo}
+                enableDelete={isEditable}
+                enableAddToWantToGo={list?.default_list_type !== 'want_to_go'}
+              />
             ))}
           </View>
         )}

@@ -357,7 +357,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
             {/* Favorites List */}
             {favoritesList && (
               <TouchableOpacity
-                onPress={() => handleNavigateToList(favoritesList.id, favoritesList.name, false)}
+                onPress={() => handleNavigateToList(favoritesList.id, favoritesList.name, true)}
                 activeOpacity={0.7}
                 style={{ flex: 1 }}
               >
@@ -411,7 +411,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
             {/* Want to Go List */}
             {wantToGoList && (
               <TouchableOpacity
-                onPress={() => handleNavigateToList(wantToGoList.id, wantToGoList.name, false)}
+                onPress={() => handleNavigateToList(wantToGoList.id, wantToGoList.name, true)}
                 activeOpacity={0.7}
                 style={{ flex: 1 }}
               >
