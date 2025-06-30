@@ -1,5 +1,6 @@
 import { Place, EnrichedPlace, PlaceDetails, PlaceSuggestion, Location, PlaceSearchParams } from '../types';
 import { supabase } from './supabase';
+import { getPlaceTimezone } from '../utils/operatingHours';
 
 interface GooglePlaceResult {
   place_id: string;
@@ -27,8 +28,13 @@ interface GooglePlaceResult {
   opening_hours?: {
     open_now: boolean;
     weekday_text: string[];
+    periods?: Array<{
+      open: { day: number; time: string };
+      close?: { day: number; time: string };
+    }>;
   };
   current_opening_hours?: any;
+  utc_offset_minutes?: number;
   formatted_phone_number?: string;
   international_phone_number?: string;
   website?: string;
@@ -299,6 +305,19 @@ export class PlacesService {
    */
   async cacheGooglePlace(googleResult: GooglePlaceResult): Promise<void> {
     try {
+      // Get timezone from coordinates if not provided by Google
+      let timezone: string | null = null;
+      if (googleResult.geometry?.location) {
+        try {
+          timezone = getPlaceTimezone({
+            lat: googleResult.geometry.location.lat,
+            lng: googleResult.geometry.location.lng
+          });
+        } catch (error) {
+          console.warn('Failed to get timezone for place:', googleResult.place_id, error);
+        }
+      }
+
       const cacheData = {
         google_place_id: googleResult.place_id,
         name: googleResult.name,
@@ -313,6 +332,8 @@ export class PlacesService {
         website: googleResult.website,
         opening_hours: googleResult.opening_hours,
         current_opening_hours: googleResult.current_opening_hours,
+        utc_offset_minutes: googleResult.utc_offset_minutes,
+        timezone: timezone,
         photos: googleResult.photos?.slice(0, 3),
         reviews: googleResult.reviews,
         business_status: googleResult.business_status || 'OPERATIONAL',
@@ -382,7 +403,7 @@ export class PlacesService {
       const params = new URLSearchParams({
         place_id: googlePlaceId,
         key: this.apiKey,
-        fields: 'place_id,name,formatted_address,geometry,types,rating,user_ratings_total,price_level,formatted_phone_number,international_phone_number,website,opening_hours,current_opening_hours,photos,reviews,business_status,plus_code'
+        fields: 'place_id,name,formatted_address,geometry,types,rating,user_ratings_total,price_level,formatted_phone_number,international_phone_number,website,opening_hours,current_opening_hours,utc_offset_minutes,photos,reviews,business_status,plus_code'
       });
 
       console.log('🟢 GOOGLE API CALL: Place Details from Google Places API', {
@@ -510,6 +531,8 @@ export class PlacesService {
       website: cachedPlace.website,
       opening_hours: cachedPlace.opening_hours,
       current_opening_hours: cachedPlace.current_opening_hours,
+      utc_offset_minutes: cachedPlace.utc_offset_minutes,
+      timezone: cachedPlace.timezone,
       price_level: cachedPlace.price_level,
       rating: cachedPlace.rating,
       user_ratings_total: cachedPlace.user_ratings_total,

@@ -5,6 +5,7 @@ import { DarkTheme } from '../../constants/theme';
 import { LocationBadge } from '../ui';
 import { EnrichedPlace } from '../../types';
 import { PlaceType, inferPlaceTypeFromGoogleTypes } from '../../utils/placeTypeMapping';
+import { isPlaceCurrentlyOpen } from '../../utils/operatingHours';
 
 // Enhanced props interface that can accept either individual props or an EnrichedPlace object
 export interface PlaceCardProps {
@@ -128,6 +129,22 @@ export default function PlaceCard({
   notes,
   style,
 }: PlaceCardProps) {
+  // Calculate real-time open/closed status using our utility
+  const calculateIsOpen = (placeObj: EnrichedPlace | undefined): boolean | null => {
+    if (!placeObj?.opening_hours || !placeObj?.geometry?.location) {
+      return null;
+    }
+    
+    return isPlaceCurrentlyOpen(
+      placeObj.opening_hours,
+      {
+        lat: placeObj.geometry.location.lat,
+        lng: placeObj.geometry.location.lng
+      },
+      placeObj.timezone // Use cached timezone if available
+    );
+  };
+
   // Use place object data if provided, otherwise use individual props
   const placeData = place ? {
     googlePlaceId: place.google_place_id,
@@ -138,7 +155,7 @@ export default function PlaceCard({
     distance: distance || '',
     rating: place.rating,
     priceLevel: place.price_level,
-    isOpen: place.opening_hours?.open_now,
+    isOpen: calculateIsOpen(place),
     btsStation: btsStation // BTS station would come from Bangkok context
   } : {
     googlePlaceId,
@@ -232,7 +249,7 @@ export default function PlaceCard({
               {placeData.type}
             </Text>
             
-            {placeData.isOpen !== undefined && (
+            {placeData.isOpen !== undefined && placeData.isOpen !== null && (
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <View 
                   style={{

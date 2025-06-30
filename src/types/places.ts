@@ -29,6 +29,8 @@ export interface PlaceDetails {
   website?: string;
   opening_hours?: any; // JSONB field from Google Places
   current_opening_hours?: any; // JSONB field from Google Places
+  utc_offset_minutes?: number; // UTC offset in minutes from Google Places API
+  timezone?: string; // Timezone identifier (e.g., 'Asia/Bangkok') from geo-tz
   price_level?: number;
   rating?: number;
   user_ratings_total?: number;
