@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { placesService } from './places';
 import { EnrichedPlace, List, User, CheckIn, PlaceSuggestion, PlaceDetails, Location } from '../types';
+import { AppError, ErrorType, ErrorSeverity, ErrorFactory, ErrorLogger, safeAsync, ErrorContext } from '../utils/errorHandling';
 
 // Enhanced type definitions for the new schema
 export interface EnhancedList extends List {
@@ -40,24 +41,46 @@ export interface SmartListConfig {
   generator: (userId: string) => Promise<string[]>; // Returns Google Place IDs
 }
 
-// Error classes
-export class ListError extends Error {
-  code: string;
-  
-  constructor(message: string, code: string) {
-    super(message);
+// Error classes extending AppError for standardization
+export class ListError extends AppError {
+  constructor(
+    message: string, 
+    code: string, 
+    severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+    context?: Partial<ErrorContext>,
+    originalError?: Error
+  ) {
+    super(
+      message,
+      ErrorType.DATABASE_ERROR,
+      code,
+      severity,
+      { service: 'lists', ...context },
+      originalError,
+      true
+    );
     this.name = 'ListError';
-    this.code = code;
   }
 }
 
-export class PlaceError extends Error {
-  code: string;
-  
-  constructor(message: string, code: string) {
-    super(message);
+export class PlaceError extends AppError {
+  constructor(
+    message: string, 
+    code: string, 
+    severity: ErrorSeverity = ErrorSeverity.MEDIUM,
+    context?: Partial<ErrorContext>,
+    originalError?: Error
+  ) {
+    super(
+      message,
+      ErrorType.DATABASE_ERROR,
+      code,
+      severity,
+      { service: 'lists', ...context },
+      originalError,
+      true
+    );
     this.name = 'PlaceError';
-    this.code = code;
   }
 }
 
@@ -68,7 +91,7 @@ export class ListsService {
    * Get all lists for a user with place counts
    */
   async getUserLists(userId: string): Promise<EnhancedList[]> {
-    try {
+    return safeAsync(async () => {
       const { data: lists, error } = await supabase
         .from('user_lists_with_counts')
         .select('*')
@@ -77,19 +100,23 @@ export class ListsService {
         // This view should only contain user lists, not curated lists
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        throw ErrorFactory.database(
+          `Failed to get user lists: ${error.message}`,
+          { service: 'lists', operation: 'getUserLists', userId },
+          error
+        );
+      }
+      
       return lists || [];
-    } catch (error) {
-      console.error('Error getting user lists:', error);
-      throw new ListError('Failed to get user lists', 'GET_LISTS_ERROR');
-    }
+    }, { service: 'lists', operation: 'getUserLists', userId });
   }
 
   /**
    * Get lists with their places for a user
    */
   async getUserListsWithPlaces(userId: string): Promise<ListWithPlaces[]> {
-    try {
+    return safeAsync(async () => {
       const { data: listData, error } = await supabase
         .from('lists')
         .select(`
@@ -144,7 +171,13 @@ export class ListsService {
         .eq('is_curated', false)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        throw ErrorFactory.database(
+          `Failed to get user lists with places: ${error.message}`,
+          { service: 'lists', operation: 'getUserListsWithPlaces', userId },
+          error
+        );
+      }
 
       const result: ListWithPlaces[] = [];
 
@@ -225,10 +258,7 @@ export class ListsService {
       }
 
       return result;
-    } catch (error) {
-      console.error('Error getting user lists with places:', error);
-      throw new ListError('Failed to get user lists with places', 'GET_LISTS_WITH_PLACES_ERROR');
-    }
+    }, { service: 'lists', operation: 'getUserListsWithPlaces', userId });
   }
 
   /**
@@ -278,7 +308,15 @@ export class ListsService {
       is_default?: boolean;
     }
   ): Promise<EnhancedList> {
-    try {
+    return safeAsync(async () => {
+      // Validate input
+      if (!name || name.trim().length === 0) {
+        throw ErrorFactory.validation(
+          'List name is required',
+          { service: 'lists', operation: 'createList', userId }
+        );
+      }
+
       const { data: list, error } = await supabase
         .from('lists')
         .insert({
@@ -297,12 +335,16 @@ export class ListsService {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        throw ErrorFactory.database(
+          `Failed to create list: ${error.message}`,
+          { service: 'lists', operation: 'createList', userId, metadata: { listName: name } },
+          error
+        );
+      }
+      
       return list;
-    } catch (error) {
-      console.error('Error creating list:', error);
-      throw new ListError('Failed to create list', 'CREATE_ERROR');
-    }
+    }, { service: 'lists', operation: 'createList', userId });
   }
 
   /**
@@ -318,24 +360,27 @@ export class ListsService {
       color?: string;
     }
   ): Promise<void> {
-    try {
+    return safeAsync(async () => {
       const { error } = await supabase
         .from('lists')
         .update(updates)
         .eq('id', listId);
 
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error updating list:', error);
-      throw new ListError('Failed to update list', 'UPDATE_ERROR');
-    }
+      if (error) {
+        throw ErrorFactory.database(
+          `Failed to update list: ${error.message}`,
+          { service: 'lists', operation: 'updateList', metadata: { listId, updates } },
+          error
+        );
+      }
+    }, { service: 'lists', operation: 'updateList', metadata: { listId } });
   }
 
   /**
    * Delete a list
    */
   async deleteList(listId: string): Promise<void> {
-    try {
+    return safeAsync(async () => {
       // Check if it's a default list
       const { data: list, error: fetchError } = await supabase
         .from('lists')
@@ -343,10 +388,21 @@ export class ListsService {
         .eq('id', listId)
         .single();
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        throw ErrorFactory.database(
+          `Failed to fetch list for deletion: ${fetchError.message}`,
+          { service: 'lists', operation: 'deleteList', metadata: { listId } },
+          fetchError
+        );
+      }
 
       if (list?.is_default) {
-        throw new ListError('Cannot delete default favorites list', 'DELETE_DEFAULT_ERROR');
+        throw new ListError(
+          'Cannot delete default favorites list', 
+          'DELETE_DEFAULT_ERROR', 
+          ErrorSeverity.LOW,
+          { operation: 'deleteList', metadata: { listId } }
+        );
       }
 
       const { error } = await supabase
@@ -354,12 +410,14 @@ export class ListsService {
         .delete()
         .eq('id', listId);
 
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error deleting list:', error);
-      if (error instanceof ListError) throw error;
-      throw new ListError('Failed to delete list', 'DELETE_ERROR');
-    }
+      if (error) {
+        throw ErrorFactory.database(
+          `Failed to delete list: ${error.message}`,
+          { service: 'lists', operation: 'deleteList', metadata: { listId } },
+          error
+        );
+      }
+    }, { service: 'lists', operation: 'deleteList', metadata: { listId } });
   }
 
   // 2. PLACE MANAGEMENT IN LISTS
@@ -376,7 +434,7 @@ export class ListsService {
       sort_order?: number;
     }
   ): Promise<void> {
-    try {
+    return safeAsync(async () => {
       // Verify the place exists in google_places_cache
       const { data: existingPlace, error: cacheCheckError } = await supabase
         .from('google_places_cache')
@@ -385,11 +443,20 @@ export class ListsService {
         .single();
 
       if (cacheCheckError && cacheCheckError.code !== 'PGRST116') {
-        throw cacheCheckError;
+        throw ErrorFactory.database(
+          `Failed to check place cache: ${cacheCheckError.message}`,
+          { service: 'lists', operation: 'addPlaceToList', metadata: { listId, googlePlaceId } },
+          cacheCheckError
+        );
       }
 
       if (!existingPlace) {
-        throw new PlaceError('Place not found in cache. Please ensure place is cached first.', 'PLACE_NOT_CACHED');
+        throw new PlaceError(
+          'Place not found in cache. Please ensure place is cached first.', 
+          'PLACE_NOT_CACHED', 
+          ErrorSeverity.LOW,
+          { operation: 'addPlaceToList', metadata: { listId, googlePlaceId } }
+        );
       }
 
       // Check if place is already in list
@@ -401,7 +468,11 @@ export class ListsService {
         .single();
 
       if (listCheckError && listCheckError.code !== 'PGRST116') {
-        throw listCheckError;
+        throw ErrorFactory.database(
+          `Failed to check if place exists in list: ${listCheckError.message}`,
+          { service: 'lists', operation: 'addPlaceToList', metadata: { listId, googlePlaceId } },
+          listCheckError
+        );
       }
 
       if (existing) {
@@ -416,7 +487,13 @@ export class ListsService {
           .eq('list_id', listId)
           .eq('place_id', googlePlaceId);
 
-        if (updateError) throw updateError;
+        if (updateError) {
+          throw ErrorFactory.database(
+            `Failed to update place in list: ${updateError.message}`,
+            { service: 'lists', operation: 'addPlaceToList', metadata: { listId, googlePlaceId, updating: true } },
+            updateError
+          );
+        }
       } else {
         // Add place to list
         const { error: insertError } = await supabase
@@ -429,13 +506,15 @@ export class ListsService {
             sort_order: options?.sort_order || 0
           });
 
-        if (insertError) throw insertError;
+        if (insertError) {
+          throw ErrorFactory.database(
+            `Failed to add place to list: ${insertError.message}`,
+            { service: 'lists', operation: 'addPlaceToList', metadata: { listId, googlePlaceId } },
+            insertError
+          );
+        }
       }
-    } catch (error) {
-      console.error('Error adding place to list:', error);
-      if (error instanceof PlaceError) throw error;
-      throw new PlaceError('Failed to add place to list', 'ADD_PLACE_ERROR');
-    }
+    }, { service: 'lists', operation: 'addPlaceToList', metadata: { listId, googlePlaceId } });
   }
 
   /**

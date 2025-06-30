@@ -1,6 +1,7 @@
 import { Place, EnrichedPlace, PlaceDetails, PlaceSuggestion, Location, PlaceSearchParams } from '../types';
 import { supabase } from './supabase';
 import { getPlaceTimezone } from '../utils/operatingHours';
+import { ErrorFactory, ErrorLogger, safeAsync, withRetry, withTimeout, ErrorType } from '../utils/errorHandling';
 
 interface GooglePlaceResult {
   place_id: string;
@@ -67,7 +68,12 @@ export class PlacesService {
   constructor() {
     this.apiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '';
     if (!this.apiKey) {
-      console.warn('Google Places API key not configured');
+      ErrorLogger.log(
+        ErrorFactory.config(
+          'Google Places API key not configured',
+          { service: 'places', operation: 'initialization' }
+        )
+      );
     }
   }
 
@@ -75,7 +81,7 @@ export class PlacesService {
    * Search nearby places and cache results in google_places_cache
    */
   async searchNearbyPlaces(location: Location, radius: number, type?: string): Promise<EnrichedPlace[]> {
-    try {
+    return safeAsync(async () => {
       // First check for cached places in the area
       const cachedPlaces = await this.getCachedNearbyPlaces(location, radius, type);
       if (cachedPlaces.length > 0) {
@@ -89,7 +95,7 @@ export class PlacesService {
         return cachedPlaces;
       }
 
-      // Make Google Places API request
+      // Make Google Places API request with retry and timeout
       const url = `${this.baseUrl}/nearbysearch/json`;
       const params = new URLSearchParams({
         location: `${location.latitude},${location.longitude}`,
@@ -109,8 +115,35 @@ export class PlacesService {
         cost: '$0.032 per 1000 calls - PAID'
       });
 
-      const response = await fetch(`${url}?${params}`);
-      const data = await response.json();
+      const data = await withRetry(
+        async () => {
+          const response = await withTimeout(
+            () => fetch(`${url}?${params}`),
+            10000, // 10 second timeout
+            { service: 'places', operation: 'searchNearbyPlaces', metadata: { location, radius, type } }
+          );
+          
+          if (!response.ok) {
+            throw ErrorFactory.googlePlaces(
+              `HTTP error: ${response.status} ${response.statusText}`,
+              response.status.toString(),
+              { service: 'places', operation: 'searchNearbyPlaces', metadata: { location, radius, type } }
+            );
+          }
+          
+          return response.json();
+        },
+        {
+          maxRetries: 3,
+          retryCondition: (error) => {
+            // Retry on network errors and specific Google API errors
+            if (error instanceof Error && error.message.includes('UNKNOWN_ERROR')) return true;
+            if (error instanceof Error && error.message.includes('TIMEOUT')) return true;
+            return false;
+          }
+        },
+        { service: 'places', operation: 'searchNearbyPlaces' }
+      );
 
       console.log('📊 API RESPONSE: Nearby Search completed', {
         status: data.status,
@@ -118,8 +151,23 @@ export class PlacesService {
         cost: '$0.032 per 1000 calls - PAID'
       });
 
-      if (data.status !== 'OK') {
-        throw new Error(`Google Places API error: ${data.status}`);
+      if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+        const errorMessage = this.getGoogleAPIErrorMessage(data.status);
+        throw ErrorFactory.googlePlaces(
+          errorMessage,
+          data.status,
+          { service: 'places', operation: 'searchNearbyPlaces', metadata: { location, radius, type } }
+        );
+      }
+      
+      // Handle ZERO_RESULTS gracefully
+      if (data.status === 'ZERO_RESULTS') {
+        console.log('🔍 NO RESULTS: No nearby places found', { 
+          location: `${location.latitude},${location.longitude}`,
+          radius,
+          type: type || 'all'
+        });
+        return [];
       }
 
       // Cache all results and return enriched places
@@ -133,9 +181,28 @@ export class PlacesService {
       }
 
       return enrichedPlaces;
-    } catch (error) {
-      console.error('Error searching nearby places:', error);
-      throw error;
+    }, { service: 'places', operation: 'searchNearbyPlaces', metadata: { location, radius, type } });
+  }
+
+  /**
+   * Get error message for Google API status codes
+   */
+  private getGoogleAPIErrorMessage(status: string): string {
+    switch (status) {
+      case 'ZERO_RESULTS':
+        return 'No results found for this search';
+      case 'NOT_FOUND':
+        return 'Place not found - Place ID may be invalid or outdated';
+      case 'INVALID_REQUEST':
+        return 'Invalid request - Check parameters and API key permissions';
+      case 'OVER_QUERY_LIMIT':
+        return 'API quota exceeded - Daily or per-second limits reached';
+      case 'REQUEST_DENIED':
+        return 'Request denied - Check API key permissions and billing setup';
+      case 'UNKNOWN_ERROR':
+        return 'Server error - Temporary issue, retry may help';
+      default:
+        return `Google Places API error: ${status}`;
     }
   }
 
@@ -143,10 +210,13 @@ export class PlacesService {
    * Get autocomplete suggestions with caching
    */
   async getPlaceAutocomplete(query: string, location?: Location): Promise<PlaceSuggestion[]> {
-    try {
+    return safeAsync(async () => {
+      // Validate input
       if (!query || typeof query !== 'string') {
-        console.error('❌ INVALID QUERY: Invalid autocomplete query', { query, type: typeof query });
-        throw new Error('Invalid query provided to autocomplete');
+        throw ErrorFactory.validation(
+          'Invalid query provided to autocomplete',
+          { service: 'places', operation: 'getPlaceAutocomplete', metadata: { query, type: typeof query } }
+        );
       }
 
       const sanitizedQuery = query.trim();
@@ -179,12 +249,34 @@ export class PlacesService {
         cost: '$0.00283 per 1000 calls - PAID'
       });
 
-      const response = await fetch(`${url}?${params}`);
-      const data = await response.json();
+      const data = await withTimeout(
+        async () => {
+          const response = await fetch(`${url}?${params}`);
+          if (!response.ok) {
+            throw ErrorFactory.network(
+              `Autocomplete request failed: ${response.status}`,
+              { service: 'places', operation: 'getPlaceAutocomplete', metadata: { query: sanitizedQuery } }
+            );
+          }
+          return response.json();
+        },
+        5000, // 5 second timeout for autocomplete
+        { service: 'places', operation: 'getPlaceAutocomplete' }
+      );
 
-      if (data.status !== 'OK') {
-        console.error('❌ GOOGLE API ERROR:', { status: data.status, query: sanitizedQuery });
-        throw new Error(`Google Places Autocomplete API error: ${data.status}`);
+      if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+        const errorMessage = this.getGoogleAPIErrorMessage(data.status);
+        throw ErrorFactory.googlePlaces(
+          errorMessage,
+          data.status,
+          { service: 'places', operation: 'getPlaceAutocomplete', metadata: { query: sanitizedQuery } }
+        );
+      }
+      
+      // Handle ZERO_RESULTS gracefully
+      if (data.status === 'ZERO_RESULTS') {
+        console.log('🔍 NO RESULTS: No autocomplete suggestions found', { query: sanitizedQuery });
+        return [];
       }
 
       const suggestions: PlaceSuggestion[] = data.predictions.map((prediction: GoogleAutocompleteResult) => ({
@@ -200,10 +292,7 @@ export class PlacesService {
 
       console.log('📝 AUTOCOMPLETE SUCCESS:', { query: sanitizedQuery, resultCount: suggestions.length });
       return suggestions;
-    } catch (error) {
-      console.error('Error in autocomplete:', error);
-      throw error;
-    }
+    }, { service: 'places', operation: 'getPlaceAutocomplete', metadata: { query, location } });
   }
 
   /**
@@ -390,7 +479,7 @@ export class PlacesService {
    * Fetch place from Google API and cache it
    */
   private async fetchAndCacheGooglePlace(googlePlaceId: string): Promise<any | null> {
-    try {
+    return safeAsync(async () => {
       const url = `${this.baseUrl}/details/json`;
       const params = new URLSearchParams({
         place_id: googlePlaceId,
@@ -403,49 +492,58 @@ export class PlacesService {
         cost: '$0.017 per 1000 calls - PAID'
       });
 
-      const response = await fetch(`${url}?${params}`);
-      
-      if (!response.ok) {
-        console.error('❌ GOOGLE API HTTP ERROR: Failed to fetch place details', {
-          place_id: googlePlaceId,
-          http_status: response.status,
-          http_status_text: response.statusText,
-          url: `${url}?place_id=${googlePlaceId}&key=***`,
-          cost: '$0.017 per 1000 calls - PAID (but failed)'
-        });
-        return null;
-      }
-
-      const data = await response.json();
+      const data = await withRetry(
+        async () => {
+          const response = await withTimeout(
+            () => fetch(`${url}?${params}`),
+            10000, // 10 second timeout
+            { service: 'places', operation: 'fetchPlaceDetails', metadata: { googlePlaceId } }
+          );
+          
+          if (!response.ok) {
+            ErrorLogger.log(
+              ErrorFactory.googlePlaces(
+                `HTTP error: ${response.status} ${response.statusText}`,
+                response.status.toString(),
+                { service: 'places', operation: 'fetchPlaceDetails', metadata: { googlePlaceId } }
+              )
+            );
+            throw ErrorFactory.network(
+              `Failed to fetch place details: ${response.status}`,
+              { service: 'places', operation: 'fetchPlaceDetails', metadata: { googlePlaceId } }
+            );
+          }
+          
+          return response.json();
+        },
+        {
+          maxRetries: 3,
+          retryCondition: (error) => {
+            if (error instanceof Error && error.message.includes('UNKNOWN_ERROR')) return true;
+            if (error instanceof Error && error.message.includes('TIMEOUT')) return true;
+            return false;
+          }
+        },
+        { service: 'places', operation: 'fetchPlaceDetails' }
+      );
 
       if (data.status !== 'OK') {
-        const errorDetails = {
-          place_id: googlePlaceId,
-          google_status: data.status,
-          error_message: data.error_message || 'No error message provided',
-          cost: '$0.017 per 1000 calls - PAID (but failed)'
-        };
-
-        // Provide specific guidance based on error type
-        switch (data.status) {
-          case 'NOT_FOUND':
-            console.error('❌ GOOGLE API ERROR: Place not found - Place ID may be invalid or outdated', errorDetails);
-            break;
-          case 'INVALID_REQUEST':
-            console.error('❌ GOOGLE API ERROR: Invalid request - Check place ID format and API key permissions', errorDetails);
-            break;
-          case 'OVER_QUERY_LIMIT':
-            console.error('❌ GOOGLE API ERROR: API quota exceeded - Daily or per-second limits reached', errorDetails);
-            break;
-          case 'REQUEST_DENIED':
-            console.error('❌ GOOGLE API ERROR: Request denied - Check API key permissions and billing setup', errorDetails);
-            break;
-          case 'UNKNOWN_ERROR':
-            console.error('❌ GOOGLE API ERROR: Server error - Temporary issue, retry may help', errorDetails);
-            break;
-          default:
-            console.error('❌ GOOGLE API ERROR: Unexpected status', errorDetails);
-        }
+        const errorMessage = this.getGoogleAPIErrorMessage(data.status);
+        ErrorLogger.log(
+          ErrorFactory.googlePlaces(
+            errorMessage,
+            data.status,
+            { 
+              service: 'places', 
+              operation: 'fetchPlaceDetails', 
+              metadata: { 
+                googlePlaceId,
+                errorMessage: data.error_message,
+                cost: '$0.017 per 1000 calls - PAID (but failed)'
+              } 
+            }
+          )
+        );
         return null;
       }
 
@@ -463,15 +561,7 @@ export class PlacesService {
       
       // Return the cached place
       return await this.getPlaceFromCache(googlePlaceId);
-    } catch (error) {
-      console.error('❌ NETWORK ERROR: Failed to fetch place from Google API', {
-        place_id: googlePlaceId,
-        error_message: error instanceof Error ? error.message : 'Unknown error',
-        error_type: error instanceof Error ? error.name : 'Unknown',
-        cost: '$0.017 per 1000 calls - PAID (but failed due to network)'
-      });
-      return null;
-    }
+    }, { service: 'places', operation: 'fetchPlaceDetails', metadata: { googlePlaceId } }, null, false);
   }
 
   /**

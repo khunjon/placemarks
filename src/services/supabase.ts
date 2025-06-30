@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, Place, CheckIn, List } from '../types';
+import { ErrorFactory, ErrorLogger, safeAsync } from '../utils/errorHandling';
 
 // Database type definitions for Supabase
 export interface Database {
@@ -72,7 +73,10 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables. Please check your .env file.');
+  throw ErrorFactory.config(
+    'Missing Supabase environment variables. Please check your .env file.',
+    { service: 'supabase', operation: 'initialization' }
+  );
 }
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
@@ -98,41 +102,85 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
 // Auth service functions
 export const authService = {
   async signUp(email: string, password: string, userData?: Partial<User>) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: userData,
-      },
-    });
-    
-    // Create user profile after successful signup
-    if (data.user && !error) {
-      const { error: profileError } = await supabase
-        .from('users')
-        .insert({
-          id: data.user.id,
-          email: data.user.email!,
-          full_name: userData?.full_name,
-          avatar_url: userData?.avatar_url,
-          auth_provider: 'email',
-          preferences: userData?.preferences || {},
-        });
-      
-      if (profileError) {
-        console.error('Error creating user profile:', profileError);
+    return safeAsync(async () => {
+      // Validate input
+      if (!email || !password) {
+        throw ErrorFactory.validation(
+          'Email and password are required',
+          { service: 'auth', operation: 'signUp' }
+        );
       }
-    }
-    
-    return { data, error };
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: userData,
+        },
+      });
+      
+      if (error) {
+        throw ErrorFactory.database(
+          `Failed to create user account: ${error.message}`,
+          { service: 'auth', operation: 'signUp', userId: data.user?.id },
+          error
+        );
+      }
+      
+      // Create user profile after successful signup
+      if (data.user) {
+        const { error: profileError } = await supabase
+          .from('users')
+          .insert({
+            id: data.user.id,
+            email: data.user.email!,
+            full_name: userData?.full_name,
+            avatar_url: userData?.avatar_url,
+            auth_provider: 'email',
+            preferences: userData?.preferences || {},
+          });
+        
+        if (profileError) {
+          // Log profile creation error but don't fail the signup
+          ErrorLogger.log(
+            ErrorFactory.database(
+              `Failed to create user profile: ${profileError.message}`,
+              { service: 'auth', operation: 'createProfile', userId: data.user.id },
+              profileError
+            )
+          );
+        }
+      }
+      
+      return { data, error: null };
+    }, { service: 'auth', operation: 'signUp' });
   },
 
   async signIn(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { data, error };
+    return safeAsync(async () => {
+      // Validate input
+      if (!email || !password) {
+        throw ErrorFactory.validation(
+          'Email and password are required',
+          { service: 'auth', operation: 'signIn' }
+        );
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) {
+        throw ErrorFactory.database(
+          `Authentication failed: ${error.message}`,
+          { service: 'auth', operation: 'signIn' },
+          error
+        );
+      }
+      
+      return { data, error: null };
+    }, { service: 'auth', operation: 'signIn' });
   },
 
   async signOut() {

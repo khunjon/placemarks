@@ -20,7 +20,8 @@
       "Bash(sed:*)",
       "Bash(for:*)",
       "Bash(do)",
-      "Bash(done)"
+      "Bash(done)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": []
   },

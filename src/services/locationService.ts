@@ -1,6 +1,7 @@
 import { LocationCoords } from '../types/navigation';
 import { locationUtils } from '../utils/location';
 import { cacheManager } from './cacheManager';
+import { ErrorFactory, ErrorLogger, withRetry, DEFAULT_RETRY_CONFIG } from '../utils/errorHandling';
 
 interface LocationServiceState {
   currentLocation: LocationCoords | null;
@@ -60,7 +61,13 @@ class LocationService {
       try {
         callback(location, source);
       } catch (error) {
-        console.warn('Location listener error:', error);
+        ErrorLogger.log(
+          ErrorFactory.location(
+            'Location listener error',
+            { service: 'location', operation: 'notifyListeners', metadata: { source } },
+            error instanceof Error ? error : undefined
+          )
+        );
       }
     });
   }
@@ -173,7 +180,20 @@ class LocationService {
         console.log(`⏭️ LocationService: Retry ${this.state.retryAttempts} failed, will try again later`);
       }
     } catch (error) {
-      console.warn(`❌ LocationService: Retry ${this.state.retryAttempts} error:`, error);
+      ErrorLogger.log(
+        ErrorFactory.location(
+          `Background retry ${this.state.retryAttempts} failed`,
+          { 
+            service: 'location', 
+            operation: 'backgroundRetry', 
+            metadata: { 
+              attempt: this.state.retryAttempts,
+              maxAttempts: this.MAX_RETRY_ATTEMPTS 
+            } 
+          },
+          error instanceof Error ? error : undefined
+        )
+      );
     } finally {
       this.state.isRetrying = false;
     }
@@ -206,7 +226,17 @@ class LocationService {
 
       return false;
     } catch (error) {
-      console.warn('❌ LocationService: Force retry error:', error);
+      ErrorLogger.log(
+        ErrorFactory.location(
+          'Force retry failed',
+          { 
+            service: 'location', 
+            operation: 'forceRetry', 
+            metadata: { triggeredBy: 'user' } 
+          },
+          error instanceof Error ? error : undefined
+        )
+      );
       return false;
     } finally {
       this.state.isRetrying = false;
