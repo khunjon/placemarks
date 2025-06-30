@@ -10,6 +10,7 @@ interface EmptyStateProps {
   icon?: LucideIcon;
   title: string;
   description?: string;
+  message?: string; // Alias for description for backward compatibility
   primaryAction?: {
     title: string;
     onPress: () => void;
@@ -28,11 +29,15 @@ export function EmptyState({
   icon: Icon,
   title,
   description,
+  message,
   primaryAction,
   secondaryAction,
   variant = 'default',
   style,
 }: EmptyStateProps) {
+  // Use description or message (for backward compatibility)
+  const displayText = description || message;
+
   const getContainerStyle = (): ViewStyle => {
     const baseStyle: ViewStyle = {
       alignItems: 'center',
@@ -90,14 +95,14 @@ export function EmptyState({
         variant="title2"
         style={{
           textAlign: 'center',
-          marginBottom: description ? Spacing.sm : Spacing.lg,
+          marginBottom: displayText ? Spacing.sm : Spacing.lg,
           fontWeight: '600',
         }}
       >
         {title}
       </Typography>
 
-      {description && (
+      {displayText && (
         <Typography
           variant="body"
           color="secondary"
@@ -108,7 +113,7 @@ export function EmptyState({
             lineHeight: 22,
           }}
         >
-          {description}
+          {displayText}
         </Typography>
       )}
 

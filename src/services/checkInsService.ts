@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { EnrichedPlace } from '../types';
+import { placesService } from './places';
 
 // Thumbs rating system type
 export type ThumbsRating = 'thumbs_down' | 'neutral' | 'thumbs_up';
@@ -28,6 +29,9 @@ export interface CheckIn {
 }
 
 // Enriched CheckIn with place details
+export interface CheckInWithPlace extends CheckIn {
+  place?: EnrichedPlace;
+}
 export interface EnrichedCheckIn extends CheckIn {
   place: EnrichedPlace;
 }
@@ -116,7 +120,23 @@ export class CheckInsService {
       }
 
       if (!existingPlace) {
-        throw new CheckInError('Place not found in cache. Please ensure place is cached first.', 'PLACE_NOT_FOUND');
+        // Attempt to get place details and cache it
+        console.log('Place not found in cache, attempting to fetch and cache:', googlePlaceId);
+        try {
+          const placeDetails = await placesService.getPlaceDetails(googlePlaceId);
+          if (!placeDetails) {
+            console.error('getPlaceDetails returned null for place_id:', googlePlaceId);
+            throw new CheckInError('Place not found in Google Places API', 'PLACE_NOT_FOUND');
+          }
+          // Cache the place (getPlaceDetails already caches it internally)
+          console.log('Successfully cached place for check-in:', googlePlaceId);
+        } catch (error) {
+          console.error('Failed to fetch and cache place for check-in:', error);
+          if (error instanceof CheckInError) {
+            throw error;
+          }
+          throw new CheckInError('Unable to fetch place details. Please try again.', 'PLACE_FETCH_FAILED');
+        }
       }
 
       const { data: checkIn, error } = await supabase
