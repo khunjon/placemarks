@@ -6,7 +6,6 @@ import {
   Bell, 
   Map, 
   Shield, 
-  Download,
   BarChart3,
   Calendar,
   List,
@@ -15,10 +14,11 @@ import {
   TreePine
 } from 'lucide-react-native';
 import { DarkTheme } from '../../constants/theme';
-import { UserProfileHeader, SettingItem, AchievementSection } from '../../components/profile';
+import { UserProfileHeader, SettingItem } from '../../components/profile';
 import { useAuth } from '../../services/auth-context';
 import { checkInsService, EnrichedCheckIn } from '../../services/checkInsService';
 import { listsService } from '../../services/listsService';
+import { userRatingsService } from '../../services/userRatingsService';
 import type { ProfileStackScreenProps } from '../../navigation/types';
 
 type ProfileScreenProps = ProfileStackScreenProps<'Profile'>;
@@ -28,7 +28,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const [userStats, setUserStats] = useState({
     totalCheckIns: 0,
     checkInsThisMonth: 0,
-    totalPlacesVisited: 0,
+    totalRatings: 0,
     listsCreated: 0,
   });
   const [loadingStats, setLoadingStats] = useState(true);
@@ -55,9 +55,9 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         return checkInDate.getMonth() === currentMonth && checkInDate.getFullYear() === currentYear;
       }).length || 0;
 
-      // Get total unique places visited (from check-ins)
-      const uniquePlaces = new Set(checkIns?.map((checkIn: EnrichedCheckIn) => checkIn.place_id) || []);
-      const totalPlacesVisited = uniquePlaces.size;
+      // Get total ratings from user_place_ratings table
+      const ratingStats = await userRatingsService.getUserRatingStats(user.id);
+      const totalRatings = ratingStats.totalRatings || 0;
 
       // Get user's lists
       const lists = await listsService.getUserLists(user.id);
@@ -66,7 +66,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       setUserStats({
         totalCheckIns: checkIns?.length || 0,
         checkInsThisMonth,
-        totalPlacesVisited,
+        totalRatings,
         listsCreated,
       });
     } catch (error) {
@@ -85,17 +85,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     Alert.alert(setting, `${setting} settings coming soon!`);
   };
 
-  const handleExportData = () => {
-    console.log('Export data pressed');
-    Alert.alert(
-      'Export Data',
-      'Your data will be exported as a JSON file. This may take a few moments.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Export', onPress: () => console.log('Exporting data...') }
-      ]
-    );
-  };
 
   // Show loading state while user data is being loaded
   if (loading || !user) {
@@ -134,8 +123,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         />
       </View>
 
-      {/* Achievements Section */}
-      <AchievementSection />
 
       {/* Your Data Section */}
       <View
@@ -163,48 +150,138 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           </Text>
         </View>
 
+        {/* KPI Grid */}
         <View
           style={{
-            backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
-            borderTopWidth: 1,
-            borderBottomWidth: 1,
-            borderColor: DarkTheme.colors.semantic.separator,
+            paddingHorizontal: DarkTheme.spacing.lg,
           }}
         >
-          <SettingItem
-            icon={Calendar}
-            iconColor={DarkTheme.colors.accent.orange}
-            title="Total Check-ins"
-            subtitle="All-time count"
-            value={loadingStats ? '...' : userStats.totalCheckIns.toString()}
-            showArrow={false}
-          />
-          
-          <SettingItem
-            icon={MapPin}
-            iconColor={DarkTheme.colors.accent.purple}
-            title="Total Places Visited"
-            subtitle="All-time count"
-            value={loadingStats ? '...' : userStats.totalPlacesVisited.toString()}
-            showArrow={false}
-          />
-          
-          <SettingItem
-            icon={List}
-            iconColor={DarkTheme.colors.accent.teal}
-            title="Lists Created"
-            subtitle="Custom collections"
-            value={loadingStats ? '...' : userStats.listsCreated.toString()}
-            showArrow={false}
-          />
-          
-          <SettingItem
-            icon={Download}
-            iconColor={DarkTheme.colors.accent.indigo}
-            title="Export Data"
-            subtitle="Download your data as JSON"
-            onPress={handleExportData}
-          />
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: DarkTheme.spacing.sm,
+            }}
+          >
+            {/* Lists KPI */}
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
+                borderRadius: DarkTheme.spacing.sm,
+                padding: DarkTheme.spacing.md,
+                alignItems: 'center',
+              }}
+            >
+              <List 
+                size={20} 
+                color={DarkTheme.colors.accent.teal}
+                style={{ marginBottom: DarkTheme.spacing.xs }}
+              />
+              <Text
+                style={[
+                  DarkTheme.typography.title2,
+                  {
+                    color: DarkTheme.colors.semantic.label,
+                    fontWeight: 'bold',
+                    marginBottom: 2,
+                  }
+                ]}
+              >
+                {loadingStats ? '...' : userStats.listsCreated.toString()}
+              </Text>
+              <Text
+                style={[
+                  DarkTheme.typography.caption2,
+                  {
+                    color: DarkTheme.colors.semantic.secondaryLabel,
+                    textAlign: 'center',
+                  }
+                ]}
+              >
+                Lists
+              </Text>
+            </View>
+
+            {/* Ratings KPI */}
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
+                borderRadius: DarkTheme.spacing.sm,
+                padding: DarkTheme.spacing.md,
+                alignItems: 'center',
+              }}
+            >
+              <BarChart3 
+                size={20} 
+                color={DarkTheme.colors.accent.purple}
+                style={{ marginBottom: DarkTheme.spacing.xs }}
+              />
+              <Text
+                style={[
+                  DarkTheme.typography.title2,
+                  {
+                    color: DarkTheme.colors.semantic.label,
+                    fontWeight: 'bold',
+                    marginBottom: 2,
+                  }
+                ]}
+              >
+                {loadingStats ? '...' : userStats.totalRatings.toString()}
+              </Text>
+              <Text
+                style={[
+                  DarkTheme.typography.caption2,
+                  {
+                    color: DarkTheme.colors.semantic.secondaryLabel,
+                    textAlign: 'center',
+                  }
+                ]}
+              >
+                Ratings
+              </Text>
+            </View>
+
+            {/* Check-Ins KPI */}
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
+                borderRadius: DarkTheme.spacing.sm,
+                padding: DarkTheme.spacing.md,
+                alignItems: 'center',
+              }}
+            >
+              <Calendar 
+                size={20} 
+                color={DarkTheme.colors.accent.orange}
+                style={{ marginBottom: DarkTheme.spacing.xs }}
+              />
+              <Text
+                style={[
+                  DarkTheme.typography.title2,
+                  {
+                    color: DarkTheme.colors.semantic.label,
+                    fontWeight: 'bold',
+                    marginBottom: 2,
+                  }
+                ]}
+              >
+                {loadingStats ? '...' : userStats.totalCheckIns.toString()}
+              </Text>
+              <Text
+                style={[
+                  DarkTheme.typography.caption2,
+                  {
+                    color: DarkTheme.colors.semantic.secondaryLabel,
+                    textAlign: 'center',
+                  }
+                ]}
+              >
+                Check-ins
+              </Text>
+            </View>
+          </View>
         </View>
       </View>
 
