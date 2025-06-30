@@ -788,8 +788,13 @@ export const checkInUtils = {
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
 
-    // Format dates for comparison (YYYY-MM-DD)
-    const formatDate = (d: Date) => d.toISOString().split('T')[0];
+    // Format dates for comparison in local timezone (YYYY-MM-DD)
+    const formatDate = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
     
     const dateStr = formatDate(date);
     const todayStr = formatDate(today);
