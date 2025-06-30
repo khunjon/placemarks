@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { 
   View, 
   ScrollView, 
@@ -49,12 +50,13 @@ import {
 } from '../../components/common';
 import Toast from '../../components/ui/Toast';
 
-import { EnrichedPlace, CheckIn } from '../../types';
+import { EnrichedPlace } from '../../types';
 import { placesService } from '../../services/places';
-import { checkInsService } from '../../services/checkInsService';
+import { checkInsService, CheckIn } from '../../services/checkInsService';
 import { userRatingsService, UserRatingType } from '../../services/userRatingsService';
 import { listsService, EnrichedListPlace } from '../../services/listsService';
 import { useAuth } from '../../services/auth-context';
+import { cacheManager } from '../../services/cacheManager';
 import { RootStackParamList } from '../../types/navigation';
 import { RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -79,6 +81,9 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   const contextListName = routeParams.listName; // Name of the list user came from
   
   const { user } = useAuth();
+  
+  // Track initial mount to prevent duplicate loading
+  const isInitialMount = useRef(true);
   
   // Refs for keyboard handling
   const scrollViewRef = useRef<ScrollView>(null);
@@ -113,19 +118,37 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
     setToast(prev => ({ ...prev, visible: false }));
   };
 
-  // Load place details on mount and when focused
+  // Initial load
   useEffect(() => {
-    loadPlaceDetails();
-  }, [googlePlaceId]);
+    if (user && googlePlaceId) {
+      loadPlaceDetails();
+    }
+  }, [user, googlePlaceId]);
 
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      if (user?.id) {
-        loadPlaceDetails();
+  // Refresh data when screen comes back into focus (but not on initial mount)
+  useFocusEffect(
+    React.useCallback(() => {
+      // Skip the first focus effect call (initial mount)
+      if (isInitialMount.current) {
+        isInitialMount.current = false;
+        return;
       }
-    });
-    return unsubscribe;
-  }, [navigation, user?.id]);
+
+      if (user && googlePlaceId) {
+        console.log('PlaceDetailScreen focused, checking cache...');
+        // Only refresh if we don't have recent cached data
+        cacheManager.placeDetails.hasCache(googlePlaceId, user.id).then(hasCache => {
+          if (!hasCache) {
+            // No cache, do a normal load
+            loadPlaceDetails();
+          } else {
+            // We have cache, just do a background refresh
+            loadPlaceDetailsInBackground();
+          }
+        });
+      }
+    }, [user, googlePlaceId])
+  );
 
   // Keyboard listeners - simplified to just track keyboard height
   useEffect(() => {
@@ -146,37 +169,82 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   }, []);
 
   /**
-   * Load enriched place details using Google Place ID
-   * This is much simpler than the old version - just one call to get all data
+   * Load place details with caching - optimized to eliminate redundant API calls
    */
-  const loadPlaceDetails = async () => {
+  const loadPlaceDetails = async (forceRefresh = false) => {
     if (!user?.id) return;
     
     try {
-      setLoading(true);
+      // Check cache first if not forcing refresh
+      if (!forceRefresh) {
+        const cached = await cacheManager.placeDetails.get(googlePlaceId, user.id);
+        if (cached) {
+          console.log('PlaceDetailScreen: Using cached place details');
+          // Immediately show cached data
+          setPlace(cached.place);
+          setUserRating(cached.userRating);
+          setCheckIns(cached.checkIns);
+          setListsContainingPlace(cached.listsContainingPlace);
+          
+          // Initialize note for the specific context list (if user came from a list)
+          if (contextListId) {
+            const contextList = cached.listsContainingPlace.find(listPlace => listPlace.list_id === contextListId);
+            if (contextList) {
+              setContextListPlace(contextList);
+              setNoteText(contextList.notes || '');
+            }
+          }
+          
+          setLoading(false);
+          
+          // Load fresh data in background without showing loading state
+          loadPlaceDetailsInBackground();
+          return;
+        }
+      }
       
+      // No cache or force refresh - show loading and fetch fresh data
+      setLoading(true);
+      await loadFreshPlaceDetails();
+    } catch (error) {
+      console.error('Error loading place details:', error);
+      showToast('Failed to load place details', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Load fresh place details and cache them - optimized parallel loading
+   */
+  const loadFreshPlaceDetails = async (): Promise<void> => {
+    try {
       // Load all data in parallel - much simpler with Google Place IDs
       const [placeDetails, userRatingData, checkInsData, listsData] = await Promise.all([
         // Get full place details from Google Places API cache
         placesService.getPlaceDetails(googlePlaceId),
         
         // Get user's rating for this place
-        userRatingsService.getUserRating(user.id, googlePlaceId),
+        userRatingsService.getUserRating(user!.id, googlePlaceId),
         
         // Get user's check-ins for this place
         checkInsService.getPlaceCheckIns(googlePlaceId, 10),
         
         // Get lists containing this place
-        getListsContainingPlace(user.id, googlePlaceId)
+        getListsContainingPlace(user!.id, googlePlaceId)
       ]);
       
       if (!placeDetails) {
         throw new Error('Place not found');
       }
       
+      const userRating = userRatingData?.rating_type || null;
+      const filteredCheckIns = checkInsData.filter(checkIn => checkIn.user_id === user!.id);
+      
+      // Update state
       setPlace(placeDetails as any);
-      setUserRating(userRatingData?.rating_type || null);
-      setCheckIns(checkInsData.filter(checkIn => checkIn.user_id === user.id));
+      setUserRating(userRating);
+      setCheckIns(filteredCheckIns);
       setListsContainingPlace(listsData);
       
       // Initialize note for the specific context list (if user came from a list)
@@ -188,11 +256,30 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
         }
       }
       
+      // Cache the loaded data
+      await cacheManager.placeDetails.store(
+        googlePlaceId,
+        placeDetails as any,
+        userRating,
+        filteredCheckIns,
+        listsData,
+        user!.id
+      );
     } catch (error) {
-      console.error('Error loading place details:', error);
-      showToast('Failed to load place details', 'error');
-    } finally {
-      setLoading(false);
+      console.error('Error loading fresh place details:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Load fresh data in background without affecting UI loading state
+   */
+  const loadPlaceDetailsInBackground = async (): Promise<void> => {
+    try {
+      await loadFreshPlaceDetails();
+    } catch (error) {
+      console.warn('Background place refresh failed:', error);
+      // Don't show error to user for background refresh failures
     }
   };
 
@@ -222,28 +309,37 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   };
 
   /**
-   * Handle user rating update - simplified with Google Place IDs
+   * Handle user rating update with optimistic cache updates
    */
   const handleUpdateRating = async (ratingType: UserRatingType) => {
     if (!user?.id) return;
     
     try {
+      // Optimistic update - update UI immediately
+      setUserRating(ratingType);
+      
+      // Update cache immediately for instant feedback on future loads
+      await cacheManager.placeDetails.updateRating(googlePlaceId, ratingType, user.id);
+      
+      // Make actual API call
       await userRatingsService.setUserRating(
         user.id,
         googlePlaceId,
         ratingType
       );
       
-      setUserRating(ratingType);
       showToast('Rating updated');
     } catch (error) {
       console.error('Error updating rating:', error);
       showToast('Failed to update rating', 'error');
+      
+      // Revert optimistic update on error
+      await loadPlaceDetailsInBackground();
     }
   };
 
   /**
-   * Handle check-in creation - simplified with Google Place IDs
+   * Handle check-in creation with optimistic cache updates
    */
   const handleCheckIn = async () => {
     if (!user?.id) return;
@@ -259,9 +355,14 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       
       showToast('Check-in created successfully');
       
-      // Reload check-ins
+      // Reload check-ins and update cache
       const updatedCheckIns = await checkInsService.getPlaceCheckIns(googlePlaceId, 10);
-      setCheckIns(updatedCheckIns.filter(checkIn => checkIn.user_id === user.id));
+      const filteredCheckIns = updatedCheckIns.filter(checkIn => checkIn.user_id === user.id);
+      
+      setCheckIns(filteredCheckIns);
+      
+      // Update cache with new check-ins
+      await cacheManager.placeDetails.updateCheckIns(googlePlaceId, filteredCheckIns, user.id);
     } catch (error) {
       console.error('Error creating check-in:', error);
       showToast('Failed to create check-in', 'error');
@@ -311,31 +412,41 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
     if (!user?.id || !contextListPlace) return;
     
     try {
-      await listsService.updatePlaceInList(
-        contextListPlace.list_id,
-        googlePlaceId,
-        { notes: noteText.trim() || undefined }
-      );
+      const trimmedNote = noteText.trim() || undefined;
       
-      // Update local state
+      // Optimistic updates - update UI immediately
       setIsEditingNote(false);
-      
-      // Update context list place
-      setContextListPlace(prev => prev ? { ...prev, notes: noteText.trim() || undefined } : null);
-      
-      // Update lists containing place
+      setContextListPlace(prev => prev ? { ...prev, notes: trimmedNote } : null);
       setListsContainingPlace(prev => 
         prev.map(listPlace => 
           listPlace.list_id === contextListPlace.list_id 
-            ? { ...listPlace, notes: noteText.trim() || undefined }
+            ? { ...listPlace, notes: trimmedNote }
             : listPlace
         )
+      );
+      
+      // Update cache immediately for instant feedback on future loads
+      await cacheManager.placeDetails.updateNotes(
+        googlePlaceId,
+        contextListPlace.list_id,
+        trimmedNote || '',
+        user.id
+      );
+      
+      // Make actual API call
+      await listsService.updatePlaceInList(
+        contextListPlace.list_id,
+        googlePlaceId,
+        { notes: trimmedNote }
       );
       
       showToast('Note saved');
     } catch (error) {
       console.error('Error saving note:', error);
       showToast('Failed to save note', 'error');
+      
+      // Revert optimistic update on error
+      await loadPlaceDetailsInBackground();
     }
   };
 
@@ -472,7 +583,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
           }}
         >
           {/* Place Photos - prioritize editorial/featured images */}
-          {(place.primary_image_url || place.photo_urls?.length > 0) && (
+          {(place.primary_image_url || (place.photo_urls && place.photo_urls.length > 0)) && (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}

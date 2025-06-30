@@ -9,6 +9,7 @@ import { LocationCache } from './locationCache';
 import { ListsCache } from './listsCache';
 import { ListDetailsCache } from './listDetailsCache';
 import { checkInSearchCache } from './checkInSearchCache';
+import { PlaceDetailsCache } from './placeDetailsCache';
 
 /**
  * Unified Cache Manager
@@ -348,6 +349,112 @@ export class CacheManager {
   };
 
   /**
+   * Place details cache operations (individual place with all associated data)
+   */
+  placeDetails = {
+    /**
+     * Get cached place details for a specific place
+     */
+    get: async (googlePlaceId: string, userId: string) => {
+      return PlaceDetailsCache.getCachedPlaceDetails(googlePlaceId, userId);
+    },
+
+    /**
+     * Save place details to cache
+     */
+    store: async (
+      googlePlaceId: string,
+      place: any,
+      userRating: any,
+      checkIns: any[],
+      listsContainingPlace: any[],
+      userId: string
+    ): Promise<void> => {
+      return PlaceDetailsCache.savePlaceDetails(
+        googlePlaceId,
+        place,
+        userRating,
+        checkIns,
+        listsContainingPlace,
+        userId
+      );
+    },
+
+    /**
+     * Update user rating in cache (optimistic update)
+     */
+    updateRating: async (
+      googlePlaceId: string,
+      rating: any,
+      userId: string
+    ): Promise<void> => {
+      return PlaceDetailsCache.updateRatingInCache(googlePlaceId, rating, userId);
+    },
+
+    /**
+     * Update check-ins in cache (optimistic update)
+     */
+    updateCheckIns: async (
+      googlePlaceId: string,
+      checkIns: any[],
+      userId: string
+    ): Promise<void> => {
+      return PlaceDetailsCache.updateCheckInsInCache(googlePlaceId, checkIns, userId);
+    },
+
+    /**
+     * Update lists containing place in cache (optimistic update)
+     */
+    updateLists: async (
+      googlePlaceId: string,
+      listsContainingPlace: any[],
+      userId: string
+    ): Promise<void> => {
+      return PlaceDetailsCache.updateListsInCache(googlePlaceId, listsContainingPlace, userId);
+    },
+
+    /**
+     * Update place notes in cache (optimistic update)
+     */
+    updateNotes: async (
+      googlePlaceId: string,
+      listId: string,
+      notes: string,
+      userId: string
+    ): Promise<void> => {
+      return PlaceDetailsCache.updatePlaceNotesInCache(googlePlaceId, listId, notes, userId);
+    },
+
+    /**
+     * Check if we have cached place details
+     */
+    hasCache: async (googlePlaceId: string, userId: string): Promise<boolean> => {
+      return PlaceDetailsCache.hasCache(googlePlaceId, userId);
+    },
+
+    /**
+     * Get cache status for debugging
+     */
+    getStatus: async (googlePlaceId: string, userId: string) => {
+      return PlaceDetailsCache.getCacheStatus(googlePlaceId, userId);
+    },
+
+    /**
+     * Clear cached place details for a specific place
+     */
+    clear: async (googlePlaceId: string): Promise<void> => {
+      return PlaceDetailsCache.clearPlaceCache(googlePlaceId);
+    },
+
+    /**
+     * Invalidate cache for a specific place
+     */
+    invalidate: async (googlePlaceId: string): Promise<void> => {
+      return PlaceDetailsCache.invalidatePlaceCache(googlePlaceId);
+    }
+  };
+
+  /**
    * Search cache operations (check-in search with smart matching)
    */
   search = {
@@ -486,5 +593,6 @@ export {
   LocationCache,
   ListsCache,
   ListDetailsCache,
+  PlaceDetailsCache,
   checkInSearchCache
 };
