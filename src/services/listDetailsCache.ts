@@ -11,7 +11,8 @@ interface CachedListDetails {
 }
 
 const CACHE_KEY_PREFIX = '@placemarks_list_details_cache_';
-const CACHE_VALIDITY_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
+const CACHE_VALIDITY_DURATION = 60 * 60 * 1000; // 60 minutes in milliseconds (balance freshness vs performance)
+const SOFT_EXPIRY_DURATION = 30 * 60 * 1000; // 30 minutes - refresh in background but still serve
 const STORAGE_TIMEOUT = 2000; // 2 second timeout for AsyncStorage operations
 
 // Helper function to add timeout to AsyncStorage operations
@@ -62,13 +63,16 @@ export class ListDetailsCache {
 
   /**
    * Get cached list details if they're still valid and for the correct user
+   * @param allowStale - Allow serving stale cache for immediate response
    */
   static async getCachedListDetails(
     listId: string,
-    userId: string
+    userId: string,
+    allowStale: boolean = false
   ): Promise<{
     list: ListWithPlaces;
     userRatings: Record<string, UserPlaceRating>;
+    isStale?: boolean;
   } | null> {
     try {
       const cacheKey = this.getCacheKey(listId);
@@ -92,15 +96,36 @@ export class ListDetailsCache {
         return null;
       }
       
-      // Check if cache is still valid
-      if (this.isCacheValid(cached.timestamp)) {
+      // Check cache freshness
+      const isValid = this.isCacheValid(cached.timestamp);
+      const isStale = this.isCacheStale(cached.timestamp);
+      
+      // Return fresh cache immediately
+      if (isValid) {
         return {
           list: cached.list,
           userRatings: cached.userRatings,
+          isStale: false,
+        };
+      }
+      
+      // For stale cache: serve if allowStale is true (soft expiry pattern)
+      if (allowStale && isStale) {
+        console.log(`🗄️ SOFT EXPIRY: Serving stale list details cache for immediate UX`, {
+          listId,
+          ageMinutes: Math.round((Date.now() - cached.timestamp) / (60 * 1000)),
+          placeCount: cached.list.places.length,
+          willRefreshInBackground: true
+        });
+        
+        return {
+          list: cached.list,
+          userRatings: cached.userRatings,
+          isStale: true,
         };
       }
 
-      // Cache is expired, remove it (but don't wait for it)
+      // Cache is expired beyond stale threshold, remove it
       this.clearListCache(listId).catch(error => {
         console.warn(`Failed to clear expired cache for list ${listId}:`, error);
       });
@@ -112,10 +137,18 @@ export class ListDetailsCache {
   }
 
   /**
-   * Check if cached list details are still valid (within 10 minutes)
+   * Check if cached list details are still valid (within 30 minutes)
    */
   static isCacheValid(timestamp: number): boolean {
-    return Date.now() - timestamp < CACHE_VALIDITY_DURATION;
+    return Date.now() - timestamp < SOFT_EXPIRY_DURATION;
+  }
+
+  /**
+   * Check if cached list details are stale but still usable (30-60 minutes old)
+   */
+  static isCacheStale(timestamp: number): boolean {
+    const age = Date.now() - timestamp;
+    return age >= SOFT_EXPIRY_DURATION && age < CACHE_VALIDITY_DURATION;
   }
 
   /**

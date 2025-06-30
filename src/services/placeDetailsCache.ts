@@ -15,7 +15,8 @@ interface CachedPlaceDetails {
 }
 
 const CACHE_KEY_PREFIX = '@placemarks_place_details_cache_';
-const CACHE_VALIDITY_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
+const CACHE_VALIDITY_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds (aligned with user session patterns)
+const SOFT_EXPIRY_DURATION = 12 * 60 * 60 * 1000; // 12 hours - refresh in background but still serve
 const STORAGE_TIMEOUT = 2000; // 2 second timeout for AsyncStorage operations
 
 // Helper function to add timeout to AsyncStorage operations
@@ -70,15 +71,18 @@ export class PlaceDetailsCache {
 
   /**
    * Get cached place details if they're still valid and for the correct user
+   * @param allowStale - Allow serving stale cache for immediate response while refreshing in background
    */
   static async getCachedPlaceDetails(
     googlePlaceId: string,
-    userId: string
+    userId: string,
+    allowStale: boolean = false
   ): Promise<{
     place: EnrichedPlace;
     userRating: UserRatingType | null;
     checkIns: CheckIn[];
     listsContainingPlace: (EnrichedListPlace & { list_name: string })[];
+    isStale?: boolean;
   } | null> {
     try {
       const cacheKey = this.getCacheKey(googlePlaceId);
@@ -102,17 +106,39 @@ export class PlaceDetailsCache {
         return null;
       }
       
-      // Check if cache is still valid
-      if (this.isCacheValid(cached.timestamp)) {
+      // Check cache freshness
+      const isValid = this.isCacheValid(cached.timestamp);
+      const isStale = this.isCacheStale(cached.timestamp);
+      
+      // Return fresh cache immediately
+      if (isValid) {
         return {
           place: cached.place,
           userRating: cached.userRating,
           checkIns: cached.checkIns,
           listsContainingPlace: cached.listsContainingPlace,
+          isStale: false,
+        };
+      }
+      
+      // For stale cache: serve if allowStale is true (soft expiry pattern)
+      if (allowStale && isStale) {
+        console.log(`🗄️ SOFT EXPIRY: Serving stale place details cache for immediate UX`, {
+          googlePlaceId: googlePlaceId.substring(0, 20) + '...',
+          ageHours: Math.round((Date.now() - cached.timestamp) / (60 * 60 * 1000)),
+          willRefreshInBackground: true
+        });
+        
+        return {
+          place: cached.place,
+          userRating: cached.userRating,
+          checkIns: cached.checkIns,
+          listsContainingPlace: cached.listsContainingPlace,
+          isStale: true,
         };
       }
 
-      // Cache is expired, remove it (but don't wait for it)
+      // Cache is expired beyond stale threshold, remove it
       this.clearPlaceCache(googlePlaceId).catch(error => {
         console.warn(`Failed to clear expired cache for place ${googlePlaceId}:`, error);
       });
@@ -124,10 +150,18 @@ export class PlaceDetailsCache {
   }
 
   /**
-   * Check if cached place details are still valid (within 10 minutes)
+   * Check if cached place details are still valid (within 24 hours)
    */
   static isCacheValid(timestamp: number): boolean {
-    return Date.now() - timestamp < CACHE_VALIDITY_DURATION;
+    return Date.now() - timestamp < SOFT_EXPIRY_DURATION;
+  }
+
+  /**
+   * Check if cached place details are stale but still usable (12-24 hours old)
+   */
+  static isCacheStale(timestamp: number): boolean {
+    const age = Date.now() - timestamp;
+    return age >= SOFT_EXPIRY_DURATION && age < CACHE_VALIDITY_DURATION;
   }
 
   /**

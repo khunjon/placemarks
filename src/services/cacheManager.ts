@@ -3,7 +3,6 @@ import { LocationCoords } from '../types/navigation';
 import { ListWithPlaces, EnhancedList } from './listsService';
 
 // Import existing cache services
-import { placesCacheService } from './placesCache';
 import { googlePlacesCache, GooglePlacesCacheEntry, GooglePlacesCacheStats } from './googlePlacesCache';
 import { LocationCache } from './locationCache';
 import { ListsCache } from './listsCache';
@@ -19,45 +18,8 @@ import { PlaceDetailsCache } from './placeDetailsCache';
  * existing optimizations while simplifying cache usage across the app.
  */
 export class CacheManager {
-  /**
-   * Places cache operations (database-level caching)
-   */
-  places = {
-    /**
-     * Get a cached place by Google Place ID
-     */
-    get: async (googlePlaceId: string): Promise<Place | null> => {
-      return placesCacheService.getCachedPlace(googlePlaceId);
-    },
-
-    /**
-     * Cache a place in the database
-     */
-    store: async (place: Place): Promise<void> => {
-      return placesCacheService.cachePlace(place);
-    },
-
-    /**
-     * Get cached places within a radius of a location
-     */
-    getNearby: async (location: Location, radius: number, type?: string): Promise<Place[]> => {
-      return placesCacheService.getCachedNearbyPlaces(location, radius, type);
-    },
-
-    /**
-     * Get cache statistics
-     */
-    getStats: async () => {
-      return placesCacheService.getCacheStats();
-    },
-
-    /**
-     * Clear expired cache entries
-     */
-    clearExpired: async (): Promise<number> => {
-      return placesCacheService.clearExpiredCache();
-    }
-  };
+  // Note: Basic place caching is now handled directly by GooglePlacesCache
+  // The separate "places" cache was redundant and has been consolidated
 
   /**
    * Google Places API cache operations (with soft expiry and cost optimization)
@@ -523,18 +485,16 @@ export class CacheManager {
      * Get comprehensive cache statistics from all cache layers
      */
     getStats: async () => {
-      const [placesStats, googlePlacesStats, searchStats] = await Promise.all([
-        this.places.getStats(),
+      const [googlePlacesStats, searchStats] = await Promise.all([
         this.googlePlaces.getStats(),
         this.search.getStats()
       ]);
 
       return {
-        places: placesStats,
         googlePlaces: googlePlacesStats,
         search: searchStats,
         summary: {
-          totalCachedPlaces: placesStats.totalPlaces + googlePlacesStats.totalEntries,
+          totalCachedPlaces: googlePlacesStats.totalEntries,
           totalSearches: searchStats.nearbySearches + searchStats.textSearches,
           searchCacheSizeKB: searchStats.totalSizeKB,
           costSavings: {
@@ -549,15 +509,11 @@ export class CacheManager {
      * Clear all expired cache entries across all layers
      */
     clearAllExpired: async () => {
-      const [placesCleared, googlePlacesCleared] = await Promise.all([
-        this.places.clearExpired(),
-        this.googlePlaces.clearExpired()
-      ]);
+      const googlePlacesCleared = await this.googlePlaces.clearExpired();
 
       return {
-        placesCleared,
         googlePlacesCleared,
-        total: placesCleared + googlePlacesCleared
+        total: googlePlacesCleared
       };
     },
 
@@ -573,7 +529,6 @@ export class CacheManager {
           ? (stats.googlePlaces.validEntries / stats.googlePlaces.totalEntries * 100).toFixed(1) + '%'
           : '0%',
         cacheLayers: {
-          places: stats.places.totalPlaces > 0,
           googlePlaces: stats.googlePlaces.totalEntries > 0,
           search: (stats.search.nearbySearches + stats.search.textSearches) > 0
         },
@@ -588,7 +543,6 @@ export const cacheManager = new CacheManager();
 
 // Export individual cache services for backward compatibility
 export {
-  placesCacheService,
   googlePlacesCache,
   LocationCache,
   ListsCache,

@@ -13,7 +13,7 @@ import {
 import * as Location from 'expo-location';
 import { Place, PlaceSuggestion, Location as LocationType } from '../../types';
 import { placesService } from '../../services/places';
-import { placesCacheService } from '../../services/placesCache';
+import { googlePlacesCache } from '../../services/googlePlacesCache';
 import PlaceCard from '../../components/places/PlaceCard';
 import PlaceAutocomplete from '../../components/places/PlaceAutocomplete';
 
@@ -80,7 +80,7 @@ export default function PlacesSearchScreen() {
 
   const loadCacheStats = async () => {
     try {
-      const stats = await placesCacheService.getCacheStats();
+      const stats = await googlePlacesCache.getCacheStats();
       setCacheStats(stats);
     } catch (error) {
       console.error('Error loading cache stats:', error);
@@ -131,7 +131,7 @@ export default function PlacesSearchScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const cleared = await placesCacheService.clearExpiredCache();
+              const cleared = await googlePlacesCache.clearExpiredEntries();
               Alert.alert('Success', `Cleared ${cleared} cached places`);
               loadCacheStats();
             } catch (error) {
@@ -269,31 +269,35 @@ export default function PlacesSearchScreen() {
                 <View style={styles.statsContainer}>
                   <View style={styles.statItem}>
                     <Text style={styles.statLabel}>Total Places Cached</Text>
-                    <Text style={styles.statValue}>{cacheStats.totalPlaces}</Text>
+                    <Text style={styles.statValue}>{cacheStats.totalEntries}</Text>
                   </View>
                   
                   <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>Recent Places (24h)</Text>
-                    <Text style={styles.statValue}>{cacheStats.recentPlaces}</Text>
+                    <Text style={styles.statLabel}>Valid Entries</Text>
+                    <Text style={styles.statValue}>{cacheStats.validEntries}</Text>
                   </View>
                   
-                  {cacheStats.oldestPlace && (
-                    <View style={styles.statItem}>
-                      <Text style={styles.statLabel}>Oldest Cache Entry</Text>
-                      <Text style={styles.statValue}>
-                        {new Date(cacheStats.oldestPlace).toLocaleDateString()}
-                      </Text>
-                    </View>
-                  )}
+                  <View style={styles.statItem}>
+                    <Text style={styles.statLabel}>Stale But Usable</Text>
+                    <Text style={styles.statValue}>{cacheStats.staleButUsableEntries}</Text>
+                  </View>
                   
-                  {cacheStats.newestPlace && (
-                    <View style={styles.statItem}>
-                      <Text style={styles.statLabel}>Newest Cache Entry</Text>
-                      <Text style={styles.statValue}>
-                        {new Date(cacheStats.newestPlace).toLocaleDateString()}
-                      </Text>
-                    </View>
-                  )}
+                  <View style={styles.statItem}>
+                    <Text style={styles.statLabel}>Expired Entries</Text>
+                    <Text style={styles.statValue}>{cacheStats.expiredEntries}</Text>
+                  </View>
+                  
+                  <View style={styles.statItem}>
+                    <Text style={styles.statLabel}>Cache Duration</Text>
+                    <Text style={styles.statValue}>{cacheStats.cacheDurationDays} days</Text>
+                  </View>
+                  
+                  <View style={styles.statItem}>
+                    <Text style={styles.statLabel}>Cost Savings</Text>
+                    <Text style={styles.statValue}>
+                      ${((cacheStats.validEntries + cacheStats.staleButUsableEntries) * 0.017).toFixed(2)}
+                    </Text>
+                  </View>
                 </View>
               ) : (
                 <ActivityIndicator size="small" color="#4A90E2" />
