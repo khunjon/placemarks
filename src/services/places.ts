@@ -334,7 +334,7 @@ export class PlacesService {
         current_opening_hours: googleResult.current_opening_hours,
         utc_offset_minutes: googleResult.utc_offset_minutes,
         timezone: timezone,
-        photos: googleResult.photos?.slice(0, 3),
+        photos: googleResult.photos?.slice(0, 1),
         reviews: googleResult.reviews,
         business_status: googleResult.business_status || 'OPERATIONAL',
         plus_code: googleResult.plus_code,
@@ -347,7 +347,7 @@ export class PlacesService {
         has_hours_data: !!googleResult.opening_hours,
         has_photos_data: !!(googleResult.photos && googleResult.photos.length > 0),
         has_reviews_data: !!(googleResult.reviews && googleResult.reviews.length > 0),
-        photo_urls: googleResult.photos?.slice(0, 3).map(photo => 
+        photo_urls: googleResult.photos?.slice(0, 1).map(photo => 
           `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo.photo_reference}&key=${this.apiKey}`
         ) || []
       };

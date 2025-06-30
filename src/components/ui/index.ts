@@ -1,7 +1,3 @@
-// Bangkok Place Card Component
-export { default as BangkokPlaceCard } from './BangkokPlaceCard';
-export type { BangkokPlaceCardProps } from './BangkokPlaceCard';
-
 // Dark Button Components
 export { 
   default as DarkButton,

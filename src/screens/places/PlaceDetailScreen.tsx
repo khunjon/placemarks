@@ -5,6 +5,7 @@ import {
   ScrollView, 
   TouchableOpacity, 
   Image, 
+  Text,
   Linking, 
   Dimensions,
   TextInput,
@@ -101,6 +102,9 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   const [noteText, setNoteText] = useState<string>('');
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [contextListPlace, setContextListPlace] = useState<(EnrichedListPlace & { list_name: string }) | null>(null);
+
+  // Photo loading state
+  const [showPhotos, setShowPhotos] = useState(false);
 
   // Toast state
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' }>({
@@ -583,16 +587,24 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
           }}
         >
           {/* Place Photos - prioritize editorial/featured images */}
-          {(place.primary_image_url || (place.photo_urls && place.photo_urls.length > 0)) && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              pagingEnabled
-              style={{ height: 240 }}
-            >
-              {place.primary_image_url && (
+          {place.primary_image_url && (
+            <Image
+              source={{ uri: place.primary_image_url }}
+              style={{
+                width: screenWidth,
+                height: 240,
+                backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground
+              }}
+              resizeMode="cover"
+            />
+          )}
+          
+          {/* Google Photos - lazy loaded */}
+          {!place.primary_image_url && place.photo_urls && place.photo_urls.length > 0 && (
+            <View>
+              {showPhotos ? (
                 <Image
-                  source={{ uri: place.primary_image_url }}
+                  source={{ uri: place.photo_urls[0] }}
                   style={{
                     width: screenWidth,
                     height: 240,
@@ -600,20 +612,35 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                   }}
                   resizeMode="cover"
                 />
+              ) : (
+                <TouchableOpacity
+                  onPress={() => setShowPhotos(true)}
+                  style={{
+                    width: screenWidth,
+                    height: 240,
+                    backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderBottomWidth: 1,
+                    borderBottomColor: DarkTheme.colors.semantic.separator
+                  }}
+                >
+                  <Camera 
+                    size={32} 
+                    color={DarkTheme.colors.semantic.tertiaryLabel} 
+                  />
+                  <Text style={[
+                    DarkTheme.typography.body,
+                    { 
+                      color: DarkTheme.colors.semantic.secondaryLabel,
+                      marginTop: Spacing.sm
+                    }
+                  ]}>
+                    Tap to view photo
+                  </Text>
+                </TouchableOpacity>
               )}
-              {place.photo_urls?.slice(0, 5).map((photo: string, index: number) => (
-                <Image
-                  key={index}
-                  source={{ uri: photo }}
-                  style={{
-                    width: screenWidth,
-                    height: 240,
-                    backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground
-                  }}
-                  resizeMode="cover"
-                />
-              ))}
-            </ScrollView>
+            </View>
           )}
 
           <View style={{ padding: Spacing.lg }}>
