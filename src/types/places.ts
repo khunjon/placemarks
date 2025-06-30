@@ -1,4 +1,5 @@
 import { BangkokContext, CityContext, Place } from './entities';
+import { Location } from './navigation';
 
 // Place-specific types that are not core entities
 export interface PlaceSuggestion {
@@ -53,10 +54,8 @@ export interface PlaceReview {
   time: number;
 }
 
-export interface Location {
-  latitude: number;
-  longitude: number;
-}
+// Re-export Location type for backward compatibility
+export { Location };
 
 export interface PlaceSearchParams {
   location: Location;

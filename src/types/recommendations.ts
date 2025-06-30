@@ -2,7 +2,7 @@
 // ✅ Updated for Google Place ID architecture
 // Database-backed recommendation system types
 
-import { Location } from '../services/cityContext';
+import { Location } from './navigation';
 
 export type TimeOfDay = 'morning' | 'lunch' | 'afternoon' | 'dinner' | 'evening';
 export type CityTier = 'bangkok' | 'standard';

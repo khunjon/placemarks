@@ -7,12 +7,15 @@ export interface AuthState {
   loading: boolean;
 }
 
-// Location types
+// Location types - primary location interface for the app
 export interface LocationCoords {
   latitude: number;
   longitude: number;
   accuracy?: number;
 }
+
+// Alias for backward compatibility
+export type Location = LocationCoords;
 
 export interface MapRegion {
   latitude: number;

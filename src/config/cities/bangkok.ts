@@ -7,6 +7,54 @@ export const bangkokConfig: CityConfig = {
   timezone: 'Asia/Bangkok',
   coordinates: [100.5018, 13.7563], // [longitude, latitude] - Siam area
   
+  // City boundaries for location detection
+  bounds: {
+    north: 13.956,  // Northern boundary
+    south: 13.494,  // Southern boundary
+    east: 100.928,  // Eastern boundary
+    west: 100.321,  // Western boundary
+  },
+  
+  // Bangkok districts with descriptions
+  districts: [
+    { key: 'sukhumvit', label: 'Sukhumvit', description: 'Shopping, nightlife, expat area' },
+    { key: 'silom', label: 'Silom', description: 'Business district, nightlife' },
+    { key: 'siam', label: 'Siam', description: 'Shopping malls, central Bangkok' },
+    { key: 'chatuchak', label: 'Chatuchak', description: 'Weekend market, local culture' },
+    { key: 'khao_san', label: 'Khao San', description: 'Backpacker area, street food' },
+    { key: 'thonglor', label: 'Thonglor', description: 'Trendy dining, upscale' },
+    { key: 'ekkamai', label: 'Ekkamai', description: 'Hip cafes, nightlife' },
+    { key: 'ari', label: 'Ari', description: 'Local neighborhood, authentic food' },
+    { key: 'phrom_phong', label: 'Phrom Phong', description: 'Expat-friendly, shopping' },
+    { key: 'asok', label: 'Asok', description: 'Business, entertainment' },
+    { key: 'saphan_phut', label: 'Saphan Phut', description: 'Wholesale market' },
+    { key: 'chinatown', label: 'Chinatown', description: 'Traditional Chinese culture' },
+    { key: 'dusit', label: 'Dusit', description: 'Government area, parks' },
+    { key: 'bang_sue', label: 'Bang Sue', description: 'Transport hub' },
+    { key: 'lat_phrao', label: 'Lat Phrao', description: 'Local residential' },
+    { key: 'huai_khwang', label: 'Huai Khwang', description: 'Night market' },
+    { key: 'ratchada', label: 'Ratchada', description: 'Entertainment district' },
+    { key: 'ramkhamhaeng', label: 'Ramkhamhaeng', description: 'University area' },
+  ],
+  
+  // Popular cuisine types in Bangkok
+  cuisine_types: [
+    { key: 'thai', label: 'Thai' },
+    { key: 'japanese', label: 'Japanese' },
+    { key: 'korean', label: 'Korean' },
+    { key: 'chinese', label: 'Chinese' },
+    { key: 'italian', label: 'Italian' },
+    { key: 'american', label: 'American' },
+    { key: 'indian', label: 'Indian' },
+    { key: 'mexican', label: 'Mexican' },
+    { key: 'french', label: 'French' },
+    { key: 'vietnamese', label: 'Vietnamese' },
+    { key: 'street_food', label: 'Street Food' },
+    { key: 'seafood', label: 'Seafood' },
+    { key: 'vegetarian', label: 'Vegetarian' },
+    { key: 'desserts', label: 'Desserts' },
+  ],
+  
   transport_systems: {
     BTS: {
       name: 'BTS Skytrain',

@@ -37,19 +37,16 @@ export interface LocationError {
   canRetry: boolean;
 }
 
-// Bangkok boundaries for city detection
-export const BANGKOK_BOUNDS = {
-  north: 13.956,
-  south: 13.494,
-  east: 100.928,
-  west: 100.321,
-};
+import { getDefaultCity } from '../config/cities';
 
 // Default fallback location (Bangkok center)
-export const DEFAULT_LOCATION: LocationCoords = {
-  latitude: 13.7563,
-  longitude: 100.5018,
-};
+export const DEFAULT_LOCATION: LocationCoords = (() => {
+  const defaultCity = getDefaultCity();
+  return {
+    latitude: defaultCity.coordinates[1],
+    longitude: defaultCity.coordinates[0],
+  };
+})();
 
 export const locationUtils = {
   // Check network connectivity (optimized implementation)
@@ -401,11 +398,13 @@ export const locationUtils = {
 
   // Check if location is within Bangkok bounds
   isLocationInBangkok(coords: LocationCoords): boolean {
+    const bangkokConfig = getDefaultCity();
+    const bounds = bangkokConfig.bounds;
     return (
-      coords.latitude >= BANGKOK_BOUNDS.south &&
-      coords.latitude <= BANGKOK_BOUNDS.north &&
-      coords.longitude >= BANGKOK_BOUNDS.west &&
-      coords.longitude <= BANGKOK_BOUNDS.east
+      coords.latitude >= bounds.south &&
+      coords.latitude <= bounds.north &&
+      coords.longitude >= bounds.west &&
+      coords.longitude <= bounds.east
     );
   },
 

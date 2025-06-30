@@ -1,10 +1,8 @@
 // City Detection Service for Placemarks MVP
-// Simple Bangkok boundary detection with distance utilities
+// Simple city boundary detection with distance utilities
 
-export interface Location {
-  latitude: number;
-  longitude: number;
-}
+import { getDefaultCity } from '../config/cities';
+import { Location } from '../types/navigation';
 
 export interface CityContext {
   tier: 'bangkok' | 'standard';
@@ -13,21 +11,6 @@ export interface CityContext {
   userLocation?: Location;
 }
 
-export interface BangkokBounds {
-  north: number;
-  south: number;
-  east: number;
-  west: number;
-}
-
-// Bangkok boundary coordinates (simple rectangle)
-const BANGKOK_BOUNDS: BangkokBounds = {
-  north: 13.956,  // Northern boundary
-  south: 13.494,  // Southern boundary
-  east: 100.928,  // Eastern boundary
-  west: 100.321,  // Western boundary
-};
-
 /**
  * Detects if a location is within Bangkok boundaries
  * @param location - The location to check
@@ -35,12 +18,14 @@ const BANGKOK_BOUNDS: BangkokBounds = {
  */
 export function isLocationInBangkok(location: Location): boolean {
   const { latitude, longitude } = location;
+  const bangkokConfig = getDefaultCity();
+  const bounds = bangkokConfig.bounds;
   
   return (
-    latitude >= BANGKOK_BOUNDS.south &&
-    latitude <= BANGKOK_BOUNDS.north &&
-    longitude >= BANGKOK_BOUNDS.west &&
-    longitude <= BANGKOK_BOUNDS.east
+    latitude >= bounds.south &&
+    latitude <= bounds.north &&
+    longitude >= bounds.west &&
+    longitude <= bounds.east
   );
 }
 
@@ -140,9 +125,15 @@ export function createValidatedCityContext(
 }
 
 // Export constants for external use
-export const BANGKOK_CENTER: Location = {
-  latitude: 13.7563,
-  longitude: 100.5018,
-};
+export const BANGKOK_CENTER: Location = (() => {
+  const bangkokConfig = getDefaultCity();
+  return {
+    latitude: bangkokConfig.coordinates[1],
+    longitude: bangkokConfig.coordinates[0],
+  };
+})();
 
-export const BANGKOK_BOUNDS_EXPORT = BANGKOK_BOUNDS; 
+export const BANGKOK_BOUNDS_EXPORT = (() => {
+  const bangkokConfig = getDefaultCity();
+  return bangkokConfig.bounds;
+})(); 

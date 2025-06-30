@@ -56,7 +56,6 @@ export {
   PlaceSuggestion,
   PlaceDetails,
   PlaceReview,
-  Location,
   PlaceSearchParams,
   LegacyPlace // For backwards compatibility
 } from './places';
@@ -87,6 +86,7 @@ export {
 export {
   AuthState,
   LocationCoords,
+  Location, // Primary location type for the app
   MapRegion,
   RootStackParamList
 } from './navigation';

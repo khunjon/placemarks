@@ -1,11 +1,38 @@
 // City configuration types for multi-city support
 
+export interface CityBounds {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+}
+
+export interface CityDistrict {
+  key: string;
+  label: string;
+  description: string;
+}
+
+export interface CuisineType {
+  key: string;
+  label: string;
+}
+
 export interface CityConfig {
   code: string;
   name: string;
   country: string;
   timezone: string;
   coordinates: [number, number]; // [longitude, latitude] - city center
+  
+  // City boundaries for location detection
+  bounds: CityBounds;
+  
+  // Districts within the city
+  districts: CityDistrict[];
+  
+  // Popular cuisine types in this city
+  cuisine_types: CuisineType[];
   
   // Transport systems in this city
   transport_systems: {
