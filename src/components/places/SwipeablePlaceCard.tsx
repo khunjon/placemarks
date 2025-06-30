@@ -57,7 +57,7 @@ export default function SwipeablePlaceCard({
         { 
           text: 'Remove', 
           style: 'destructive',
-          onPress: () => onDelete(placeData.googlePlaceId, placeData.name)
+          onPress: () => onDelete(placeData.googlePlaceId, placeData.name || 'Unknown Place')
         }
       ]
     );
@@ -65,7 +65,7 @@ export default function SwipeablePlaceCard({
 
   const handleAddToWantToGo = () => {
     if (!enableAddToWantToGo || !onAddToWantToGo) return;
-    onAddToWantToGo(placeData.googlePlaceId, placeData.name);
+    onAddToWantToGo(placeData.googlePlaceId, placeData.name || 'Unknown Place');
   };
 
   // Update action animations based on swipe progress

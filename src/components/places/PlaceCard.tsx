@@ -174,7 +174,7 @@ export default function PlaceCard({
   const typeColor = getTypeColor(placeData.type);
 
   const handleCheckIn = () => {
-    onCheckIn(placeData.googlePlaceId, placeData.name);
+    onCheckIn(placeData.googlePlaceId, placeData.name || 'Unknown Place');
   };
 
   return (
@@ -205,7 +205,7 @@ export default function PlaceCard({
         ]}
         numberOfLines={1}
       >
-        {shortenPlaceName(placeData.name)}
+        {shortenPlaceName(placeData.name || 'Unknown Place')}
       </Text>
 
       {/* Image and Details Row */}
@@ -312,7 +312,7 @@ export default function PlaceCard({
             ]}
             numberOfLines={1}
           >
-            {shortenAddress(placeData.address)}
+            {shortenAddress(placeData.address || 'Address not available')}
           </Text>
         </View>
       </View>

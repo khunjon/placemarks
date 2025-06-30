@@ -234,7 +234,7 @@ export class AuthService {
           .eq('id', user.id)
           .single(),
         10000 // Increased to 10 seconds for slow networks
-      );
+      ) as { data: any; error: any };
       
       const { data: profile, error } = result;
 

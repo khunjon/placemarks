@@ -63,7 +63,7 @@ export default function ProfileSetupScreen() {
   const handleDietaryToggle = (restriction: string) => {
     setPreferences(prev => ({
       ...prev,
-      dietary_restrictions: toggleArrayItem(prev.dietary_restrictions, restriction),
+      dietary_restrictions: toggleArrayItem(prev.dietary_restrictions || [], restriction),
     }));
   };
 
@@ -171,14 +171,14 @@ export default function ProfileSetupScreen() {
                 key={restriction}
                 style={[
                   styles.tag,
-                  preferences.dietary_restrictions.includes(restriction) && styles.tagSelected,
+                  (preferences.dietary_restrictions || []).includes(restriction) && styles.tagSelected,
                 ]}
                 onPress={() => handleDietaryToggle(restriction)}
               >
                 <Text
                   style={[
                     styles.tagText,
-                    preferences.dietary_restrictions.includes(restriction) && styles.tagTextSelected,
+                    (preferences.dietary_restrictions || []).includes(restriction) && styles.tagTextSelected,
                   ]}
                 >
                   {restriction}

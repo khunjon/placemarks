@@ -222,7 +222,9 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       setUserRatings(userRatingsData);
       
       // Cache the loaded data
-      await cacheManager.listDetails.store(listId, listWithPlaces, userRatingsData, user.id);
+      if (user) {
+        await cacheManager.listDetails.store(listId, listWithPlaces, userRatingsData, user.id);
+      }
     } catch (error) {
       console.error('Error loading fresh list data:', error);
       throw error;

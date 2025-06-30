@@ -142,9 +142,9 @@ export default function AddPlaceToListScreen({
       if (enrichedPlace) {
         const searchResult: SearchResult = {
           googlePlaceId: enrichedPlace.google_place_id,
-          name: enrichedPlace.name,
-          address: enrichedPlace.formatted_address,
-          types: enrichedPlace.types,
+          name: enrichedPlace.name || 'Unknown Place',
+          address: enrichedPlace.formatted_address || 'Address not available',
+          types: enrichedPlace.types || [],
           rating: enrichedPlace.rating,
           priceLevel: enrichedPlace.price_level,
           originalSuggestion: suggestion,

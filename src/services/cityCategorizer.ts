@@ -87,7 +87,7 @@ export class CityCategorizer {
   }
 
   // Determine noise level based on location type and city rules
-  private determineNoiseLevel(locationType: string, environment: string, cityConfig: CityConfig): 'quiet' | 'moderate' | 'loud' {
+  private determineNoiseLevel(locationType: string, environment: string, cityConfig: CityConfig): 'quiet' | 'moderate' | 'busy' {
     const rules = cityConfig.categorization_rules.noise_level_rules;
     
     if (rules[locationType]) {

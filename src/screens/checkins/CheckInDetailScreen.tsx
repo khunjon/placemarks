@@ -175,11 +175,11 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
           title: 'Add to List',
         },
         async (buttonIndex) => {
-          if (buttonIndex < userLists.length) {
+          if (buttonIndex < userLists.length && checkIn.place) {
             const selectedList = userLists[buttonIndex];
             try {
               await listsService.addPlaceToList(selectedList.id, checkIn.place.google_place_id);
-              Alert.alert('Added', `Added ${checkIn.place.name} to ${selectedList.name}`);
+              Alert.alert('Added', `Added ${checkIn.place.name || 'this place'} to ${selectedList.name}`);
             } catch (error) {
               console.error('Error adding to list:', error);
               Alert.alert('Error', 'Failed to add to list');
@@ -195,9 +195,10 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
           ...userLists.map(list => ({
             text: list.name,
             onPress: async () => {
+              if (!checkIn.place) return;
               try {
                 await listsService.addPlaceToList(list.id, checkIn.place.google_place_id);
-                Alert.alert('Added', `Added ${checkIn.place.name} to ${list.name}`);
+                Alert.alert('Added', `Added ${checkIn.place.name || 'this place'} to ${list.name}`);
               } catch (error) {
                 console.error('Error adding to list:', error);
                 Alert.alert('Error', 'Failed to add to list');
@@ -395,10 +396,10 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
                 📍
               </Typography>
               <Title2 style={{ textAlign: 'center', marginBottom: Spacing.xs }}>
-                {checkIn.place.name}
+                {checkIn.place?.name || 'Unknown Place'}
               </Title2>
               <SecondaryText style={{ textAlign: 'center', fontSize: 14, marginBottom: Spacing.sm }}>
-                {checkIn.place.address}
+                {checkIn.place?.address || 'Address not available'}
               </SecondaryText>
               <SecondaryText style={{ textAlign: 'center', fontSize: 12 }}>
                 {formatDateTime(checkIn.timestamp)}

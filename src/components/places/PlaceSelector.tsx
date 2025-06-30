@@ -109,8 +109,8 @@ export default function PlaceSelector({
           <PlaceCard
             googlePlaceId={selectedPlace.google_place_id}
             place={selectedPlace}
-            name={selectedPlace.name}
-            address={selectedPlace.formatted_address}
+            name={selectedPlace.name || 'Unknown Place'}
+            address={selectedPlace.formatted_address || 'Address not available'}
             onCheckIn={() => {}} // Disabled in selector
             onPress={allowDeselection ? handleDeselectPlace : undefined}
             showCheckInButton={false}

@@ -30,25 +30,47 @@ export type AuthProvider = 'email' | 'google' | 'apple' | 'facebook';
 
 // Place entity - matches google_places_cache table (primary place source)
 export interface Place {
+  // Primary keys and identifiers
   google_place_id: string; // Primary key
+  id?: string; // Legacy compatibility - maps to google_place_id
+  place_id?: string; // Alternative place_id field
+  
+  // Basic place information
   name?: string;
   formatted_address?: string;
+  address?: string; // Legacy compatibility - maps to formatted_address
   geometry?: any; // JSONB geometry data from Google Places
+  coordinates?: [number, number]; // Legacy compatibility - computed from geometry
+  
+  // Place categorization
   types?: string[]; // Google Places API types array
+  place_type?: string; // Legacy compatibility - computed from types[0]
+  primary_type?: string; // Legacy compatibility - computed from types[0]
+  
+  // Ratings and reviews
   rating?: number; // Google rating (numeric)
   user_ratings_total?: number;
   price_level?: number;
+  
+  // Contact information
   formatted_phone_number?: string;
   international_phone_number?: string;
   website?: string;
+  
+  // Hours and availability
   opening_hours?: any; // JSONB opening hours data
   current_opening_hours?: any; // JSONB current opening hours
+  
+  // Media and content
   photos?: any; // JSONB photos data from Google Places
   photo_urls?: string[]; // Pre-generated photo URLs array
   reviews?: any; // JSONB reviews data
+  
+  // Status and metadata
   business_status?: string;
-  place_id?: string; // Alternative place_id field
   plus_code?: any; // JSONB plus code data
+  
+  // Cache management
   cached_at?: string;
   expires_at?: string;
   last_accessed?: string;
@@ -58,6 +80,12 @@ export interface Place {
   has_hours_data?: boolean;
   has_photos_data?: boolean;
   has_reviews_data?: boolean;
+  
+  // Legacy context fields
+  bangkok_context?: BangkokContext; // Legacy field for backwards compatibility
+  city_context?: CityContext; // New field replacing bangkok_context
+  
+  // Timestamps
   created_at?: string;
   updated_at?: string;
 }
@@ -245,7 +273,7 @@ export interface WeatherContext {
 // Type aliases and enums
 export type ThumbsRating = 'thumbs_down' | 'neutral' | 'thumbs_up';
 export type UserRatingType = 'thumbs_up' | 'thumbs_down' | 'neutral';
-export type CompanionType = 'solo' | 'partner' | 'couple' | 'family' | 'friends' | 'business' | 'group';
+export type CompanionType = 'solo' | 'partner' | 'couple' | 'family' | 'friends' | 'business' | 'group' | 'date';
 export type MealType = 'breakfast' | 'brunch' | 'lunch' | 'afternoon_snack' | 'dinner' | 'snack' | 'drinks' | 'late_night';
 export type TransportationMethod = 'walking' | 'bts' | 'mrt' | 'bus' | 'taxi' | 'grab' | 'motorcycle' | 'car' | 'boat';
 export type ListVisibility = 'private' | 'friends' | 'public' | 'curated';
