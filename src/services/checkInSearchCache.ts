@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
+import { CACHE_CONFIG } from '../config/cacheConfig';
 
 interface NearbyPlaceResult {
   google_place_id: string;
@@ -34,13 +35,13 @@ interface TextSearchCacheResult {
 }
 
 export class CheckInSearchCache {
-  private readonly CACHE_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
+  private readonly CACHE_EXPIRY_MS = CACHE_CONFIG.CHECK_IN_SEARCH.CACHE_EXPIRY_MS;
   private readonly MAX_CACHE_ENTRIES = 50;
-  private readonly LOCATION_THRESHOLD_METERS = 100; // Consider locations within 100m as the same
+  private readonly LOCATION_THRESHOLD_METERS = CACHE_CONFIG.CHECK_IN_SEARCH.LOCATION_THRESHOLD_METERS;
   
   // In-memory cache for faster access to recent searches
   private memoryCache: Map<string, { places: NearbyPlaceResult[]; timestamp: number }> = new Map();
-  private readonly MEMORY_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+  private readonly MEMORY_CACHE_DURATION = CACHE_CONFIG.CHECK_IN_SEARCH.MEMORY_CACHE_DURATION_MS;
 
   /**
    * Cache nearby search results

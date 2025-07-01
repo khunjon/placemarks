@@ -2,6 +2,7 @@ import { LocationCoords } from '../types/navigation';
 import { locationUtils } from '../utils/location';
 import { cacheManager } from './cacheManager';
 import { ErrorFactory, ErrorLogger, withRetry, DEFAULT_RETRY_CONFIG } from '../utils/errorHandling';
+import { CACHE_CONFIG } from '../config/cacheConfig';
 
 interface LocationServiceState {
   currentLocation: LocationCoords | null;
@@ -24,9 +25,9 @@ class LocationService {
   private retryInterval: NodeJS.Timeout | null = null;
   
   // Configuration - optimized for better responsiveness
-  private readonly RETRY_INTERVAL = 90 * 1000; // Reduced to 90 seconds for faster retries
+  private readonly RETRY_INTERVAL = CACHE_CONFIG.LOCATION.RETRY_INTERVAL_MS;
   private readonly MAX_RETRY_ATTEMPTS = 8; // Reduced to 8 attempts to avoid excessive retries
-  private readonly MIN_RETRY_DELAY = 15 * 1000; // Reduced to 15 seconds minimum delay
+  private readonly MIN_RETRY_DELAY = CACHE_CONFIG.LOCATION.MIN_RETRY_DELAY_MS;
 
   // Bangkok fallback coordinates
   private readonly BANGKOK_CENTER: LocationCoords = {

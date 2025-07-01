@@ -3,6 +3,7 @@ import { View, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { Colors } from '../../constants/Colors';
+import { CACHE_CONFIG } from '../../config/cacheConfig';
 import { Spacing } from '../../constants/Spacing';
 import { 
   Typography, 
@@ -263,7 +264,7 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
     if (trimmedQuery.length >= 3) {
       const timeoutId = setTimeout(() => {
         searchPlaces(trimmedQuery);
-      }, 800); // Increased from 500ms to 800ms for better debouncing
+      }, CACHE_CONFIG.DEBOUNCE.SEARCH_MS);
       return () => clearTimeout(timeoutId);
     } else if (trimmedQuery.length === 0) {
       // Clear results immediately when query is empty

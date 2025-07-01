@@ -2,6 +2,7 @@ import { AuthProvider, SocialAuthData, UserUpdate as ProfileUpdate, User } from 
 import { supabase } from './supabase';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
+import { CACHE_CONFIG } from '../config/cacheConfig';
 
 // Complete the auth session for web browser
 WebBrowser.maybeCompleteAuthSession();
@@ -233,7 +234,7 @@ export class AuthService {
           .select('*')
           .eq('id', user.id)
           .single(),
-        10000 // Increased to 10 seconds for slow networks
+        CACHE_CONFIG.TIMEOUTS.DATABASE_OPERATION_MS
       ) as { data: any; error: any };
       
       const { data: profile, error } = result;

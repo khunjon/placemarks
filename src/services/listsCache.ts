@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ListWithPlaces, EnhancedList } from './listsService';
+import { CACHE_CONFIG } from '../config/cacheConfig';
 
 interface CachedListsData {
   userLists: ListWithPlaces[];
@@ -9,9 +10,9 @@ interface CachedListsData {
 }
 
 const CACHE_KEY = '@placemarks_lists_cache';
-const CACHE_VALIDITY_DURATION = 60 * 60 * 1000; // 60 minutes in milliseconds (balance freshness vs performance)
-const SOFT_EXPIRY_DURATION = 30 * 60 * 1000; // 30 minutes - refresh in background but still serve
-const STORAGE_TIMEOUT = 2000; // 2 second timeout for AsyncStorage operations
+const CACHE_VALIDITY_DURATION = CACHE_CONFIG.LISTS.VALIDITY_DURATION_MS;
+const SOFT_EXPIRY_DURATION = CACHE_CONFIG.LISTS.SOFT_EXPIRY_DURATION_MS;
+const STORAGE_TIMEOUT = CACHE_CONFIG.LISTS.STORAGE_TIMEOUT_MS;
 
 // Helper function to add timeout to AsyncStorage operations
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {

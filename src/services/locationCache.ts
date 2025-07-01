@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LocationCoords } from '../types/navigation';
+import { CACHE_CONFIG } from '../config/cacheConfig';
 
 interface CachedLocation {
   location: LocationCoords;
@@ -8,8 +9,8 @@ interface CachedLocation {
 }
 
 const CACHE_KEY = '@placemarks_location_cache';
-const CACHE_VALIDITY_DURATION = 3 * 60 * 1000; // Reduced to 3 minutes to align with background updates
-const STORAGE_TIMEOUT = 1500; // Reduced timeout to 1.5 seconds for faster operations
+const CACHE_VALIDITY_DURATION = CACHE_CONFIG.LOCATION.VALIDITY_DURATION_MS;
+const STORAGE_TIMEOUT = CACHE_CONFIG.LOCATION.STORAGE_TIMEOUT_MS;
 
 // Helper function to add timeout to AsyncStorage operations
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {

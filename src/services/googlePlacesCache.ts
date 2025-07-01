@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { CACHE_CONFIG } from '../config/cacheConfig';
 
 export interface GooglePlacesCacheEntry {
   google_place_id: string;
@@ -81,7 +82,7 @@ export interface GooglePlacesApiResponse {
 
 class GooglePlacesCacheService {
   private readonly GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY;
-  private readonly CACHE_DURATION_DAYS = parseInt(process.env.EXPO_PUBLIC_GOOGLE_PLACES_CACHE_DAYS || '90', 10);
+  private readonly CACHE_DURATION_DAYS = CACHE_CONFIG.GOOGLE_PLACES.CACHE_DURATION_DAYS;
   private readonly DEFAULT_FIELDS = [
     'place_id',
     'name',
@@ -243,10 +244,10 @@ class GooglePlacesCacheService {
         result.set(placeId, place);
       }
       
-      // Rate limiting: wait 100ms between API calls
+      // Rate limiting: wait between API calls
       if (placesToFetch.indexOf(placeId) < placesToFetch.length - 1) {
-        console.log('⏱️ Rate limiting: Waiting 100ms before next Google API call...');
-        await new Promise(resolve => setTimeout(resolve, 100));
+        console.log(`⏱️ Rate limiting: Waiting ${CACHE_CONFIG.GOOGLE_PLACES.RATE_LIMIT_DELAY_MS}ms before next Google API call...`);
+        await new Promise(resolve => setTimeout(resolve, CACHE_CONFIG.GOOGLE_PLACES.RATE_LIMIT_DELAY_MS));
       }
     }
 
@@ -375,9 +376,9 @@ class GooglePlacesCacheService {
       return false; // Not expired, so not stale
     }
     
-    // Consider data stale but usable if expired within the last 180 days (6 months)
+    // Consider data stale but usable if expired within the stale time threshold
     const expiresAt = new Date(cachedPlace.expires_at);
-    const maxStaleTime = 180 * 24 * 60 * 60 * 1000; // 180 days in milliseconds
+    const maxStaleTime = CACHE_CONFIG.GOOGLE_PLACES.STALE_TIME_DAYS * 24 * 60 * 60 * 1000;
     const staleThreshold = new Date(expiresAt.getTime() + maxStaleTime);
     
     return new Date() < staleThreshold;
@@ -396,9 +397,9 @@ class GooglePlacesCacheService {
         .from('google_places_cache_valid')
         .select('google_place_id', { count: 'exact' });
 
-      // Get stale but usable entries (expired within last 180 days)
+      // Get stale but usable entries (expired within stale time threshold)
       const staleThreshold = new Date();
-      staleThreshold.setDate(staleThreshold.getDate() - 180);
+      staleThreshold.setDate(staleThreshold.getDate() - CACHE_CONFIG.GOOGLE_PLACES.STALE_TIME_DAYS);
       
       const { data: staleData } = await supabase
         .from('google_places_cache')
@@ -480,7 +481,7 @@ class GooglePlacesCacheService {
   getCacheConfig(): GooglePlacesCacheConfig {
     return {
       cacheDurationDays: this.CACHE_DURATION_DAYS,
-      staleCacheThresholdDays: 180, // 6 months
+      staleCacheThresholdDays: CACHE_CONFIG.GOOGLE_PLACES.STALE_TIME_DAYS,
       softExpiryEnabled: true,
     };
   }

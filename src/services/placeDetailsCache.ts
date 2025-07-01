@@ -3,6 +3,7 @@ import { EnrichedPlace } from '../types';
 import { CheckIn } from './checkInsService';
 import { UserRatingType } from './userRatingsService';
 import { EnrichedListPlace } from './listsService';
+import { CACHE_CONFIG } from '../config/cacheConfig';
 
 interface CachedPlaceDetails {
   place: EnrichedPlace;
@@ -15,9 +16,9 @@ interface CachedPlaceDetails {
 }
 
 const CACHE_KEY_PREFIX = '@placemarks_place_details_cache_';
-const CACHE_VALIDITY_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds (aligned with user session patterns)
-const SOFT_EXPIRY_DURATION = 12 * 60 * 60 * 1000; // 12 hours - refresh in background but still serve
-const STORAGE_TIMEOUT = 2000; // 2 second timeout for AsyncStorage operations
+const CACHE_VALIDITY_DURATION = CACHE_CONFIG.PLACE_DETAILS.VALIDITY_DURATION_MS;
+const SOFT_EXPIRY_DURATION = CACHE_CONFIG.PLACE_DETAILS.SOFT_EXPIRY_DURATION_MS;
+const STORAGE_TIMEOUT = CACHE_CONFIG.PLACE_DETAILS.STORAGE_TIMEOUT_MS;
 
 // Helper function to add timeout to AsyncStorage operations
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {

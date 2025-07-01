@@ -8,6 +8,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
+import { CACHE_CONFIG } from '../../config/cacheConfig';
 import { PlaceSuggestion, Location } from '../../types';
 import { placesService } from '../../services/places';
 import { DarkTheme } from '../../constants/theme';
@@ -73,7 +74,7 @@ export default function PlaceAutocomplete({
       } finally {
         setLoading(false);
       }
-    }, 300); // 300ms debounce
+    }, CACHE_CONFIG.DEBOUNCE.AUTOCOMPLETE_MS);
 
     return () => {
       if (debounceRef.current) {

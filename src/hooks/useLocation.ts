@@ -3,6 +3,7 @@ import * as Location from 'expo-location';
 import { LocationCoords } from '../types/navigation';
 import { locationUtils } from '../utils/location';
 import { cacheManager } from '../services/cacheManager';
+import { CACHE_CONFIG } from '../config/cacheConfig';
 import { locationService } from '../services/locationService';
 
 export interface LocationState {
@@ -33,7 +34,7 @@ const BANGKOK_CENTER: LocationCoords = {
   longitude: 100.5018,
 };
 
-const BACKGROUND_UPDATE_INTERVAL = 2 * 60 * 1000; // Reduced to 2 minutes for faster updates
+const BACKGROUND_UPDATE_INTERVAL = CACHE_CONFIG.LOCATION.BACKGROUND_UPDATE_INTERVAL_MS;
 
 export function useLocation(options: UseLocationOptions = {}) {
   const {
@@ -45,7 +46,7 @@ export function useLocation(options: UseLocationOptions = {}) {
     enableOfflineFallback = true,
     disabled = false,
     sessionMode = false,
-    sessionUpdateInterval = 1 * 60 * 60 * 1000, // 1 hour in milliseconds
+    sessionUpdateInterval = CACHE_CONFIG.LOCATION.SESSION_UPDATE_INTERVAL_MS,
   } = options;
 
   const [state, setState] = useState<LocationState>({
@@ -205,7 +206,7 @@ export function useLocation(options: UseLocationOptions = {}) {
         forceRefresh,
         useCache: enableCaching,
         enableOfflineFallback,
-        timeout: 3000, // Optimized timeout to 3 seconds
+        timeout: CACHE_CONFIG.TIMEOUTS.LOCATION_REQUEST_MS,
       });
 
       if (locationResult.location) {
@@ -363,8 +364,8 @@ export function useLocation(options: UseLocationOptions = {}) {
         return;
       }
 
-      // Skip if we have a recent cache (less than 3 minutes old)
-      if (state.lastUpdated && (Date.now() - state.lastUpdated) < 3 * 60 * 1000) {
+      // Skip if we have a recent cache
+      if (state.lastUpdated && (Date.now() - state.lastUpdated) < CACHE_CONFIG.LOCATION.RECENT_CACHE_THRESHOLD_MS) {
         return;
       }
 

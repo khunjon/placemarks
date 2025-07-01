@@ -2,6 +2,7 @@ import { Place, EnrichedPlace, PlaceDetails, PlaceSuggestion, Location, PlaceSea
 import { supabase } from './supabase';
 import { getPlaceTimezone } from '../utils/operatingHours';
 import { ErrorFactory, ErrorLogger, safeAsync, withRetry, withTimeout, ErrorType } from '../utils/errorHandling';
+import { CACHE_CONFIG } from '../config/cacheConfig';
 
 interface GooglePlaceResult {
   place_id: string;
@@ -63,7 +64,7 @@ export class PlacesService {
   private apiKey: string;
   private baseUrl = 'https://maps.googleapis.com/maps/api/place';
   private autocompleteCache: Map<string, { suggestions: PlaceSuggestion[]; timestamp: number }> = new Map();
-  private readonly AUTOCOMPLETE_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+  private readonly AUTOCOMPLETE_CACHE_DURATION = CACHE_CONFIG.PLACES_SERVICE.AUTOCOMPLETE_CACHE_DURATION_MS;
 
   constructor() {
     this.apiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '';
@@ -119,7 +120,7 @@ export class PlacesService {
         async () => {
           const response = await withTimeout(
             () => fetch(`${url}?${params}`),
-            10000, // 10 second timeout
+            CACHE_CONFIG.TIMEOUTS.API_DEFAULT_MS,
             { service: 'places', operation: 'searchNearbyPlaces', metadata: { location, radius, type } }
           );
           
@@ -260,7 +261,7 @@ export class PlacesService {
           }
           return response.json();
         },
-        5000, // 5 second timeout for autocomplete
+        CACHE_CONFIG.TIMEOUTS.API_AUTOCOMPLETE_MS,
         { service: 'places', operation: 'getPlaceAutocomplete' }
       );
 
@@ -414,7 +415,7 @@ export class PlacesService {
         business_status: googleResult.business_status || 'OPERATIONAL',
         plus_code: googleResult.plus_code,
         cached_at: new Date().toISOString(),
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
+        expires_at: new Date(Date.now() + CACHE_CONFIG.PLACES_SERVICE.PLACES_CACHE_EXPIRY_MS).toISOString(),
         last_accessed: new Date().toISOString(),
         access_count: 1,
         has_basic_data: true,
@@ -496,7 +497,7 @@ export class PlacesService {
         async () => {
           const response = await withTimeout(
             () => fetch(`${url}?${params}`),
-            10000, // 10 second timeout
+            CACHE_CONFIG.TIMEOUTS.API_DEFAULT_MS,
             { service: 'places', operation: 'fetchPlaceDetails', metadata: { googlePlaceId } }
           );
           
