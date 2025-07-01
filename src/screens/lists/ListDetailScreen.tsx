@@ -22,20 +22,9 @@ import {
   Plus, 
   SortAsc, 
   MapPin, 
- 
-  Clock, 
-  Eye, 
-  Navigation, 
   CheckCircle,
-  Heart,
-  Coffee,
   Calendar,
-  Target,
-  Utensils,
-  Camera,
   TrendingUp,
-  Award,
-  MoreVertical,
   Star
 } from '../../components/icons';
 import { DarkTheme } from '../../constants/theme';
@@ -136,7 +125,6 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       }
 
       if (user && listId) {
-        console.log('ListDetailScreen focused, checking cache...');
         // Only refresh if we don't have recent cached data
         cacheManager.listDetails.hasCache(listId, user.id).then(hasCache => {
           if (!hasCache) {
@@ -162,7 +150,6 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       if (!forceRefresh) {
         const cached = await cacheManager.listDetails.get(listId, user.id);
         if (cached) {
-          console.log('ListDetailScreen: Using cached list details');
           // Immediately show cached data
           setList(cached.list);
           setEditedName(cached.list.name);

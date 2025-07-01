@@ -173,13 +173,11 @@ export function useLocation(options: UseLocationOptions = {}) {
       
       // If we already have a location in this session and not enough time has passed, skip
       if (sessionLocationLoadedRef.current && timeSinceSessionStart < sessionUpdateInterval) {
-        console.log('📍 Session mode: Skipping location update, using existing location');
         return state.location;
       }
       
       // If we have a cached location and haven't loaded in this session yet, use cache
       if (!sessionLocationLoadedRef.current && state.location && enableCaching) {
-        console.log('📍 Session mode: Using cached location from previous session');
         sessionLocationLoadedRef.current = true;
         return state.location;
       }
@@ -225,7 +223,6 @@ export function useLocation(options: UseLocationOptions = {}) {
         // Mark as loaded in session mode
         if (sessionMode) {
           sessionLocationLoadedRef.current = true;
-          console.log('📍 Session mode: Location loaded successfully');
         }
 
         return locationResult.location;
@@ -249,7 +246,6 @@ export function useLocation(options: UseLocationOptions = {}) {
         // Mark as loaded in session mode
         if (sessionMode) {
           sessionLocationLoadedRef.current = true;
-          console.log('📍 Session mode: Using Bangkok fallback');
         }
 
         return BANGKOK_CENTER;
@@ -369,7 +365,6 @@ export function useLocation(options: UseLocationOptions = {}) {
         return;
       }
 
-      console.log('🔄 Background location update triggered');
       lastBackgroundUpdateRef.current = Date.now();
       
       try {

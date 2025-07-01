@@ -1,7 +1,7 @@
 import { LocationCoords } from '../types/navigation';
 import { locationUtils } from '../utils/location';
 import { cacheManager } from './cacheManager';
-import { ErrorFactory, ErrorLogger, withRetry, DEFAULT_RETRY_CONFIG } from '../utils/errorHandling';
+import { ErrorFactory, ErrorLogger, withRetry } from '../utils/errorHandling';
 import { CACHE_CONFIG } from '../config/cacheConfig';
 
 interface LocationServiceState {
@@ -29,11 +29,6 @@ class LocationService {
   private readonly MAX_RETRY_ATTEMPTS = 8; // Reduced to 8 attempts to avoid excessive retries
   private readonly MIN_RETRY_DELAY = CACHE_CONFIG.LOCATION.MIN_RETRY_DELAY_MS;
 
-  // Bangkok fallback coordinates
-  private readonly BANGKOK_CENTER: LocationCoords = {
-    latitude: 13.7563,
-    longitude: 100.5018,
-  };
 
   /**
    * Subscribe to location updates
@@ -88,13 +83,11 @@ class LocationService {
       this.state.retryAttempts = 0;
       this.state.lastRetryTime = null;
       this.stopRetryTimer();
-      console.log('✅ LocationService: Got real location, stopping retries');
     }
 
     // Start retry timer if we're using fallback
     if (isNowUsingFallback && !wasUsingFallback) {
       this.startRetryTimer();
-      console.log('🔄 LocationService: Using fallback, starting background retries');
     }
 
     // Notify listeners
@@ -142,7 +135,6 @@ class LocationService {
     // Don't retry if we've exceeded max attempts
     if (this.state.retryAttempts >= this.MAX_RETRY_ATTEMPTS) {
       this.stopRetryTimer();
-      console.log('❌ LocationService: Max retry attempts reached, stopping retries');
       return;
     }
 
@@ -161,7 +153,6 @@ class LocationService {
       this.state.retryAttempts += 1;
       this.state.lastRetryTime = Date.now();
 
-      console.log(`🔄 LocationService: Retry attempt ${this.state.retryAttempts}/${this.MAX_RETRY_ATTEMPTS}`);
 
       // Use the location utils to get real location
       const locationResult = await locationUtils.getLocationWithCache({
@@ -172,13 +163,11 @@ class LocationService {
 
       if (locationResult.location && locationResult.source !== 'fallback') {
         // Got a real location!
-        console.log('✅ LocationService: Background retry successful!');
         this.updateLocation(locationResult.location, locationResult.source as 'gps' | 'network');
         
         // Save to cache
         await cacheManager.location.store(locationResult.location, locationResult.source as 'gps' | 'network');
       } else {
-        console.log(`⏭️ LocationService: Retry ${this.state.retryAttempts} failed, will try again later`);
       }
     } catch (error) {
       ErrorLogger.log(
@@ -210,7 +199,6 @@ class LocationService {
 
     try {
       this.state.isRetrying = true;
-      console.log('🔄 LocationService: Force retry triggered by user');
 
       const locationResult = await locationUtils.getLocationWithCache({
         forceRefresh: true,
@@ -219,7 +207,6 @@ class LocationService {
       });
 
       if (locationResult.location && locationResult.source !== 'fallback') {
-        console.log('✅ LocationService: Force retry successful!');
         this.updateLocation(locationResult.location, locationResult.source as 'gps' | 'network');
         await cacheManager.location.store(locationResult.location, locationResult.source as 'gps' | 'network');
         return true;

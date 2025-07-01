@@ -2,7 +2,6 @@ import { AuthProvider, SocialAuthData, UserUpdate as ProfileUpdate, User } from 
 import { supabase } from './supabase';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
-import { CACHE_CONFIG } from '../config/cacheConfig';
 
 // Complete the auth session for web browser
 WebBrowser.maybeCompleteAuthSession();
@@ -141,21 +140,17 @@ export class AuthService {
   // Profile management
   async updateProfile(data: ProfileUpdate): Promise<void> {
     try {
-      console.log('Auth service: Starting updateProfile with data:', data);
       
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No authenticated user');
 
-      console.log('Auth service: User found:', user.id);
 
       // Update user profile in database
-      console.log('Auth service: Updating user profile in database...');
       const updateData: any = {};
       if (data.full_name !== undefined) updateData.full_name = data.full_name;
       if (data.avatar_url !== undefined) updateData.avatar_url = data.avatar_url;
       if (data.preferences !== undefined) updateData.preferences = data.preferences;
 
-      console.log('Auth service: Database update data:', updateData);
 
       const { error: profileError } = await supabase
         .from('users')
@@ -163,12 +158,9 @@ export class AuthService {
         .eq('id', user.id);
 
       if (profileError) {
-        console.error('Auth service: Database update error:', profileError);
         throw profileError;
       }
       
-      console.log('Auth service: Database updated successfully');
-      console.log('Auth service: Profile updated successfully');
     } catch (error) {
       console.error('Update profile error:', error);
       throw error;
@@ -234,7 +226,7 @@ export class AuthService {
           .select('*')
           .eq('id', user.id)
           .single(),
-        CACHE_CONFIG.TIMEOUTS.DATABASE_OPERATION_MS
+10000
       ) as { data: any; error: any };
       
       const { data: profile, error } = result;
@@ -269,17 +261,6 @@ export class AuthService {
     }
   }
 
-  // Social auth helpers
-  private async handleSocialAuth(provider: AuthProvider, authData: SocialAuthData): Promise<{ data: any; error: any }> {
-    try {
-      // This is handled automatically by Supabase OAuth flow
-      // The user profile creation happens in the auth state change listener
-      return { data: authData, error: null };
-    } catch (error: any) {
-      console.error('Social auth error:', error);
-      return { data: null, error };
-    }
-  }
 
   private async createUserProfile(user: any, provider: AuthProvider, socialData?: any): Promise<User> {
     try {

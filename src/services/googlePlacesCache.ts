@@ -127,10 +127,6 @@ class GooglePlacesCacheService {
             // Update access tracking
             await this.updateAccessTracking(googlePlaceId);
             
-            const cacheType = isExpired ? 'STALE CACHE' : 'CACHE HIT';
-            console.log(`🗄️ DATABASE ${cacheType}: Using pre-generated photo URLs`, {
-              source: 'database_cache'
-            });
             
             return cached;
           }
@@ -146,15 +142,6 @@ class GooglePlacesCacheService {
       // Cache the fresh data
       const cachedEntry = await this.cacheGooglePlaceData(googleData);
       
-      console.log('🟢 GOOGLE API CALL: Fresh data from Google Places API', {
-        googlePlaceId: googlePlaceId.substring(0, 20) + '...',
-        name: googleData.result.name,
-        cost: '$0.017 per 1000 calls - PAID',
-        hasPhotos: !!googleData.result.photos?.length,
-        rating: googleData.result.rating,
-        nowCached: true,
-        photoUrlsGenerated: cachedEntry.photo_urls?.length || 0
-      });
 
       return cachedEntry;
     } catch (error) {
@@ -230,7 +217,6 @@ class GooglePlacesCacheService {
     // Identify which places need to be fetched
     const placesToFetch = googlePlaceIds.filter(id => !cachedPlaces.has(id));
     
-    console.log(`🗄️ BATCH CACHE CHECK: ${cachedPlaces.size} found in cache, ${placesToFetch.length} need Google API calls`);
     
     // Add cached places to result
     cachedPlaces.forEach((place, id) => {
@@ -246,7 +232,6 @@ class GooglePlacesCacheService {
       
       // Rate limiting: wait between API calls
       if (placesToFetch.indexOf(placeId) < placesToFetch.length - 1) {
-        console.log(`⏱️ Rate limiting: Waiting ${CACHE_CONFIG.GOOGLE_PLACES.RATE_LIMIT_DELAY_MS}ms before next Google API call...`);
         await new Promise(resolve => setTimeout(resolve, CACHE_CONFIG.GOOGLE_PLACES.RATE_LIMIT_DELAY_MS));
       }
     }
@@ -294,8 +279,6 @@ class GooglePlacesCacheService {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + this.CACHE_DURATION_DAYS * 24 * 60 * 60 * 1000);
 
-    // Note: Photo URLs should be generated client-side using PhotoUrlGenerator
-    // This ensures each environment uses its own API key
 
     const cacheEntry = {
       google_place_id: result.place_id,
@@ -312,7 +295,7 @@ class GooglePlacesCacheService {
       opening_hours: result.opening_hours,
       current_opening_hours: result.current_opening_hours,
       photos: result.photos,
-      photo_urls: null, // URLs should be generated client-side
+      photo_urls: null,
       reviews: result.reviews?.slice(0, 5), // Limit to 5 reviews
       business_status: result.business_status,
       place_id: result.place_id,
@@ -439,41 +422,6 @@ class GooglePlacesCacheService {
     }
   }
 
-  /**
-   * Demonstrate cache vs API logging with soft expiry
-   * This method shows the difference between cache hits, stale cache, and API calls
-   */
-  async demonstrateLogging(testPlaceId: string = 'ChIJDemo123456789'): Promise<void> {
-    console.log('🎯 DEMO: Enhanced Cache with Soft Expiry Demonstration');
-    console.log(`   Cache Duration: ${this.CACHE_DURATION_DAYS} days`);
-    console.log('   🗄️ = Database cache (FREE)');
-    console.log('   🗄️ STALE CACHE = Expired but usable for recommendations (FREE)');
-    console.log('   🟢 = Google API calls (PAID)');
-    console.log('');
-
-    try {
-      // First call - will be an API call (if not cached)
-      console.log('📍 First call - expecting Google API call:');
-      await this.getPlaceDetails(testPlaceId);
-
-      // Second call - should be a cache hit
-      console.log('\n📍 Second call - expecting cache hit:');
-      await this.getPlaceDetails(testPlaceId);
-
-      // Third call with soft expiry enabled (for recommendations)
-      console.log('\n📍 Third call (with soft expiry for recommendations):');
-      await this.getPlaceDetails(testPlaceId, false, true);
-
-      // Fourth call with force refresh - will be an API call
-      console.log('\n📍 Fourth call (force refresh) - expecting Google API call:');
-      await this.getPlaceDetails(testPlaceId, true);
-
-      console.log('\n✅ Demo completed! Notice the different log messages above.');
-      console.log(`💡 Soft expiry allows using stale data for recommendations, reducing API costs.`);
-    } catch (error) {
-      console.log('ℹ️ Demo used test place ID - actual API calls would work with real place IDs');
-    }
-  }
 
   /**
    * Get cache configuration summary
@@ -502,9 +450,7 @@ class GooglePlacesCacheService {
         return 0;
       }
 
-      const clearedCount = data?.length || 0;
-      console.log(`🗄️ CACHE MAINTENANCE: Cleared ${clearedCount} expired entries from database`);
-      return clearedCount;
+      return data?.length || 0;
     } catch (error) {
       console.error('Error clearing expired entries:', error);
       return 0;

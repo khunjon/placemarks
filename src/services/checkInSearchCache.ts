@@ -146,12 +146,6 @@ class CheckInSearchCacheService extends BaseAsyncStorageCache<SearchCacheData> {
       // First check memory cache for exact match
       const memoryResult = this.memoryCache.get(cacheKey);
       if (memoryResult && (Date.now() - memoryResult.timestamp) < this.MEMORY_CACHE_DURATION) {
-        console.log('🗄️ MEMORY CACHE HIT: Retrieved text search from memory cache', {
-          query: query.trim(),
-          resultCount: memoryResult.places.length,
-          cost: '$0.000 - FREE!',
-          cacheAge: `${Math.round((Date.now() - memoryResult.timestamp) / 1000)}s ago`
-        });
         return memoryResult.places;
       }
 
@@ -164,12 +158,6 @@ class CheckInSearchCacheService extends BaseAsyncStorageCache<SearchCacheData> {
           timestamp: Date.now()
         });
         
-        console.log('🗄️ STORAGE CACHE HIT: Retrieved text search from AsyncStorage cache', {
-          query: query.trim(),
-          resultCount: cached.data.places.length,
-          cost: '$0.000 - FREE!',
-          cacheAge: `${Math.round((Date.now() - Date.now()) / 1000)}s ago`
-        });
         return cached.data.places;
       }
 
@@ -200,7 +188,6 @@ class CheckInSearchCacheService extends BaseAsyncStorageCache<SearchCacheData> {
     
     // Clear AsyncStorage cache
     await this.clearAllCaches();
-    console.log(`🗑️ Cleared search cache`);
   }
 
   /**
@@ -361,13 +348,6 @@ class CheckInSearchCacheService extends BaseAsyncStorageCache<SearchCacheData> {
                 cachedQuery.length >= 3 && 
                 normalizedQuery.length - cachedQuery.length <= 3) {
               
-              console.log('🗄️ SMART MEMORY CACHE: Using similar cached query', {
-                originalQuery: query,
-                cachedQuery: cachedQuery,
-                resultCount: cachedData.places.length,
-                cost: '$0.000 - FREE!',
-                reason: 'Similar query likely has same results'
-              });
               
               return cachedData.places;
             }
@@ -398,13 +378,6 @@ class CheckInSearchCacheService extends BaseAsyncStorageCache<SearchCacheData> {
                 cachedQuery.length >= 3 && 
                 normalizedQuery.length - cachedQuery.length <= 3) {
               
-              console.log('🗄️ SMART STORAGE CACHE: Using similar cached query', {
-                originalQuery: query,
-                cachedQuery: cachedQuery,
-                resultCount: cached.data.places.length,
-                cost: '$0.000 - FREE!',
-                reason: 'Similar query likely has same results'
-              });
               
               return cached.data.places;
             }
@@ -472,7 +445,6 @@ class CheckInSearchCacheService extends BaseAsyncStorageCache<SearchCacheData> {
       
       if (entriesToRemove.length > 0) {
         await AsyncStorage.multiRemove(entriesToRemove.map(entry => entry.key));
-        console.log(`🗑️ Cleaned up ${entriesToRemove.length} old cache entries`);
       }
     } catch (error) {
       console.warn('Failed to cleanup old cache:', error);
