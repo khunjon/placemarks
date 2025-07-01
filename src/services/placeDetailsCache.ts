@@ -1,47 +1,43 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { EnrichedPlace } from '../types';
 import { CheckIn } from './checkInsService';
 import { UserRatingType } from './userRatingsService';
 import { EnrichedListPlace } from './listsService';
 import { CACHE_CONFIG } from '../config/cacheConfig';
+import { BaseAsyncStorageCache } from '../utils/BaseAsyncStorageCache';
+import { CacheConfig } from '../utils/cacheUtils';
 
-interface CachedPlaceDetails {
+interface PlaceDetailsData {
   place: EnrichedPlace;
   userRating: UserRatingType | null;
   checkIns: CheckIn[];
   listsContainingPlace: (EnrichedListPlace & { list_name: string })[];
-  timestamp: number;
-  userId: string;
   googlePlaceId: string;
 }
 
-const CACHE_KEY_PREFIX = '@placemarks_place_details_cache_';
-const CACHE_VALIDITY_DURATION = CACHE_CONFIG.PLACE_DETAILS.VALIDITY_DURATION_MS;
-const SOFT_EXPIRY_DURATION = CACHE_CONFIG.PLACE_DETAILS.SOFT_EXPIRY_DURATION_MS;
-const STORAGE_TIMEOUT = CACHE_CONFIG.PLACE_DETAILS.STORAGE_TIMEOUT_MS;
+const CACHE_CONFIG_PLACE_DETAILS: CacheConfig = {
+  keyPrefix: '@placemarks_place_details_cache_',
+  validityDurationMs: CACHE_CONFIG.PLACE_DETAILS.VALIDITY_DURATION_MS,
+  softExpiryDurationMs: CACHE_CONFIG.PLACE_DETAILS.SOFT_EXPIRY_DURATION_MS,
+  storageTimeoutMs: CACHE_CONFIG.PLACE_DETAILS.STORAGE_TIMEOUT_MS,
+  enableLogging: true
+};
 
-// Helper function to add timeout to AsyncStorage operations
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => 
-      setTimeout(() => reject(new Error('Storage operation timeout')), timeoutMs)
-    )
-  ]);
-}
+class PlaceDetailsCacheService extends BaseAsyncStorageCache<PlaceDetailsData> {
+  constructor() {
+    super(CACHE_CONFIG_PLACE_DETAILS);
+  }
 
-export class PlaceDetailsCache {
   /**
    * Generate cache key for a specific place
    */
-  private static getCacheKey(googlePlaceId: string): string {
-    return `${CACHE_KEY_PREFIX}${googlePlaceId}`;
+  protected generateCacheKey(googlePlaceId: string): string {
+    return `${this.config.keyPrefix}${googlePlaceId}`;
   }
 
   /**
    * Save place details to cache with current timestamp
    */
-  static async savePlaceDetails(
+  async savePlaceDetails(
     googlePlaceId: string,
     place: EnrichedPlace,
     userRating: UserRatingType | null,
@@ -49,32 +45,23 @@ export class PlaceDetailsCache {
     listsContainingPlace: (EnrichedListPlace & { list_name: string })[],
     userId: string
   ): Promise<void> {
-    try {
-      const cachedData: CachedPlaceDetails = {
-        place,
-        userRating,
-        checkIns,
-        listsContainingPlace,
-        timestamp: Date.now(),
-        userId,
-        googlePlaceId,
-      };
-      
-      const cacheKey = this.getCacheKey(googlePlaceId);
-      await withTimeout(
-        AsyncStorage.setItem(cacheKey, JSON.stringify(cachedData)),
-        STORAGE_TIMEOUT
-      );
-    } catch (error) {
-      console.warn(`Failed to save place details to cache for place ${googlePlaceId}:`, error);
-    }
+    const placeDetailsData: PlaceDetailsData = {
+      place,
+      userRating,
+      checkIns,
+      listsContainingPlace,
+      googlePlaceId,
+    };
+    
+    const cacheKey = this.generateCacheKey(googlePlaceId);
+    await this.saveToCache(cacheKey, placeDetailsData, userId);
   }
 
   /**
    * Get cached place details if they're still valid and for the correct user
    * @param allowStale - Allow serving stale cache for immediate response while refreshing in background
    */
-  static async getCachedPlaceDetails(
+  async getCachedPlaceDetails(
     googlePlaceId: string,
     userId: string,
     allowStale: boolean = false
@@ -85,169 +72,57 @@ export class PlaceDetailsCache {
     listsContainingPlace: (EnrichedListPlace & { list_name: string })[];
     isStale?: boolean;
   } | null> {
-    try {
-      const cacheKey = this.getCacheKey(googlePlaceId);
-      const cachedData = await withTimeout(
-        AsyncStorage.getItem(cacheKey),
-        STORAGE_TIMEOUT
-      );
-      
-      if (!cachedData) {
-        return null;
-      }
-
-      const cached: CachedPlaceDetails = JSON.parse(cachedData);
-      
-      // Check if cache is for the correct user and place
-      if (cached.userId !== userId || cached.googlePlaceId !== googlePlaceId) {
-        console.log(`Cache is for different user/place, clearing cache for place ${googlePlaceId}...`);
-        this.clearPlaceCache(googlePlaceId).catch(error => {
-          console.warn(`Failed to clear user-specific cache for place ${googlePlaceId}:`, error);
-        });
-        return null;
-      }
-      
-      // Check cache freshness
-      const isValid = this.isCacheValid(cached.timestamp);
-      const isStale = this.isCacheStale(cached.timestamp);
-      
-      // Return fresh cache immediately
-      if (isValid) {
-        return {
-          place: cached.place,
-          userRating: cached.userRating,
-          checkIns: cached.checkIns,
-          listsContainingPlace: cached.listsContainingPlace,
-          isStale: false,
-        };
-      }
-      
-      // For stale cache: serve if allowStale is true (soft expiry pattern)
-      if (allowStale && isStale) {
-        console.log(`🗄️ SOFT EXPIRY: Serving stale place details cache for immediate UX`, {
-          googlePlaceId: googlePlaceId.substring(0, 20) + '...',
-          ageHours: Math.round((Date.now() - cached.timestamp) / (60 * 60 * 1000)),
-          willRefreshInBackground: true
-        });
-        
-        return {
-          place: cached.place,
-          userRating: cached.userRating,
-          checkIns: cached.checkIns,
-          listsContainingPlace: cached.listsContainingPlace,
-          isStale: true,
-        };
-      }
-
-      // Cache is expired beyond stale threshold, remove it
-      this.clearPlaceCache(googlePlaceId).catch(error => {
-        console.warn(`Failed to clear expired cache for place ${googlePlaceId}:`, error);
-      });
-      return null;
-    } catch (error) {
-      console.warn(`Failed to get cached place details for place ${googlePlaceId}:`, error);
+    const cacheKey = this.generateCacheKey(googlePlaceId);
+    const cached = await this.getFromCache(cacheKey, userId, allowStale);
+    
+    if (!cached) {
       return null;
     }
+    
+    // Verify the cached data is for the correct place
+    if (cached.data.googlePlaceId !== googlePlaceId) {
+      console.log(`Cache mismatch for place ${googlePlaceId}, clearing...`);
+      await this.clearPlaceCache(googlePlaceId);
+      return null;
+    }
+    
+    return {
+      place: cached.data.place,
+      userRating: cached.data.userRating,
+      checkIns: cached.data.checkIns,
+      listsContainingPlace: cached.data.listsContainingPlace,
+      isStale: cached.isStale,
+    };
   }
 
-  /**
-   * Check if cached place details are still valid (within 24 hours)
-   */
-  static isCacheValid(timestamp: number): boolean {
-    return Date.now() - timestamp < SOFT_EXPIRY_DURATION;
-  }
-
-  /**
-   * Check if cached place details are stale but still usable (12-24 hours old)
-   */
-  static isCacheStale(timestamp: number): boolean {
-    const age = Date.now() - timestamp;
-    return age >= SOFT_EXPIRY_DURATION && age < CACHE_VALIDITY_DURATION;
-  }
-
-  /**
-   * Get cache age in minutes
-   */
-  static getCacheAge(timestamp: number): number {
-    return (Date.now() - timestamp) / (60 * 1000);
-  }
 
   /**
    * Clear cached place details for a specific place
    */
-  static async clearPlaceCache(googlePlaceId: string): Promise<void> {
-    try {
-      const cacheKey = this.getCacheKey(googlePlaceId);
-      await withTimeout(
-        AsyncStorage.removeItem(cacheKey),
-        STORAGE_TIMEOUT
-      );
-    } catch (error) {
-      console.warn(`Failed to clear place cache for place ${googlePlaceId}:`, error);
-    }
+  async clearPlaceCache(googlePlaceId: string): Promise<void> {
+    const cacheKey = this.generateCacheKey(googlePlaceId);
+    await this.clearCache(cacheKey);
   }
 
   /**
    * Invalidate cache for a specific place (force refresh on next load)
    */
-  static async invalidatePlaceCache(googlePlaceId: string): Promise<void> {
+  async invalidatePlaceCache(googlePlaceId: string): Promise<void> {
     await this.clearPlaceCache(googlePlaceId);
-  }
-
-  /**
-   * Clear all place detail caches (useful for user logout)
-   */
-  static async clearAllPlaceCaches(): Promise<void> {
-    try {
-      // Get all AsyncStorage keys
-      const allKeys = await withTimeout(
-        AsyncStorage.getAllKeys(),
-        STORAGE_TIMEOUT
-      );
-      
-      // Filter keys that match our cache prefix
-      const cacheKeys = allKeys.filter(key => key.startsWith(CACHE_KEY_PREFIX));
-      
-      // Remove all cache keys
-      if (cacheKeys.length > 0) {
-        await withTimeout(
-          AsyncStorage.multiRemove(cacheKeys),
-          STORAGE_TIMEOUT
-        );
-      }
-    } catch (error) {
-      console.warn('Failed to clear all place caches:', error);
-    }
   }
 
   /**
    * Check if we have cached place details for a specific place
    */
-  static async hasCache(googlePlaceId: string, userId: string): Promise<boolean> {
-    try {
-      const cacheKey = this.getCacheKey(googlePlaceId);
-      const cachedData = await withTimeout(
-        AsyncStorage.getItem(cacheKey),
-        STORAGE_TIMEOUT
-      );
-      
-      if (!cachedData) {
-        return false;
-      }
-
-      const cached: CachedPlaceDetails = JSON.parse(cachedData);
-      return cached.userId === userId && 
-             cached.googlePlaceId === googlePlaceId && 
-             this.isCacheValid(cached.timestamp);
-    } catch (error) {
-      return false;
-    }
+  async hasCache(googlePlaceId: string, userId: string): Promise<boolean> {
+    const cacheKey = this.generateCacheKey(googlePlaceId);
+    return await this.hasValidCache(cacheKey, userId);
   }
 
   /**
    * Get cache status for debugging
    */
-  static async getCacheStatus(googlePlaceId: string, userId: string): Promise<{
+  async getCacheStatus(googlePlaceId: string, userId: string): Promise<{
     hasCache: boolean;
     isValid: boolean;
     ageMinutes: number;
@@ -256,157 +131,108 @@ export class PlaceDetailsCache {
     checkInsCount: number;
     listsCount: number;
   }> {
-    try {
-      const cacheKey = this.getCacheKey(googlePlaceId);
-      const cachedData = await withTimeout(
-        AsyncStorage.getItem(cacheKey),
-        STORAGE_TIMEOUT
-      );
-      
-      if (!cachedData) {
+    const cacheKey = this.generateCacheKey(googlePlaceId);
+    const status = await this.getCacheStatusForKey(cacheKey, userId);
+    
+    // Get additional metadata if cache exists
+    if (status.hasCache) {
+      const cached = await this.getCachedPlaceDetails(googlePlaceId, userId, true);
+      if (cached) {
         return {
-          hasCache: false,
-          isValid: false,
-          ageMinutes: 0,
-          isCorrectUser: false,
-          isCorrectPlace: false,
-          checkInsCount: 0,
-          listsCount: 0,
+          ...status,
+          isCorrectUser: status.metadata?.isCorrectUser || false,
+          isCorrectPlace: true,
+          checkInsCount: cached.checkIns.length,
+          listsCount: cached.listsContainingPlace.length,
         };
       }
-
-      const cached: CachedPlaceDetails = JSON.parse(cachedData);
-      const ageMinutes = this.getCacheAge(cached.timestamp);
-      const isValid = this.isCacheValid(cached.timestamp);
-      const isCorrectUser = cached.userId === userId;
-      const isCorrectPlace = cached.googlePlaceId === googlePlaceId;
-
-      return {
-        hasCache: true,
-        isValid,
-        ageMinutes,
-        isCorrectUser,
-        isCorrectPlace,
-        checkInsCount: cached.checkIns.length,
-        listsCount: cached.listsContainingPlace.length,
-      };
-    } catch (error) {
-      return {
-        hasCache: false,
-        isValid: false,
-        ageMinutes: 0,
-        isCorrectUser: false,
-        isCorrectPlace: false,
-        checkInsCount: 0,
-        listsCount: 0,
-      };
     }
+    
+    return {
+      ...status,
+      isCorrectUser: false,
+      isCorrectPlace: false,
+      checkInsCount: 0,
+      listsCount: 0,
+    };
   }
 
   /**
    * Update user rating in cache (for optimistic updates)
    */
-  static async updateRatingInCache(
+  async updateRatingInCache(
     googlePlaceId: string,
     rating: UserRatingType | null,
     userId: string
   ): Promise<void> {
-    try {
-      const cached = await this.getCachedPlaceDetails(googlePlaceId, userId);
-      if (!cached) return;
-
-      await this.savePlaceDetails(
-        googlePlaceId,
-        cached.place,
-        rating,
-        cached.checkIns,
-        cached.listsContainingPlace,
-        userId
-      );
-    } catch (error) {
-      console.warn(`Failed to update rating in cache for place ${googlePlaceId}:`, error);
-    }
+    const cacheKey = this.generateCacheKey(googlePlaceId);
+    await this.updateCache(
+      cacheKey,
+      (data) => ({ ...data, userRating: rating }),
+      userId,
+      true // preserve timestamp for optimistic updates
+    );
   }
 
   /**
    * Update check-ins in cache (for optimistic updates)
    */
-  static async updateCheckInsInCache(
+  async updateCheckInsInCache(
     googlePlaceId: string,
     checkIns: CheckIn[],
     userId: string
   ): Promise<void> {
-    try {
-      const cached = await this.getCachedPlaceDetails(googlePlaceId, userId);
-      if (!cached) return;
-
-      await this.savePlaceDetails(
-        googlePlaceId,
-        cached.place,
-        cached.userRating,
-        checkIns,
-        cached.listsContainingPlace,
-        userId
-      );
-    } catch (error) {
-      console.warn(`Failed to update check-ins in cache for place ${googlePlaceId}:`, error);
-    }
+    const cacheKey = this.generateCacheKey(googlePlaceId);
+    await this.updateCache(
+      cacheKey,
+      (data) => ({ ...data, checkIns }),
+      userId,
+      true
+    );
   }
 
   /**
    * Update lists containing place in cache (for optimistic updates)
    */
-  static async updateListsInCache(
+  async updateListsInCache(
     googlePlaceId: string,
     listsContainingPlace: (EnrichedListPlace & { list_name: string })[],
     userId: string
   ): Promise<void> {
-    try {
-      const cached = await this.getCachedPlaceDetails(googlePlaceId, userId);
-      if (!cached) return;
-
-      await this.savePlaceDetails(
-        googlePlaceId,
-        cached.place,
-        cached.userRating,
-        cached.checkIns,
-        listsContainingPlace,
-        userId
-      );
-    } catch (error) {
-      console.warn(`Failed to update lists in cache for place ${googlePlaceId}:`, error);
-    }
+    const cacheKey = this.generateCacheKey(googlePlaceId);
+    await this.updateCache(
+      cacheKey,
+      (data) => ({ ...data, listsContainingPlace }),
+      userId,
+      true
+    );
   }
 
   /**
    * Update place notes in a specific list (optimistic update)
    */
-  static async updatePlaceNotesInCache(
+  async updatePlaceNotesInCache(
     googlePlaceId: string,
     listId: string,
     notes: string,
     userId: string
   ): Promise<void> {
-    try {
-      const cached = await this.getCachedPlaceDetails(googlePlaceId, userId);
-      if (!cached) return;
-
-      const updatedLists = cached.listsContainingPlace.map(listPlace => 
-        listPlace.list_id === listId 
-          ? { ...listPlace, notes }
-          : listPlace
-      );
-
-      await this.savePlaceDetails(
-        googlePlaceId,
-        cached.place,
-        cached.userRating,
-        cached.checkIns,
-        updatedLists,
-        userId
-      );
-    } catch (error) {
-      console.warn(`Failed to update place notes in cache for place ${googlePlaceId}:`, error);
-    }
+    const cacheKey = this.generateCacheKey(googlePlaceId);
+    await this.updateCache(
+      cacheKey,
+      (data) => ({
+        ...data,
+        listsContainingPlace: data.listsContainingPlace.map(listPlace => 
+          listPlace.list_id === listId 
+            ? { ...listPlace, notes }
+            : listPlace
+        )
+      }),
+      userId,
+      true
+    );
   }
 }
+
+// Export singleton instance for backward compatibility
+export const PlaceDetailsCache = new PlaceDetailsCacheService();

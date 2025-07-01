@@ -1,293 +1,200 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ListWithPlaces, EnhancedList } from './listsService';
 import { CACHE_CONFIG } from '../config/cacheConfig';
+import { BaseAsyncStorageCache } from '../utils/BaseAsyncStorageCache';
+import { CacheConfig } from '../utils/cacheUtils';
 
-interface CachedListsData {
+interface ListsData {
   userLists: ListWithPlaces[];
   smartLists: EnhancedList[];
-  timestamp: number;
-  userId: string;
 }
 
-const CACHE_KEY = '@placemarks_lists_cache';
-const CACHE_VALIDITY_DURATION = CACHE_CONFIG.LISTS.VALIDITY_DURATION_MS;
-const SOFT_EXPIRY_DURATION = CACHE_CONFIG.LISTS.SOFT_EXPIRY_DURATION_MS;
-const STORAGE_TIMEOUT = CACHE_CONFIG.LISTS.STORAGE_TIMEOUT_MS;
+const CACHE_CONFIG_LISTS: CacheConfig = {
+  keyPrefix: '@placemarks_lists_cache',
+  validityDurationMs: CACHE_CONFIG.LISTS.VALIDITY_DURATION_MS,
+  softExpiryDurationMs: CACHE_CONFIG.LISTS.SOFT_EXPIRY_DURATION_MS,
+  storageTimeoutMs: CACHE_CONFIG.LISTS.STORAGE_TIMEOUT_MS,
+  enableLogging: true
+};
 
-// Helper function to add timeout to AsyncStorage operations
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => 
-      setTimeout(() => reject(new Error('Storage operation timeout')), timeoutMs)
-    )
-  ]);
-}
+class ListsCacheService extends BaseAsyncStorageCache<ListsData> {
+  private static readonly CACHE_KEY = 'default';
+  
+  constructor() {
+    super(CACHE_CONFIG_LISTS);
+  }
 
-export class ListsCache {
+  /**
+   * Generate cache key - lists cache uses a single key per user
+   */
+  protected generateCacheKey(userId?: string): string {
+    return userId 
+      ? `${this.config.keyPrefix}_${userId}`
+      : `${this.config.keyPrefix}_${ListsCacheService.CACHE_KEY}`;
+  }
+
   /**
    * Save lists data to cache with current timestamp
    */
-  static async saveLists(
+  async saveLists(
     userLists: ListWithPlaces[],
     smartLists: EnhancedList[],
     userId: string
   ): Promise<void> {
-    try {
-      const cachedData: CachedListsData = {
-        userLists,
-        smartLists,
-        timestamp: Date.now(),
-        userId,
-      };
-      
-      await withTimeout(
-        AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cachedData)),
-        STORAGE_TIMEOUT
-      );
-    } catch (error) {
-      console.warn('Failed to save lists to cache:', error);
-    }
+    const listsData: ListsData = {
+      userLists,
+      smartLists,
+    };
+    
+    const cacheKey = this.generateCacheKey(userId);
+    await this.saveToCache(cacheKey, listsData, userId);
   }
 
   /**
    * Get cached lists if they're still valid (within 60 minutes) and for the correct user
    * @param allowStale - Allow serving stale cache for immediate response
    */
-  static async getCachedLists(userId: string, allowStale: boolean = false): Promise<{
+  async getCachedLists(userId: string, allowStale: boolean = false): Promise<{
     userLists: ListWithPlaces[];
     smartLists: EnhancedList[];
     isStale?: boolean;
   } | null> {
-    try {
-      const cachedData = await withTimeout(
-        AsyncStorage.getItem(CACHE_KEY),
-        STORAGE_TIMEOUT
-      );
-      
-      if (!cachedData) {
-        return null;
-      }
-
-      const cached: CachedListsData = JSON.parse(cachedData);
-      
-      // Check if cache is for the correct user
-      if (cached.userId !== userId) {
-        console.log('Cache is for different user, clearing...');
-        this.clearCache().catch(error => {
-          console.warn('Failed to clear user-specific cache:', error);
-        });
-        return null;
-      }
-      
-      // Check cache freshness
-      const isValid = this.isCacheValid(cached.timestamp);
-      const isStale = this.isCacheStale(cached.timestamp);
-      
-      // Return fresh cache immediately
-      if (isValid) {
-        return {
-          userLists: cached.userLists,
-          smartLists: cached.smartLists,
-          isStale: false,
-        };
-      }
-      
-      // For stale cache: serve if allowStale is true (soft expiry pattern)
-      if (allowStale && isStale) {
-        console.log(`🗄️ SOFT EXPIRY: Serving stale lists cache for immediate UX`, {
-          userId: userId.substring(0, 8) + '...',
-          ageMinutes: Math.round((Date.now() - cached.timestamp) / (60 * 1000)),
-          listCount: cached.userLists.length,
-          willRefreshInBackground: true
-        });
-        
-        return {
-          userLists: cached.userLists,
-          smartLists: cached.smartLists,
-          isStale: true,
-        };
-      }
-
-      // Cache is expired beyond stale threshold, remove it
-      this.clearCache().catch(error => {
-        console.warn('Failed to clear expired cache:', error);
-      });
-      return null;
-    } catch (error) {
-      console.warn('Failed to get cached lists:', error);
+    const cacheKey = this.generateCacheKey(userId);
+    const cached = await this.getFromCache(cacheKey, userId, allowStale);
+    
+    if (!cached) {
       return null;
     }
+    
+    return {
+      userLists: cached.data.userLists,
+      smartLists: cached.data.smartLists,
+      isStale: cached.isStale,
+    };
   }
 
-  /**
-   * Check if cached lists are still valid (within 30 minutes)
-   */
-  static isCacheValid(timestamp: number): boolean {
-    return Date.now() - timestamp < SOFT_EXPIRY_DURATION;
-  }
 
   /**
-   * Check if cached lists are stale but still usable (30-60 minutes old)
+   * Clear cached lists for a specific user
    */
-  static isCacheStale(timestamp: number): boolean {
-    const age = Date.now() - timestamp;
-    return age >= SOFT_EXPIRY_DURATION && age < CACHE_VALIDITY_DURATION;
-  }
-
-  /**
-   * Get cache age in minutes
-   */
-  static getCacheAge(timestamp: number): number {
-    return (Date.now() - timestamp) / (60 * 1000);
-  }
-
-  /**
-   * Clear cached lists
-   */
-  static async clearCache(): Promise<void> {
-    try {
-      await withTimeout(
-        AsyncStorage.removeItem(CACHE_KEY),
-        STORAGE_TIMEOUT
-      );
-    } catch (error) {
-      console.warn('Failed to clear lists cache:', error);
-    }
+  async clearListsCache(userId: string): Promise<void> {
+    const cacheKey = this.generateCacheKey(userId);
+    await super.clearCache(cacheKey);
   }
 
   /**
    * Invalidate cache (force refresh on next load)
    */
-  static async invalidateCache(): Promise<void> {
-    await this.clearCache();
+  async invalidateCache(userId: string): Promise<void> {
+    await this.clearListsCache(userId);
   }
 
   /**
    * Check if we have any cached lists data for the user
    */
-  static async hasCache(userId: string): Promise<boolean> {
-    try {
-      const cachedData = await withTimeout(
-        AsyncStorage.getItem(CACHE_KEY),
-        STORAGE_TIMEOUT
-      );
-      
-      if (!cachedData) {
-        return false;
-      }
-
-      const cached: CachedListsData = JSON.parse(cachedData);
-      return cached.userId === userId && this.isCacheValid(cached.timestamp);
-    } catch (error) {
-      return false;
-    }
+  async hasCache(userId: string): Promise<boolean> {
+    const cacheKey = this.generateCacheKey(userId);
+    return await this.hasValidCache(cacheKey, userId);
   }
 
   /**
    * Get cache status for debugging
    */
-  static async getCacheStatus(userId: string): Promise<{
+  async getCacheStatus(userId: string): Promise<{
     hasCache: boolean;
     isValid: boolean;
     ageMinutes: number;
     isCorrectUser: boolean;
     listCount: number;
   }> {
-    try {
-      const cachedData = await withTimeout(
-        AsyncStorage.getItem(CACHE_KEY),
-        STORAGE_TIMEOUT
-      );
-      
-      if (!cachedData) {
+    const cacheKey = this.generateCacheKey(userId);
+    const status = await this.getCacheStatusForKey(cacheKey, userId);
+    
+    // Get additional metadata if cache exists
+    if (status.hasCache) {
+      const cached = await this.getCachedLists(userId, true);
+      if (cached) {
         return {
-          hasCache: false,
-          isValid: false,
-          ageMinutes: 0,
-          isCorrectUser: false,
-          listCount: 0,
+          ...status,
+          isCorrectUser: status.metadata?.isCorrectUser || false,
+          listCount: cached.userLists.length,
         };
       }
-
-      const cached: CachedListsData = JSON.parse(cachedData);
-      const ageMinutes = this.getCacheAge(cached.timestamp);
-      const isValid = this.isCacheValid(cached.timestamp);
-      const isCorrectUser = cached.userId === userId;
-
-      return {
-        hasCache: true,
-        isValid,
-        ageMinutes,
-        isCorrectUser,
-        listCount: cached.userLists.length,
-      };
-    } catch (error) {
-      return {
-        hasCache: false,
-        isValid: false,
-        ageMinutes: 0,
-        isCorrectUser: false,
-        listCount: 0,
-      };
     }
+    
+    return {
+      ...status,
+      isCorrectUser: false,
+      listCount: 0,
+    };
   }
 
   /**
    * Update a specific list in the cache (for optimistic updates)
    */
-  static async updateListInCache(
+  async updateListInCache(
     listId: string, 
     updatedList: Partial<ListWithPlaces>,
     userId: string
   ): Promise<void> {
-    try {
-      const cached = await this.getCachedLists(userId);
-      if (!cached) return;
-
-      const updatedUserLists = cached.userLists.map(list => 
-        list.id === listId ? { ...list, ...updatedList } : list
-      );
-
-      await this.saveLists(updatedUserLists, cached.smartLists, userId);
-    } catch (error) {
-      console.warn('Failed to update list in cache:', error);
-    }
+    const cacheKey = this.generateCacheKey(userId);
+    await this.updateCache(
+      cacheKey,
+      (data) => ({
+        ...data,
+        userLists: data.userLists.map(list => 
+          list.id === listId ? { ...list, ...updatedList } : list
+        )
+      }),
+      userId,
+      true
+    );
   }
 
   /**
    * Add a new list to the cache (for optimistic updates)
    */
-  static async addListToCache(
+  async addListToCache(
     newList: ListWithPlaces,
     userId: string
   ): Promise<void> {
-    try {
-      const cached = await this.getCachedLists(userId);
-      if (!cached) return;
-
-      const updatedUserLists = [...cached.userLists, newList];
-      await this.saveLists(updatedUserLists, cached.smartLists, userId);
-    } catch (error) {
-      console.warn('Failed to add list to cache:', error);
-    }
+    const cacheKey = this.generateCacheKey(userId);
+    await this.updateCache(
+      cacheKey,
+      (data) => ({
+        ...data,
+        userLists: [...data.userLists, newList]
+      }),
+      userId,
+      true
+    );
   }
 
   /**
    * Remove a list from the cache (for optimistic updates)
    */
-  static async removeListFromCache(
+  async removeListFromCache(
     listId: string,
     userId: string
   ): Promise<void> {
-    try {
-      const cached = await this.getCachedLists(userId);
-      if (!cached) return;
-
-      const updatedUserLists = cached.userLists.filter(list => list.id !== listId);
-      await this.saveLists(updatedUserLists, cached.smartLists, userId);
-    } catch (error) {
-      console.warn('Failed to remove list from cache:', error);
-    }
+    const cacheKey = this.generateCacheKey(userId);
+    await this.updateCache(
+      cacheKey,
+      (data) => ({
+        ...data,
+        userLists: data.userLists.filter(list => list.id !== listId)
+      }),
+      userId,
+      true
+    );
   }
-} 
+  
+  /**
+   * Legacy method for backward compatibility
+   */
+  async clearCache(): Promise<void> {
+    await this.clearAllCaches();
+  }
+}
+
+// Export singleton instance for backward compatibility
+export const ListsCache = new ListsCacheService(); 

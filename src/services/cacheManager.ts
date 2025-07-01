@@ -207,8 +207,8 @@ export class CacheManager {
     /**
      * Invalidate cache (force refresh)
      */
-    invalidate: async (): Promise<void> => {
-      return ListsCache.invalidateCache();
+    invalidate: async (userId: string): Promise<void> => {
+      return ListsCache.invalidateCache(userId);
     }
   };
 

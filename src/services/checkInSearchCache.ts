@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { CACHE_CONFIG } from '../config/cacheConfig';
+import { BaseAsyncStorageCache } from '../utils/BaseAsyncStorageCache';
+import { CacheConfig, generateLocationCacheKey } from '../utils/cacheUtils';
 
 interface NearbyPlaceResult {
   google_place_id: string;
@@ -12,36 +14,43 @@ interface NearbyPlaceResult {
   business_status?: string;
 }
 
-interface CachedSearchResult {
+interface SearchCacheData {
   location: {
     latitude: number;
     longitude: number;
   };
-  radius: number;
+  radius?: number;
   places: NearbyPlaceResult[];
-  timestamp: number;
   searchType: 'nearby' | 'text';
   query?: string; // for text searches
 }
 
-interface TextSearchCacheResult {
-  query: string;
-  location: {
-    latitude: number;
-    longitude: number;
-  };
-  places: NearbyPlaceResult[];
-  timestamp: number;
-}
+const CACHE_CONFIG_SEARCH: CacheConfig = {
+  keyPrefix: 'checkin_',
+  validityDurationMs: CACHE_CONFIG.CHECK_IN_SEARCH.CACHE_EXPIRY_MS,
+  storageTimeoutMs: 5000,
+  enableLogging: false
+};
 
-export class CheckInSearchCache {
-  private readonly CACHE_EXPIRY_MS = CACHE_CONFIG.CHECK_IN_SEARCH.CACHE_EXPIRY_MS;
+class CheckInSearchCacheService extends BaseAsyncStorageCache<SearchCacheData> {
   private readonly MAX_CACHE_ENTRIES = 50;
   private readonly LOCATION_THRESHOLD_METERS = CACHE_CONFIG.CHECK_IN_SEARCH.LOCATION_THRESHOLD_METERS;
   
   // In-memory cache for faster access to recent searches
   private memoryCache: Map<string, { places: NearbyPlaceResult[]; timestamp: number }> = new Map();
   private readonly MEMORY_CACHE_DURATION = CACHE_CONFIG.CHECK_IN_SEARCH.MEMORY_CACHE_DURATION_MS;
+
+  constructor() {
+    super(CACHE_CONFIG_SEARCH);
+  }
+
+  /**
+   * Generate cache key - this is used internally by base class
+   */
+  protected generateCacheKey(...args: any[]): string {
+    // This method is required by base class but we'll use specific methods below
+    return args.join('_');
+  }
 
   /**
    * Cache nearby search results
@@ -51,24 +60,19 @@ export class CheckInSearchCache {
     radius: number,
     places: NearbyPlaceResult[]
   ): Promise<void> {
-    try {
-      const cacheKey = this.getNearbySearchCacheKey(location.coords.latitude, location.coords.longitude, radius);
-      const cacheData: CachedSearchResult = {
-        location: {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        },
-        radius,
-        places,
-        timestamp: Date.now(),
-        searchType: 'nearby',
-      };
+    const cacheKey = this.getNearbySearchCacheKey(location.coords.latitude, location.coords.longitude, radius);
+    const cacheData: SearchCacheData = {
+      location: {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      },
+      radius,
+      places,
+      searchType: 'nearby',
+    };
 
-      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
-      await this.cleanupOldCache();
-    } catch (error) {
-      console.warn('Failed to cache nearby search results:', error);
-    }
+    await this.saveToCache(cacheKey, cacheData, undefined, { radius });
+    await this.cleanupOldCache();
   }
 
   /**
@@ -78,33 +82,21 @@ export class CheckInSearchCache {
     location: Location.LocationObject,
     radius: number
   ): Promise<NearbyPlaceResult[] | null> {
-    try {
-      // First try exact cache key
-      const exactCacheKey = this.getNearbySearchCacheKey(location.coords.latitude, location.coords.longitude, radius);
-      let cachedData = await AsyncStorage.getItem(exactCacheKey);
+    // First try exact cache key
+    const exactCacheKey = this.getNearbySearchCacheKey(location.coords.latitude, location.coords.longitude, radius);
+    const cached = await this.getFromCache(exactCacheKey);
 
-      if (!cachedData) {
-        // If no exact match, look for nearby cached results
-        cachedData = await this.findNearbyCache(location.coords.latitude, location.coords.longitude, radius);
-      }
-
-      if (!cachedData) {
-        return null;
-      }
-
-      const parsed: CachedSearchResult = JSON.parse(cachedData);
-
-      // Check if cache is still valid
-      if (Date.now() - parsed.timestamp > this.CACHE_EXPIRY_MS) {
-        await AsyncStorage.removeItem(exactCacheKey);
-        return null;
-      }
-
-      return parsed.places;
-    } catch (error) {
-      console.warn('Failed to get cached nearby search results:', error);
-      return null;
+    if (cached) {
+      return cached.data.places;
     }
+
+    // If no exact match, look for nearby cached results
+    const nearbyCacheData = await this.findNearbyCache(location.coords.latitude, location.coords.longitude, radius);
+    if (nearbyCacheData) {
+      return nearbyCacheData.places;
+    }
+
+    return null;
   }
 
   /**
@@ -115,41 +107,30 @@ export class CheckInSearchCache {
     location: Location.LocationObject,
     places: NearbyPlaceResult[]
   ): Promise<void> {
-    try {
-      const cacheKey = this.getTextSearchCacheKey(query, location.coords.latitude, location.coords.longitude);
-      
-      // Store in memory cache for fast access
-      this.memoryCache.set(cacheKey, {
-        places,
-        timestamp: Date.now()
-      });
+    const cacheKey = this.getTextSearchCacheKey(query, location.coords.latitude, location.coords.longitude);
+    
+    // Store in memory cache for fast access
+    this.memoryCache.set(cacheKey, {
+      places,
+      timestamp: Date.now()
+    });
 
-      // Clean up memory cache if it gets too large
-      if (this.memoryCache.size > 20) {
-        const now = Date.now();
-        for (const [key, value] of this.memoryCache.entries()) {
-          if (now - value.timestamp > this.MEMORY_CACHE_DURATION) {
-            this.memoryCache.delete(key);
-          }
-        }
-      }
+    // Clean up memory cache if it gets too large
+    this.cleanupMemoryCache();
 
-      // Store in AsyncStorage for persistence
-      const cacheData: TextSearchCacheResult = {
-        query: query.toLowerCase().trim(),
-        location: {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        },
-        places,
-        timestamp: Date.now(),
-      };
+    // Store in AsyncStorage for persistence
+    const cacheData: SearchCacheData = {
+      query: query.toLowerCase().trim(),
+      location: {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      },
+      places,
+      searchType: 'text',
+    };
 
-      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
-      await this.cleanupOldCache();
-    } catch (error) {
-      console.warn('Failed to cache text search results:', error);
-    }
+    await this.saveToCache(cacheKey, cacheData, undefined, { query: query.toLowerCase().trim() });
+    await this.cleanupOldCache();
   }
 
   /**
@@ -175,28 +156,21 @@ export class CheckInSearchCache {
       }
 
       // Check AsyncStorage for exact match
-      const cachedData = await AsyncStorage.getItem(cacheKey);
-      if (cachedData) {
-        const parsed: TextSearchCacheResult = JSON.parse(cachedData);
-
-        // Check if cache is still valid
-        if (Date.now() - parsed.timestamp > this.CACHE_EXPIRY_MS) {
-          await AsyncStorage.removeItem(cacheKey);
-        } else {
-          // Add to memory cache for faster future access
-          this.memoryCache.set(cacheKey, {
-            places: parsed.places,
-            timestamp: Date.now()
-          });
-          
-          console.log('🗄️ STORAGE CACHE HIT: Retrieved text search from AsyncStorage cache', {
-            query: query.trim(),
-            resultCount: parsed.places.length,
-            cost: '$0.000 - FREE!',
-            cacheAge: `${Math.round((Date.now() - parsed.timestamp) / 1000)}s ago`
-          });
-          return parsed.places;
-        }
+      const cached = await this.getFromCache(cacheKey);
+      if (cached) {
+        // Add to memory cache for faster future access
+        this.memoryCache.set(cacheKey, {
+          places: cached.data.places,
+          timestamp: Date.now()
+        });
+        
+        console.log('🗄️ STORAGE CACHE HIT: Retrieved text search from AsyncStorage cache', {
+          query: query.trim(),
+          resultCount: cached.data.places.length,
+          cost: '$0.000 - FREE!',
+          cacheAge: `${Math.round((Date.now() - Date.now()) / 1000)}s ago`
+        });
+        return cached.data.places;
       }
 
       // Try to find similar cached queries (smart cache matching)
@@ -221,16 +195,12 @@ export class CheckInSearchCache {
    * Clear all cache
    */
   async clearCache(): Promise<void> {
-    try {
-      const keys = await AsyncStorage.getAllKeys();
-      const cacheKeys = keys.filter(key => 
-        key.startsWith('checkin_nearby_') || key.startsWith('checkin_text_')
-      );
-      await AsyncStorage.multiRemove(cacheKeys);
-      console.log(`🗑️ Cleared ${cacheKeys.length} cache entries`);
-    } catch (error) {
-      console.warn('Failed to clear cache:', error);
-    }
+    // Clear memory cache
+    this.memoryCache.clear();
+    
+    // Clear AsyncStorage cache
+    await this.clearAllCaches();
+    console.log(`🗑️ Cleared search cache`);
   }
 
   /**
@@ -246,7 +216,7 @@ export class CheckInSearchCache {
     try {
       const keys = await AsyncStorage.getAllKeys();
       const cacheKeys = keys.filter(key => 
-        key.startsWith('checkin_nearby_') || key.startsWith('checkin_text_')
+        key.startsWith(this.config.keyPrefix + 'nearby_') || key.startsWith(this.config.keyPrefix + 'text_')
       );
 
       let nearbySearches = 0;
@@ -303,19 +273,31 @@ export class CheckInSearchCache {
    * Generate cache key for nearby searches
    */
   private getNearbySearchCacheKey(lat: number, lng: number, radius: number): string {
-    const roundedLat = Math.round(lat * 1000) / 1000; // Round to ~100m precision
-    const roundedLng = Math.round(lng * 1000) / 1000;
-    return `checkin_nearby_${roundedLat}_${roundedLng}_${radius}`;
+    const locationKey = generateLocationCacheKey('', lat, lng, 3);
+    return `${this.config.keyPrefix}nearby_${locationKey}_${radius}`;
   }
 
   /**
    * Generate cache key for text searches
    */
   private getTextSearchCacheKey(query: string, lat: number, lng: number): string {
-    const roundedLat = Math.round(lat * 1000) / 1000;
-    const roundedLng = Math.round(lng * 1000) / 1000;
+    const locationKey = generateLocationCacheKey('', lat, lng, 3);
     const cleanQuery = query.toLowerCase().trim().replace(/\s+/g, '_');
-    return `checkin_text_${cleanQuery}_${roundedLat}_${roundedLng}`;
+    return `${this.config.keyPrefix}text_${cleanQuery}_${locationKey}`;
+  }
+
+  /**
+   * Clean up memory cache if it gets too large
+   */
+  private cleanupMemoryCache(): void {
+    if (this.memoryCache.size > 20) {
+      const now = Date.now();
+      for (const [key, value] of this.memoryCache.entries()) {
+        if (now - value.timestamp > this.MEMORY_CACHE_DURATION) {
+          this.memoryCache.delete(key);
+        }
+      }
+    }
   }
 
   /**
@@ -325,32 +307,25 @@ export class CheckInSearchCache {
     lat: number, 
     lng: number, 
     radius: number
-  ): Promise<string | null> {
+  ): Promise<SearchCacheData | null> {
     try {
       const keys = await AsyncStorage.getAllKeys();
-      const nearbyCacheKeys = keys.filter(key => key.startsWith('checkin_nearby_'));
+      const nearbyCacheKeys = keys.filter(key => key.startsWith(this.config.keyPrefix + 'nearby_'));
 
       for (const key of nearbyCacheKeys) {
         try {
-          const data = await AsyncStorage.getItem(key);
-          if (!data) continue;
-
-          const parsed: CachedSearchResult = JSON.parse(data);
+          const cached = await this.getFromCache(key);
+          if (!cached || !cached.data.radius) continue;
           
-          // Check if cache is still valid
-          if (Date.now() - parsed.timestamp > this.CACHE_EXPIRY_MS) {
-            continue;
-          }
-
           // Check if location is within threshold and radius is similar
           const distance = this.calculateDistance(
             lat, lng,
-            parsed.location.latitude, parsed.location.longitude
+            cached.data.location.latitude, cached.data.location.longitude
           );
 
           if (distance <= this.LOCATION_THRESHOLD_METERS && 
-              Math.abs(radius - parsed.radius) <= 100) {
-            return data;
+              Math.abs(radius - cached.data.radius) <= 100) {
+            return cached.data;
           }
         } catch (error) {
           // Skip invalid entries
@@ -402,28 +377,21 @@ export class CheckInSearchCache {
 
       // Check AsyncStorage for similar queries
       const keys = await AsyncStorage.getAllKeys();
-      const textCacheKeys = keys.filter(key => key.startsWith('checkin_text_'));
+      const textCacheKeys = keys.filter(key => key.startsWith(this.config.keyPrefix + 'text_'));
 
       for (const key of textCacheKeys) {
         try {
-          const data = await AsyncStorage.getItem(key);
-          if (!data) continue;
-
-          const parsed: TextSearchCacheResult = JSON.parse(data);
-          
-          // Check if cache is still valid
-          if (Date.now() - parsed.timestamp > this.CACHE_EXPIRY_MS) {
-            continue;
-          }
+          const cached = await this.getFromCache(key);
+          if (!cached) continue;
 
           // Check if location is similar
           const distance = this.calculateDistance(
             location.coords.latitude, location.coords.longitude,
-            parsed.location.latitude, parsed.location.longitude
+            cached.data.location.latitude, cached.data.location.longitude
           );
 
           if (distance <= this.LOCATION_THRESHOLD_METERS) {
-            const cachedQuery = parsed.query.toLowerCase();
+            const cachedQuery = cached.data.query?.toLowerCase() || '';
             
             // Check if current query starts with cached query and is similar
             if (normalizedQuery.startsWith(cachedQuery) && 
@@ -433,12 +401,12 @@ export class CheckInSearchCache {
               console.log('🗄️ SMART STORAGE CACHE: Using similar cached query', {
                 originalQuery: query,
                 cachedQuery: cachedQuery,
-                resultCount: parsed.places.length,
+                resultCount: cached.data.places.length,
                 cost: '$0.000 - FREE!',
                 reason: 'Similar query likely has same results'
               });
               
-              return parsed.places;
+              return cached.data.places;
             }
           }
         } catch (error) {
@@ -475,7 +443,7 @@ export class CheckInSearchCache {
     try {
       const keys = await AsyncStorage.getAllKeys();
       const cacheKeys = keys.filter(key => 
-        key.startsWith('checkin_nearby_') || key.startsWith('checkin_text_')
+        key.startsWith(this.config.keyPrefix + 'nearby_') || key.startsWith(this.config.keyPrefix + 'text_')
       );
 
       if (cacheKeys.length <= this.MAX_CACHE_ENTRIES) {
@@ -513,4 +481,4 @@ export class CheckInSearchCache {
 }
 
 // Export singleton instance
-export const checkInSearchCache = new CheckInSearchCache(); 
+export const checkInSearchCache = new CheckInSearchCacheService(); 
