@@ -101,25 +101,6 @@ export function inferPlaceTypeFromGoogleTypes(types: string[]): PlaceType {
 }
 
 /**
- * Get useful place types for display in search results
- * Returns array of display-friendly type names
- */
-export function getUsefulPlaceTypesForDisplay(types: string[]): string[] {
-  if (!types || types.length === 0) return [];
-  
-  const displayTypes = new Set<string>();
-  
-  for (const googleType of types) {
-    const appType = GOOGLE_TYPE_TO_APP_TYPE[googleType];
-    if (appType) {
-      displayTypes.add(PLACE_TYPE_DISPLAY_NAMES[appType]);
-    }
-  }
-  
-  return Array.from(displayTypes);
-}
-
-/**
  * Get the primary display type for a place
  */
 export function getPrimaryDisplayType(types: string[]): string {

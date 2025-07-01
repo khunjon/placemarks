@@ -61,14 +61,7 @@ export {
 } from './places';
 
 // Legacy types from other files (keeping for backwards compatibility)
-export {
-  BangkokDistrict,
-  CuisineType,
-  DietaryRestriction,
-  PriceRange,
-  TransportMethod,
-  ActivityType
-} from './database';
+// These have been removed from database.ts as they were unused
 
 // Auth-specific types
 export {

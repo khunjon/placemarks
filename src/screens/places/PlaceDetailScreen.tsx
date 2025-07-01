@@ -65,6 +65,11 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   const contextListId = routeParams.listId; // ID of the list user came from
   const contextListName = routeParams.listName; // Name of the list user came from
   
+  // Defensive check for missing googlePlaceId
+  if (!googlePlaceId) {
+    console.error('PlaceDetailScreen: No googlePlaceId provided in route params:', routeParams);
+  }
+  
   const { user } = useAuth();
   
   // Track initial mount to prevent duplicate loading
@@ -160,7 +165,10 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
    * Load place details with caching - optimized to eliminate redundant API calls
    */
   const loadPlaceDetails = async (forceRefresh = false) => {
-    if (!user?.id) return;
+    if (!user?.id || !googlePlaceId) {
+      console.error('Cannot load place details: missing user or googlePlaceId', { userId: user?.id, googlePlaceId });
+      return;
+    }
     
     try {
       // Check cache first if not forcing refresh

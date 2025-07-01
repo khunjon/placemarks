@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { DarkTheme } from '../../constants/theme';
 
@@ -205,8 +205,8 @@ export default function LocationBadge({
 
   const BadgeContent = () => (
     <View 
-      className="flex-row items-center"
       style={[
+        styles.container,
         {
           paddingVertical: isCompact ? variantStyles.paddingVertical : sizeConfig.paddingVertical,
           paddingHorizontal: isCompact ? variantStyles.paddingHorizontal : sizeConfig.paddingHorizontal,
@@ -298,7 +298,7 @@ export const StatusBadge = (props: Omit<LocationBadgeProps, 'type'>) => (
 
 // Bangkok-specific preset badges
 export const BangkokBTSBadge = ({ station, distance }: { station: string; distance?: string }) => (
-  <View className="flex-row items-center">
+  <View style={styles.container}>
     <BTSBadge 
       value={station} 
       size="small" 
@@ -316,7 +316,7 @@ export const BangkokBTSBadge = ({ station, distance }: { station: string; distan
 );
 
 export const BangkokPriceTierBadge = ({ level, category }: { level: number; category?: string }) => (
-  <View className="flex-row items-center">
+  <View style={styles.container}>
     <PriceBadge 
       value={level} 
       size="small"
@@ -330,4 +330,11 @@ export const BangkokPriceTierBadge = ({ level, category }: { level: number; cate
       />
     )}
   </View>
-); 
+);
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+}); 

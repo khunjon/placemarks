@@ -7,7 +7,8 @@ import {
   Alert,
   Keyboard,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  StyleSheet
 } from 'react-native';
 import { Button, Input } from 'react-native-elements';
 import { useNavigation } from '@react-navigation/native';
@@ -54,19 +55,16 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-black">
+    <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1"
+        style={styles.keyboardView}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View className="flex-1 px-6 py-8 justify-center">
+          <View style={styles.innerContainer}>
             {/* Header Section */}
-            <View className="items-center mb-12">
-              <View 
-                className="w-20 h-20 rounded-full items-center justify-center mb-6"
-                style={{ backgroundColor: DarkTheme.colors.bangkok.gold }}
-              >
+            <View style={styles.headerSection}>
+              <View style={styles.iconContainer}>
                 <Icon 
                   name="location-on" 
                   size={40} 
@@ -97,13 +95,7 @@ export default function LoginScreen() {
             </View>
 
             {/* Form Section */}
-            <View 
-              className="p-6 rounded-2xl mb-8"
-              style={{ 
-                backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
-                ...DarkTheme.shadows.medium 
-              }}
-            >
+            <View style={styles.formSection}>
               <Input
                 placeholder="Email"
                 value={email}
@@ -179,7 +171,7 @@ export default function LoginScreen() {
             </View>
 
             {/* Sign Up Link */}
-            <View className="items-center">
+            <View style={styles.signUpSection}>
               <Text 
                 style={[
                   DarkTheme.typography.callout,
@@ -207,4 +199,43 @@ export default function LoginScreen() {
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
-} 
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: DarkTheme.colors.system.black,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  innerContainer: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingVertical: 32,
+    justifyContent: 'center',
+  },
+  headerSection: {
+    alignItems: 'center',
+    marginBottom: 48,
+  },
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    backgroundColor: DarkTheme.colors.bangkok.gold,
+  },
+  formSection: {
+    padding: 24,
+    borderRadius: 16,
+    marginBottom: 32,
+    backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
+    ...DarkTheme.shadows.medium,
+  },
+  signUpSection: {
+    alignItems: 'center',
+  },
+}); 

@@ -10,7 +10,6 @@ import type { RootStackParamList } from './src/navigation/types';
 import { analyticsService } from './src/services/analytics';
 import { NAVIGATION_METHODS } from './src/constants/ScreenNames';
 import { FullScreenLoading } from './src/components/common/LoadingState';
-import './global.css';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 

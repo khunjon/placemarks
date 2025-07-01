@@ -80,8 +80,8 @@ class PlaceDetailsCacheService extends BaseAsyncStorageCache<PlaceDetailsData> {
     }
     
     // Verify the cached data is for the correct place
-    if (cached.data.googlePlaceId !== googlePlaceId) {
-      console.log(`Cache mismatch for place ${googlePlaceId}, clearing...`);
+    if (!cached.data || cached.data.googlePlaceId !== googlePlaceId) {
+      console.log(`Cache invalid or mismatch for place ${googlePlaceId}, clearing...`);
       await this.clearPlaceCache(googlePlaceId);
       return null;
     }

@@ -421,9 +421,9 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
         wantToGoList.id,
         {
           place_id: googlePlaceId,
-          description: placeToAdd.place.formatted_address,
-          main_text: placeToAdd.place.name,
-          secondary_text: placeToAdd.place.formatted_address,
+          description: placeToAdd.place?.formatted_address || '',
+          main_text: placeToAdd.place?.name || '',
+          secondary_text: placeToAdd.place?.formatted_address || '',
           types: placeToAdd.place.types || [],
         },
         { }
@@ -510,7 +510,11 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
         return places.sort((a, b) => (b.visit_count || 0) - (a.visit_count || 0));
       
       case 'name':
-        return places.sort((a, b) => a.place.name.localeCompare(b.place.name));
+        return places.sort((a, b) => {
+          const nameA = a.place?.name || '';
+          const nameB = b.place?.name || '';
+          return nameA.localeCompare(nameB);
+        });
       
       default:
         return places;
@@ -759,11 +763,11 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                 key={`${listPlace.place_id}-${index}`}
                 googlePlaceId={listPlace.place_id}
                 place={listPlace.place}
-                name={listPlace.place.name}
-                address={listPlace.place.formatted_address}
+                name={listPlace.place?.name || 'Unknown Place'}
+                address={listPlace.place?.formatted_address || ''}
                 distance=""
                 onCheckIn={handleCheckIn}
-                onPress={() => handlePlacePress(listPlace.place_id, listPlace.place.name)}
+                onPress={() => handlePlacePress(listPlace.place_id, listPlace.place?.name || 'Unknown Place')}
                 showCheckInButton={false}
                 notes={listPlace.notes}
                 onDelete={handleRemovePlace}
