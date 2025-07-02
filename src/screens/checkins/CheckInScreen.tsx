@@ -217,7 +217,7 @@ export default function CheckInScreen({ navigation }: CheckInScreenProps) {
       <View style={{
         paddingHorizontal: Spacing.lg,
         paddingVertical: Spacing.sm,
-        backgroundColor: Colors.semantic.backgroundSecondary,
+        backgroundColor: Colors.semantic.backgroundPrimary,
       }}>
         <Typography 
           variant="subhead" 
