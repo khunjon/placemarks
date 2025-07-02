@@ -32,13 +32,12 @@ The app uses a comprehensive service-oriented architecture with extensive cachin
 - **analytics.ts**: Amplitude integration with comprehensive event tracking
 
 **Specialized Cache Services:**
-- **cacheManager.ts**: Centralized cache orchestration
-- **googlePlacesCache.ts**: Google Places API response caching (30-day TTL)
-- **placeDetailsCache.ts**: Detailed place information caching
-- **placesCache.ts**: Local place data caching
-- **locationCache.ts**: User location caching with background refresh
-- **checkInSearchCache.ts**: Check-in search optimization
-- **listsCache.ts** & **listDetailsCache.ts**: List management caching
+- **cacheManager.ts**: Centralized cache orchestration with unified invalidation
+- **googlePlacesCache.ts**: Google Places API response caching (90-day TTL, configurable)
+- **placeDetailsCache.ts**: Detailed place information caching (24-hour TTL)
+- **locationCache.ts**: User location caching with background refresh (3-minute TTL)
+- **checkInSearchCache.ts**: Check-in search optimization (15-minute TTL)
+- **listsCache.ts** & **listDetailsCache.ts**: List management caching (60-minute TTL)
 
 **Context Services:**
 - **cityContext.ts**: City detection and boundary checking
@@ -125,10 +124,12 @@ There is a separate web admin UI project that connects to the same Supabase back
 - User authentication and profile management
 - Lists management with full CRUD operations
 - Check-in creation and history display
-- Google Places search and caching
-- Location services with city detection
-- Comprehensive caching system
-- Analytics tracking
+- Google Places search with optimized caching (90-day TTL)
+- Location services with city detection and 3-minute cache refresh
+- Comprehensive multi-layer caching system with centralized configuration
+- Analytics tracking with Amplitude integration
+- Check-in search optimization with location-based caching
+- Background cache refresh with soft expiry patterns
 
 ### Mock/Incomplete Features ❌
 - Decide screen recommendations (uses mock data)
@@ -144,7 +145,7 @@ There is a separate web admin UI project that connects to the same Supabase back
 - `src/navigation/` - Navigation configuration and types
 - `src/services/` - Business logic and API integrations
 - `src/types/` - TypeScript type definitions (centralized)
-- `src/config/` - App configuration including city configs
+- `src/config/` - App configuration including city configs and cache settings
 - `src/constants/` - App constants (colors, spacing, screen names)
 - `src/utils/` - Utility functions
 - `src/hooks/` - Custom React hooks
@@ -153,15 +154,15 @@ There is a separate web admin UI project that connects to the same Supabase back
 
 ## Cache Strategy
 
-The app implements a sophisticated multi-layer caching system:
+The app implements a sophisticated multi-layer caching system with centralized configuration:
 
-1. **Google Places Cache**: 30-day TTL for API responses
-2. **Place Details Cache**: 24-hour TTL for detailed place information
-3. **Location Cache**: Background refresh with fallback coordinates
-4. **Search Cache**: 15-minute TTL for search results
-5. **List Cache**: Real-time invalidation for user-generated content
+1. **Google Places Cache**: 90-day TTL (configurable via EXPO_PUBLIC_GOOGLE_PLACES_CACHE_DAYS)
+2. **Place Details Cache**: 24-hour TTL with 12-hour soft expiry for background refresh
+3. **Location Cache**: 3-minute TTL with background refresh every 2 minutes
+4. **Check-In Search Cache**: 15-minute TTL with 5-minute in-memory cache
+5. **Lists Cache**: 60-minute TTL with 30-minute soft expiry for background refresh
 
-All caches are coordinated through the `cacheManager` service.
+All caches are coordinated through the `cacheManager` service and configured via `src/config/cacheConfig.ts`.
 
 ## Cost Optimization
 
@@ -174,7 +175,9 @@ All caches are coordinated through the `cacheManager` service.
 - Strategic batching of requests
 
 ### Performance Optimizations
-- Debounced search inputs
-- Intelligent prefetching
-- Background data refresh
-- Graceful offline handling
+- Debounced search inputs (300ms autocomplete, 800ms search)
+- Intelligent prefetching with soft expiry patterns
+- Background data refresh with centralized cache coordination
+- Graceful offline handling with fallback data
+- Centralized cache configuration in `src/config/cacheConfig.ts`
+- Unified cache invalidation through `cacheManager`
