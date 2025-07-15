@@ -1266,6 +1266,35 @@ export class ListsService {
       throw new ListError('Failed to get curated list details', 'GET_CURATED_LIST_DETAILS_ERROR');
     }
   }
+
+  /**
+   * Get all unique place IDs from all of a user's lists
+   * Used for recommendations to boost places already saved by the user
+   */
+  async getAllPlacesFromUserLists(userId: string): Promise<string[]> {
+    try {
+      // Get all user lists with places
+      const lists = await this.getUserListsWithPlaces(userId);
+      
+      // Extract all unique Google Place IDs
+      const placeIds = new Set<string>();
+      
+      for (const list of lists) {
+        for (const enrichedPlace of list.places) {
+          if (enrichedPlace.place.google_place_id) {
+            placeIds.add(enrichedPlace.place.google_place_id);
+          }
+        }
+      }
+      
+      
+      return Array.from(placeIds);
+    } catch (error) {
+      console.error('Error getting all places from user lists:', error);
+      // Return empty array on error to not break recommendations
+      return [];
+    }
+  }
 }
 
 // Export singleton instance

@@ -9,7 +9,7 @@ import type { DecideStackScreenProps } from '../../navigation/types';
 import { createValidatedCityContext, CityContext } from '../../services/cityContext';
 import { Location as CityLocation } from '../../types/navigation';
 import { recommendationService, getTimeContext } from '../../services/recommendationService';
-import { TimeContext, ScoredPlace, RecommendationResponse } from '../../types/recommendations';
+import { TimeContext, ScoredPlace, RecommendationResponse, UserPreference } from '../../types/recommendations';
 import { useLocation } from '../../hooks/useLocation';
 import { useAuth } from '../../services/auth-context';
 import { locationUtils } from '../../utils/location';
@@ -52,6 +52,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
   const [timeContext, setTimeContext] = useState<TimeContext>(getTimeContext());
   const [databaseRecommendations, setDatabaseRecommendations] = useState<RecommendationResponse | null>(null);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [userPreference, setUserPreference] = useState<UserPreference>('any');
 
   // Update time context every minute
   useEffect(() => {
@@ -75,12 +76,12 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
     }
   }, [location]);
 
-  // Load recommendations when location, city context, or time changes
+  // Load recommendations when location, city context, time, or preferences change
   useEffect(() => {
     if (location && cityContext && user) {
       loadRecommendations();
     }
-  }, [location, cityContext, timeContext, user]);
+  }, [location, cityContext, timeContext, user, userPreference]);
 
   const loadRecommendations = async () => {
     if (!location || !cityContext || !user) return;
@@ -94,7 +95,9 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
         latitude: location.latitude,
         longitude: location.longitude,
         limit: 6,
-        timeContext
+        timeContext,
+        userPreference,
+        includeClosedPlaces: false // Always exclude closed places
       });
       
       setDatabaseRecommendations(databaseRecs);
@@ -177,6 +180,17 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
 
   // Helper functions for database recommendations
   const getDatabaseRecommendationReason = (place: ScoredPlace, timeCtx: TimeContext) => {
+    // Priority to open status
+    if (place.isOpen === true && place.closingTime) {
+      if (place.recommendation_score > 80) {
+        return `Perfect for ${timeCtx.timeOfDay} • Open now`;
+      }
+      return 'Open now';
+    } else if (place.isOpen === false) {
+      return 'Currently closed';
+    }
+    
+    // Other reasons
     if (place.recommendation_score > 80) {
       return `Perfect for ${timeCtx.timeOfDay}`;
     } else if (place.distance_km < 0.5) {
@@ -240,37 +254,115 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
         contentContainerStyle={{ paddingBottom: DarkTheme.spacing.xl }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Recommendations Section */}
+        {/* User Preference Selection */}
         <View style={{
           paddingHorizontal: DarkTheme.spacing.lg,
           paddingTop: DarkTheme.spacing.md,
-          paddingBottom: DarkTheme.spacing.lg,
+          paddingBottom: DarkTheme.spacing.sm,
         }}>
-          {/* Context Header */}
+          <Text style={[
+            DarkTheme.typography.caption1,
+            { 
+              color: DarkTheme.colors.semantic.secondaryLabel,
+              marginBottom: DarkTheme.spacing.sm,
+              fontWeight: '600',
+            }
+          ]}>
+            What are you looking for?
+          </Text>
+          
           <View style={{
-            marginBottom: DarkTheme.spacing.md,
+            flexDirection: 'row',
+            gap: DarkTheme.spacing.sm,
+            marginBottom: DarkTheme.spacing.sm,
           }}>
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-            }}>
-              <Clock 
-                size={16} 
-                color={DarkTheme.colors.bangkok.gold}
-                strokeWidth={2}
-              />
+            <TouchableOpacity 
+              onPress={() => setUserPreference('any')}
+              style={{
+                flex: 1,
+                backgroundColor: userPreference === 'any' 
+                  ? DarkTheme.colors.bangkok.gold 
+                  : DarkTheme.colors.semantic.tertiarySystemBackground,
+                paddingVertical: DarkTheme.spacing.sm,
+                paddingHorizontal: DarkTheme.spacing.md,
+                borderRadius: DarkTheme.borderRadius.sm,
+                alignItems: 'center',
+              }}
+            >
               <Text style={[
-                DarkTheme.typography.subhead,
+                DarkTheme.typography.caption1,
                 { 
-                  color: DarkTheme.colors.semantic.label,
+                  color: userPreference === 'any' 
+                    ? DarkTheme.colors.system.black 
+                    : DarkTheme.colors.semantic.label,
                   fontWeight: '600',
-                  marginLeft: DarkTheme.spacing.xs,
                 }
               ]}>
-                {getTimeContextMessage(timeContext, cityContext)}
+                Anything
               </Text>
-            </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              onPress={() => setUserPreference('eat')}
+              style={{
+                flex: 1,
+                backgroundColor: userPreference === 'eat' 
+                  ? DarkTheme.colors.bangkok.gold 
+                  : DarkTheme.colors.semantic.tertiarySystemBackground,
+                paddingVertical: DarkTheme.spacing.sm,
+                paddingHorizontal: DarkTheme.spacing.md,
+                borderRadius: DarkTheme.borderRadius.sm,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={[
+                DarkTheme.typography.caption1,
+                { 
+                  color: userPreference === 'eat' 
+                    ? DarkTheme.colors.system.black 
+                    : DarkTheme.colors.semantic.label,
+                  fontWeight: '600',
+                }
+              ]}>
+                🍽️ Food
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              onPress={() => setUserPreference('drink')}
+              style={{
+                flex: 1,
+                backgroundColor: userPreference === 'drink' 
+                  ? DarkTheme.colors.bangkok.gold 
+                  : DarkTheme.colors.semantic.tertiarySystemBackground,
+                paddingVertical: DarkTheme.spacing.sm,
+                paddingHorizontal: DarkTheme.spacing.md,
+                borderRadius: DarkTheme.borderRadius.sm,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={[
+                DarkTheme.typography.caption1,
+                { 
+                  color: userPreference === 'drink' 
+                    ? DarkTheme.colors.system.black 
+                    : DarkTheme.colors.semantic.label,
+                  fontWeight: '600',
+                }
+              ]}>
+                ☕ Drinks
+              </Text>
+            </TouchableOpacity>
           </View>
+          
+        </View>
+
+        {/* Recommendations Section */}
+        <View style={{
+          paddingHorizontal: DarkTheme.spacing.lg,
+          paddingTop: DarkTheme.spacing.sm,
+          paddingBottom: DarkTheme.spacing.lg,
+        }}>
 
           {/* Recommendations Content */}
           {recommendationsLoading ? (
@@ -397,6 +489,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                         flexDirection: 'row',
                         alignItems: 'center',
                         justifyContent: 'space-between',
+                        marginBottom: DarkTheme.spacing.xs,
                       }}>
                         <Text style={[
                           DarkTheme.typography.caption2,
@@ -434,6 +527,48 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                             </Text>
                           )}
                         </View>
+                      </View>
+                      
+                      {/* Opening Hours Status */}
+                      <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                      }}>
+                        {place.isOpen !== null && (
+                          <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: place.isOpen 
+                              ? `${DarkTheme.colors.status.success}20`
+                              : `${DarkTheme.colors.status.error}20`,
+                            paddingHorizontal: DarkTheme.spacing.sm,
+                            paddingVertical: DarkTheme.spacing.xs / 2,
+                            borderRadius: DarkTheme.borderRadius.xs,
+                          }}>
+                            <View style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: 3,
+                              backgroundColor: place.isOpen 
+                                ? DarkTheme.colors.status.success
+                                : DarkTheme.colors.status.error,
+                              marginRight: DarkTheme.spacing.xs / 2,
+                            }} />
+                            <Text style={[
+                              DarkTheme.typography.caption2,
+                              { 
+                                color: place.isOpen 
+                                  ? DarkTheme.colors.status.success
+                                  : DarkTheme.colors.status.error,
+                                fontWeight: '500',
+                              }
+                            ]}>
+                              {place.isOpen ? 'Open' : 'Closed'}
+                              {place.isOpen && place.closingTime && ` • Closes ${place.closingTime}`}
+                              {!place.isOpen && place.openingTime && ` • Opens ${place.openingTime}`}
+                            </Text>
+                          </View>
+                        )}
                       </View>
                     </View>
                   </TouchableOpacity>

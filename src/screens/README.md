@@ -74,6 +74,35 @@ import DecideScreen from '../screens/decide/DecideScreen';
 
 ## Screen Responsibilities
 
+### auth/
+- **LoginScreen**: User authentication with email/password
+- **SignUpScreen**: New user registration
+- **WelcomeScreen**: App introduction and onboarding flow
+- **ProfileSetupScreen**: Initial profile configuration after signup
+
+### checkins/
+- **CheckInScreen**: Main check-in tab with history and create button
+- **CheckInSearchScreen**: Search for places to check into
+- **CheckInFormScreen**: Create new check-in with rating and notes
+- **CheckInDetailScreen**: View detailed check-in information
+
 ### decide/
 - **DecideScreen**: Main discovery page with curated lists and "Help me decide" entry point
-- **RecommendationsScreen**: Personalized location-based recommendations with real-time context 
+- **RecommendationsScreen**: Personalized location-based recommendations (currently uses mock data)
+
+### lists/
+- **ListsScreen**: View all user lists and create new ones
+- **ListDetailScreen**: View places in a specific list
+- **CreateListScreen**: Create a new place list
+- **EditListScreen**: Edit existing list details
+- **AddPlaceToListScreen**: Add places to an existing list
+
+### places/
+- **PlacesSearchScreen**: Search for places using Google Places API
+- **PlaceDetailScreen**: Detailed place information with photos and reviews
+
+### profile/
+- **ProfileScreen**: User profile overview with stats and achievements
+- **EditProfileScreen**: Edit user profile information
+- **PreferencesScreen**: App settings and preferences
+- **AchievementDetailScreen**: Detailed view of user achievements

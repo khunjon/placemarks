@@ -23,7 +23,8 @@
       "Bash(done)",
       "mcp__ide__getDiagnostics",
       "mcp__supabase__get_advisors",
-      "mcp__supabase__list_migrations"
+      "mcp__supabase__list_migrations",
+      "Bash(npx tsc:*)"
     ],
     "deny": []
   },

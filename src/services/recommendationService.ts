@@ -5,13 +5,16 @@
 
 import { supabase } from './supabase';
 import { PlaceAvailabilityService } from './placeAvailability';
+import { listsService } from './listsService';
 import { 
   DatabaseRecommendationRequest, 
   RecommendationResponse, 
   ScoredPlace,
   TimeContext,
-  TimeOfDay 
+  TimeOfDay,
+  UserPreference 
 } from '../types/recommendations';
+import { isPlaceCurrentlyOpen, getFormattedHoursForDay, isPlaceOpeningSoon, OpeningHours } from '../utils/operatingHours';
 
 /**
  * Determines the time context based on current date/time
@@ -66,7 +69,9 @@ export class RecommendationService {
       latitude,
       longitude,
       limit = this.DEFAULT_LIMIT,
-      timeContext
+      timeContext,
+      userPreference = 'any',
+      includeClosedPlaces = false
     } = request;
 
     try {
@@ -98,6 +103,9 @@ export class RecommendationService {
       // Get user's checked-in places to exclude from recommendations
       const userCheckedInPlaces = await this.getUserCheckedInPlaces(userId);
 
+      // Get user's saved places from lists for boosting
+      const userSavedPlaces = await listsService.getAllPlacesFromUserLists(userId);
+
       // Get places from google_places_cache within radius, excluding checked-in places
       // This works directly with Google Place IDs - no conversion needed
       const candidatePlaces = await this.getCachedPlacesWithinRadius(
@@ -105,7 +113,7 @@ export class RecommendationService {
         longitude,
         this.DEFAULT_RADIUS_KM,
         userCheckedInPlaces,
-        limit * 2 // Get more candidates for better filtering
+        limit * 3 // Get more candidates for better filtering with preferences
       );
 
       // Score and rank the places
@@ -113,7 +121,10 @@ export class RecommendationService {
         candidatePlaces,
         latitude,
         longitude,
-        timeContext
+        timeContext,
+        userPreference,
+        includeClosedPlaces,
+        userSavedPlaces
       );
 
       // Take top results up to limit
@@ -174,7 +185,9 @@ export class RecommendationService {
           geometry,
           photo_urls,
           website,
-          formatted_phone_number
+          formatted_phone_number,
+          opening_hours,
+          current_opening_hours
         `)
         .eq('business_status', 'OPERATIONAL')
         .not('name', 'is', null)
@@ -207,6 +220,7 @@ export class RecommendationService {
         
         return fallbackData || [];
       }
+
 
       return data || [];
 
@@ -253,13 +267,19 @@ export class RecommendationService {
    * @param userLat - User latitude
    * @param userLng - User longitude
    * @param timeContext - Optional time context for time-based scoring
+   * @param userPreference - User preference for food/drink
+   * @param includeClosedPlaces - Whether to include closed places
+   * @param userSavedPlaces - Array of Google Place IDs saved in user's lists
    * @returns ScoredPlace[] - Array of scored places sorted by score descending
    */
   private scoreAndRankPlaces(
     places: any[],
     userLat: number,
     userLng: number,
-    timeContext?: TimeContext
+    timeContext?: TimeContext,
+    userPreference: UserPreference = 'any',
+    includeClosedPlaces: boolean = false,
+    userSavedPlaces: string[] = []
   ): ScoredPlace[] {
     const scoredPlaces: ScoredPlace[] = places.map(place => {
       // Extract coordinates from geometry
@@ -270,12 +290,71 @@ export class RecommendationService {
       // Calculate distance
       const distanceKm = this.calculateDistance(userLat, userLng, placeLat, placeLng);
 
+      // Check if place is currently open
+      const openingHours = place.opening_hours as OpeningHours;
+      const isOpen = isPlaceCurrentlyOpen(openingHours, { lat: placeLat, lng: placeLng });
+      
+      
+      // Get opening/closing times and check if opening soon
+      let closingTime: string | undefined;
+      let openingTime: string | undefined;
+      let isOpeningSoon = false;
+      let minutesUntilOpen: number | undefined;
+      
+      if (isOpen && openingHours?.weekday_text) {
+        // Extract closing time from today's hours
+        const todayHours = getFormattedHoursForDay(openingHours);
+        // Parse closing time from format like "Monday: 9:00 AM – 5:00 PM"
+        const match = todayHours.match(/–\s*(\d{1,2}:\d{2}\s*[AP]M)/);
+        if (match) {
+          closingTime = match[1];
+        }
+      } else if (!isOpen) {
+        // Check if opening soon
+        const openingSoonResult = isPlaceOpeningSoon(openingHours, { lat: placeLat, lng: placeLng });
+        if (openingSoonResult) {
+          isOpeningSoon = openingSoonResult.isOpeningSoon;
+          minutesUntilOpen = openingSoonResult.minutesUntilOpen;
+          
+          if (isOpeningSoon && minutesUntilOpen) {
+            openingTime = `Opens in ${minutesUntilOpen} min`;
+          } else if (openingHours?.weekday_text) {
+            // Find next opening time for display
+            const todayHours = getFormattedHoursForDay(openingHours);
+            const match = todayHours.match(/(\d{1,2}:\d{2}\s*[AP]M)\s*–/);
+            if (match) {
+              openingTime = match[1];
+            }
+          }
+        }
+      }
+
       // Calculate base score
       let score = this.calculateBaseScore(place, distanceKm);
 
       // Apply time-based scoring if time context provided
       if (timeContext) {
         score = this.applyTimeBasedScoring(score, place, timeContext);
+      }
+
+      // Apply user preference scoring
+      score = this.applyUserPreferenceScoring(score, place, userPreference);
+
+      // Apply opening hours penalty if closed, with exception for opening soon
+      if (!includeClosedPlaces && isOpen === false) {
+        if (isOpeningSoon) {
+          // Small penalty for closed but opening soon
+          score -= 10;
+        } else {
+          // Large penalty for closed places not opening soon
+          score -= 50;
+        }
+      }
+
+      // Apply boost for places in user's saved lists
+      const isInUserLists = userSavedPlaces.includes(place.google_place_id);
+      if (isInUserLists) {
+        score += 25; // Significant boost for saved places
       }
 
       return {
@@ -293,12 +372,51 @@ export class RecommendationService {
             lng: placeLng
           }
         },
+        opening_hours: place.opening_hours,
+        current_opening_hours: place.current_opening_hours,
+        isOpen,
+        closingTime,
+        openingTime,
         distance_km: Math.round(distanceKm * 100) / 100, // Round to 2 decimal places
         recommendation_score: Math.round(score * 100) / 100,
         photo_urls: place.photo_urls,
         website: place.website,
         formatted_phone_number: place.formatted_phone_number
       };
+    })
+    // Filter out closed places if not including them (but keep places opening soon)
+    .filter(place => {
+      if (includeClosedPlaces) return true;
+      if (place.isOpen === true) return true;
+      if (place.isOpen === false && place.openingTime?.includes('Opens in')) return true; // Keep places opening soon
+      return place.isOpen !== false;
+    })
+    // Apply aggressive preference filtering
+    .filter(place => {
+      if (userPreference === 'any') return true;
+      
+      const types = place.types || [];
+      
+      if (userPreference === 'eat') {
+        // Only include places that serve food
+        const foodTypes = ['restaurant', 'meal_takeaway', 'meal_delivery', 'food', 'bakery'];
+        const hasFoodType = types.some((type: string) => foodTypes.includes(type));
+        // Also include cafes that likely serve food
+        const isFoodCafe = types.includes('cafe') && (
+          place.name.toLowerCase().includes('restaurant') ||
+          place.name.toLowerCase().includes('kitchen') ||
+          place.name.toLowerCase().includes('bistro')
+        );
+        return hasFoodType || isFoodCafe;
+      }
+      
+      if (userPreference === 'drink') {
+        // Only include places focused on drinks
+        const drinkTypes = ['cafe', 'bar', 'night_club', 'brewery', 'wine_bar'];
+        return types.some((type: string) => drinkTypes.includes(type));
+      }
+      
+      return true;
     });
 
     // Sort by recommendation score descending
@@ -405,6 +523,49 @@ export class RecommendationService {
     const hasAvoided = types.some((type: string) => preferences.avoided.includes(type));
     if (hasAvoided) {
       adjustedScore -= preferences.penalty;
+    }
+
+    return Math.max(0, Math.min(100, adjustedScore));
+  }
+
+  /**
+   * Apply user preference scoring adjustments
+   * @param baseScore - Base recommendation score
+   * @param place - Place data
+   * @param userPreference - User's food/drink preference
+   * @returns number - Adjusted score
+   */
+  private applyUserPreferenceScoring(baseScore: number, place: any, userPreference: UserPreference): number {
+    if (userPreference === 'any') {
+      return baseScore;
+    }
+
+    const types = place.types || [];
+    let adjustedScore = baseScore;
+
+    if (userPreference === 'eat') {
+      // Boost restaurants and food places
+      const foodTypes = ['restaurant', 'meal_takeaway', 'meal_delivery', 'food'];
+      const hasFoodType = types.some((type: string) => foodTypes.includes(type));
+      
+      if (hasFoodType) {
+        adjustedScore += 15; // Significant boost for food places
+      } else if (types.includes('cafe') || types.includes('bakery')) {
+        adjustedScore += 5; // Small boost for cafes that serve food
+      } else if (types.includes('bar')) {
+        adjustedScore -= 10; // Penalty for bars when user wants to eat
+      }
+    } else if (userPreference === 'drink') {
+      // Boost cafes, bars, and drink places
+      const drinkTypes = ['cafe', 'bar', 'night_club'];
+      const hasDrinkType = types.some((type: string) => drinkTypes.includes(type));
+      
+      if (hasDrinkType) {
+        adjustedScore += 15; // Significant boost for drink places
+      } else if (types.includes('restaurant')) {
+        // Restaurants can serve drinks too, small boost
+        adjustedScore += 3;
+      }
     }
 
     return Math.max(0, Math.min(100, adjustedScore));

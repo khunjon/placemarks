@@ -6,6 +6,7 @@ import { Location } from './navigation';
 
 export type TimeOfDay = 'morning' | 'lunch' | 'afternoon' | 'dinner' | 'evening';
 export type CityTier = 'bangkok' | 'standard';
+export type UserPreference = 'eat' | 'drink' | 'any';
 
 export interface TimeContext {
   timeOfDay: TimeOfDay;
@@ -20,6 +21,8 @@ export interface DatabaseRecommendationRequest {
   longitude: number;
   limit?: number;
   timeContext?: TimeContext;
+  userPreference?: UserPreference;
+  includeClosedPlaces?: boolean;
 }
 
 export interface ScoredPlace {
@@ -38,6 +41,13 @@ export interface ScoredPlace {
       lng: number;
     };
   };
+  
+  // Opening hours data
+  opening_hours?: any; // JSONB from Google Places
+  current_opening_hours?: any; // JSONB from Google Places
+  isOpen?: boolean | null; // Calculated field
+  closingTime?: string; // Formatted closing time if open
+  openingTime?: string; // Formatted opening time if closed
   
   // Calculated fields
   distance_km: number;

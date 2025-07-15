@@ -258,3 +258,81 @@ export function hasValidOpeningHours(openingHours: OpeningHours | null | undefin
     )
   );
 }
+
+/**
+ * Check if a place is opening soon (within the next X minutes)
+ * @param openingHours - Opening hours data
+ * @param location - Place location
+ * @param minutesAhead - How many minutes ahead to check (default 60)
+ * @param placeTimezone - Optional timezone override
+ * @returns { isOpeningSoon: boolean, minutesUntilOpen?: number } | null
+ */
+export function isPlaceOpeningSoon(
+  openingHours: OpeningHours | null | undefined,
+  location: PlaceLocation,
+  minutesAhead: number = 60,
+  placeTimezone?: string
+): { isOpeningSoon: boolean; minutesUntilOpen?: number } | null {
+  // Return null if we don't have enough data
+  if (!openingHours?.periods || openingHours.periods.length === 0) {
+    return null;
+  }
+
+  try {
+    // Determine place timezone
+    const timezone = placeTimezone || getPlaceTimezone(location);
+    
+    // Get current day and time in place timezone
+    const { day: currentDay, minutes: currentMinutes } = getCurrentDayAndTime(timezone);
+
+    // Check each period to find the next opening time
+    let nearestOpeningMinutes: number | null = null;
+    let nearestOpeningDay: number | null = null;
+
+    for (const period of openingHours.periods) {
+      const openDay = period.open.day;
+      const openMinutes = timeToMinutes(period.open.time);
+      
+      // Calculate minutes until this opening time
+      let minutesUntilOpen = 0;
+      
+      if (openDay === currentDay && openMinutes > currentMinutes) {
+        // Opening later today
+        minutesUntilOpen = openMinutes - currentMinutes;
+      } else if (openDay !== currentDay) {
+        // Opening on a different day
+        const daysUntilOpen = (openDay - currentDay + 7) % 7;
+        if (daysUntilOpen === 0 && openMinutes <= currentMinutes) {
+          // This is today but the time has passed, so it's next week
+          minutesUntilOpen = (7 * 24 * 60) - currentMinutes + openMinutes;
+        } else if (daysUntilOpen > 0) {
+          // Opening in the next few days
+          minutesUntilOpen = (daysUntilOpen * 24 * 60) - currentMinutes + openMinutes;
+        }
+      }
+      
+      // Update nearest opening time if this is closer
+      if (minutesUntilOpen > 0 && (nearestOpeningMinutes === null || minutesUntilOpen < nearestOpeningMinutes)) {
+        nearestOpeningMinutes = minutesUntilOpen;
+        nearestOpeningDay = openDay;
+      }
+    }
+
+    // Check if place is opening soon
+    if (nearestOpeningMinutes !== null && nearestOpeningMinutes <= minutesAhead) {
+      return {
+        isOpeningSoon: true,
+        minutesUntilOpen: nearestOpeningMinutes
+      };
+    }
+
+    return {
+      isOpeningSoon: false,
+      minutesUntilOpen: nearestOpeningMinutes || undefined
+    };
+
+  } catch (error) {
+    console.error('Error checking if place is opening soon:', error);
+    return null;
+  }
+}
