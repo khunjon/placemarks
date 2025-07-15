@@ -281,7 +281,21 @@ export class RecommendationService {
     includeClosedPlaces: boolean = false,
     userSavedPlaces: string[] = []
   ): ScoredPlace[] {
-    const scoredPlaces: ScoredPlace[] = places.map(place => {
+    // Define allowed place types for recommendations (food & drink only)
+    const allowedTypes = [
+      'restaurant', 'cafe', 'bar', 'bakery', 'coffee_shop',
+      'meal_takeaway', 'meal_delivery', 'food', 'brewery',
+      'wine_bar', 'night_club', 'bistro', 'pub', 'fast_food'
+    ];
+
+    const scoredPlaces: ScoredPlace[] = places
+    // First filter to only food & drink places
+    .filter(place => {
+      const types = place.types || [];
+      // Check if place has at least one allowed type
+      return types.some((type: string) => allowedTypes.includes(type));
+    })
+    .map(place => {
       // Extract coordinates from geometry
       const location = place.geometry?.location || {};
       const placeLat = location.lat;
@@ -398,21 +412,17 @@ export class RecommendationService {
       const types = place.types || [];
       
       if (userPreference === 'eat') {
-        // Only include places that serve food
-        const foodTypes = ['restaurant', 'meal_takeaway', 'meal_delivery', 'food', 'bakery'];
+        // Only include places that primarily serve food
+        const foodTypes = ['restaurant', 'meal_takeaway', 'meal_delivery', 'food', 'bakery', 'bistro', 'fast_food'];
         const hasFoodType = types.some((type: string) => foodTypes.includes(type));
-        // Also include cafes that likely serve food
-        const isFoodCafe = types.includes('cafe') && (
-          place.name.toLowerCase().includes('restaurant') ||
-          place.name.toLowerCase().includes('kitchen') ||
-          place.name.toLowerCase().includes('bistro')
-        );
-        return hasFoodType || isFoodCafe;
+        // Exclude pure drink places
+        const isPureDrinkPlace = types.includes('bar') || types.includes('wine_bar') || types.includes('brewery');
+        return hasFoodType && !isPureDrinkPlace;
       }
       
       if (userPreference === 'drink') {
-        // Only include places focused on drinks
-        const drinkTypes = ['cafe', 'bar', 'night_club', 'brewery', 'wine_bar'];
+        // Only include places focused on drinks (cafes, bars, etc)
+        const drinkTypes = ['cafe', 'coffee_shop', 'bar', 'night_club', 'brewery', 'wine_bar', 'pub'];
         return types.some((type: string) => drinkTypes.includes(type));
       }
       
@@ -545,26 +555,27 @@ export class RecommendationService {
 
     if (userPreference === 'eat') {
       // Boost restaurants and food places
-      const foodTypes = ['restaurant', 'meal_takeaway', 'meal_delivery', 'food'];
-      const hasFoodType = types.some((type: string) => foodTypes.includes(type));
+      const primaryFoodTypes = ['restaurant', 'meal_takeaway', 'meal_delivery', 'bistro', 'fast_food'];
+      const secondaryFoodTypes = ['food', 'bakery'];
       
-      if (hasFoodType) {
-        adjustedScore += 15; // Significant boost for food places
-      } else if (types.includes('cafe') || types.includes('bakery')) {
-        adjustedScore += 5; // Small boost for cafes that serve food
-      } else if (types.includes('bar')) {
-        adjustedScore -= 10; // Penalty for bars when user wants to eat
+      if (types.some((type: string) => primaryFoodTypes.includes(type))) {
+        adjustedScore += 15; // Significant boost for primary food places
+      } else if (types.some((type: string) => secondaryFoodTypes.includes(type))) {
+        adjustedScore += 10; // Medium boost for secondary food places
+      } else if (types.includes('cafe') || types.includes('coffee_shop')) {
+        adjustedScore += 3; // Small boost for cafes (some serve food)
       }
     } else if (userPreference === 'drink') {
       // Boost cafes, bars, and drink places
-      const drinkTypes = ['cafe', 'bar', 'night_club'];
-      const hasDrinkType = types.some((type: string) => drinkTypes.includes(type));
+      const primaryDrinkTypes = ['cafe', 'coffee_shop', 'bar', 'wine_bar', 'brewery', 'pub'];
+      const secondaryDrinkTypes = ['night_club'];
       
-      if (hasDrinkType) {
-        adjustedScore += 15; // Significant boost for drink places
+      if (types.some((type: string) => primaryDrinkTypes.includes(type))) {
+        adjustedScore += 15; // Significant boost for primary drink places
+      } else if (types.some((type: string) => secondaryDrinkTypes.includes(type))) {
+        adjustedScore += 10; // Medium boost for nightclubs
       } else if (types.includes('restaurant')) {
-        // Restaurants can serve drinks too, small boost
-        adjustedScore += 3;
+        adjustedScore += 3; // Small boost for restaurants (they serve drinks too)
       }
     }
 
