@@ -1273,22 +1273,43 @@ export class ListsService {
    */
   async getAllPlacesFromUserLists(userId: string): Promise<string[]> {
     try {
-      // Get all user lists with places
-      const lists = await this.getUserListsWithPlaces(userId);
+      // Direct query to list_places for all place IDs in user's lists
+      // This is much more efficient than loading all list details
+      const { data: userLists, error: listsError } = await supabase
+        .from('lists')
+        .select('id')
+        .eq('user_id', userId);
       
-      // Extract all unique Google Place IDs
-      const placeIds = new Set<string>();
-      
-      for (const list of lists) {
-        for (const enrichedPlace of list.places) {
-          if (enrichedPlace.place.google_place_id) {
-            placeIds.add(enrichedPlace.place.google_place_id);
-          }
-        }
+      if (listsError) {
+        console.error('Error fetching user lists:', listsError);
+        return [];
       }
       
+      if (!userLists || userLists.length === 0) {
+        console.log('[Lists] User has no lists');
+        return [];
+      }
       
-      return Array.from(placeIds);
+      const listIds = userLists.map(list => list.id);
+      
+      // Get all place IDs from list_places in a single query
+      const { data: listPlaces, error: placesError } = await supabase
+        .from('list_places')
+        .select('place_id')
+        .in('list_id', listIds)
+        .not('place_id', 'is', null);
+      
+      if (placesError) {
+        console.error('Error fetching places from lists:', placesError);
+        return [];
+      }
+      
+      // Extract unique place IDs
+      const uniquePlaceIds = [...new Set(listPlaces?.map(lp => lp.place_id) || [])];
+      
+      console.log(`[Lists] Found ${uniquePlaceIds.length} unique places across ${userLists.length} lists`);
+      
+      return uniquePlaceIds;
     } catch (error) {
       console.error('Error getting all places from user lists:', error);
       // Return empty array on error to not break recommendations

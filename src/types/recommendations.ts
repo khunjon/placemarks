@@ -23,6 +23,7 @@ export interface DatabaseRecommendationRequest {
   timeContext?: TimeContext;
   userPreference?: UserPreference;
   includeClosedPlaces?: boolean;
+  savedPlacesOnly?: boolean; // New option to only show places from user's lists
 }
 
 export interface ScoredPlace {
@@ -58,6 +59,9 @@ export interface ScoredPlace {
   website?: string;
   formatted_phone_number?: string;
   editorial_summary?: string;
+  
+  // User-specific data
+  isInUserLists?: boolean;
 }
 
 export interface RecommendationResponse {

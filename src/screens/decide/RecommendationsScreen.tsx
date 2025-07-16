@@ -179,28 +179,26 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
   };
 
   // Helper functions for database recommendations
-  const getDatabaseRecommendationReason = (place: ScoredPlace, timeCtx: TimeContext) => {
-    // Priority to open status
-    if (place.isOpen === true && place.closingTime) {
-      if (place.recommendation_score > 80) {
-        return `Perfect for ${timeCtx.timeOfDay} • Open now`;
-      }
-      return 'Open now';
-    } else if (place.isOpen === false) {
+  const getDatabaseRecommendationReason = (place: ScoredPlace) => {
+    // Show closed status if applicable
+    if (place.isOpen === false) {
       return 'Currently closed';
     }
     
-    // Other reasons
-    if (place.recommendation_score > 80) {
-      return `Perfect for ${timeCtx.timeOfDay}`;
-    } else if (place.distance_km < 0.5) {
+    // Show if it's from user's saved lists
+    if (place.isInUserLists) {
+      return 'From your lists';
+    }
+    
+    // Show other meaningful reasons
+    if (place.distance_km < 0.5) {
       return 'Very close to you';
     } else if (place.rating && place.rating > 4.5) {
       return 'Highly rated';
     } else if (place.user_ratings_total && place.user_ratings_total > 1000) {
       return 'Popular choice';
     } else {
-      return 'Recommended for you';
+      return 'Recommended';
     }
   };
 
@@ -350,7 +348,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                   fontWeight: '600',
                 }
               ]}>
-                ☕ Drinks
+                ☕ Coffee
               </Text>
             </TouchableOpacity>
           </View>
@@ -431,7 +429,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
             </View>
           ) : databaseRecommendations && databaseRecommendations.places.length > 0 ? (
             <View>
-              {databaseRecommendations.places.map((place, index) => {
+              {databaseRecommendations.places.map((place) => {
                 const category = getDatabasePlaceCategory(place.types);
                 return (
                   <TouchableOpacity
@@ -482,7 +480,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                           marginBottom: DarkTheme.spacing.xs,
                         }
                       ]}>
-                        {getDatabaseRecommendationReason(place, timeContext)}
+                        {getDatabaseRecommendationReason(place)}
                       </Text>
                       
                       <View style={{
@@ -575,15 +573,26 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                 );
               })}
               
-              {/* Show fallback message if not enough places */}
-              {databaseRecommendations.places.length < 3 && (
+              {/* Show message if no saved places found */}
+              {databaseRecommendations.places.length === 0 && (
                 <View style={{
                   backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
                   borderRadius: DarkTheme.borderRadius.lg,
-                  padding: DarkTheme.spacing.md,
+                  padding: DarkTheme.spacing.lg,
                   marginTop: DarkTheme.spacing.sm,
                   alignItems: 'center',
                 }}>
+                  <Text style={[
+                    DarkTheme.typography.subhead,
+                    { 
+                      color: DarkTheme.colors.semantic.label,
+                      textAlign: 'center',
+                      marginBottom: DarkTheme.spacing.sm,
+                      fontWeight: '600',
+                    }
+                  ]}>
+                    No saved places nearby
+                  </Text>
                   <Text style={[
                     DarkTheme.typography.caption1,
                     { 
@@ -591,7 +600,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                       textAlign: 'center',
                     }
                   ]}>
-                    More recommendations coming soon as we expand our database!
+                    Save places to your lists to get personalized recommendations based on your favorites!
                   </Text>
                 </View>
               )}

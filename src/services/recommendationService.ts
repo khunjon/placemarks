@@ -71,7 +71,8 @@ export class RecommendationService {
       limit = this.DEFAULT_LIMIT,
       timeContext,
       userPreference = 'any',
-      includeClosedPlaces = false
+      includeClosedPlaces = false,
+      savedPlacesOnly = true // Default to showing only saved places
     } = request;
 
     try {
@@ -105,16 +106,41 @@ export class RecommendationService {
 
       // Get user's saved places from lists for boosting
       const userSavedPlaces = await listsService.getAllPlacesFromUserLists(userId);
+      
+      // If no saved places and we're in saved-only mode, return early
+      if (savedPlacesOnly && userSavedPlaces.length === 0) {
+        return {
+          places: [],
+          hasMorePlaces: false,
+          totalAvailable: 0,
+          generatedAt: new Date(),
+          radiusKm: this.DEFAULT_RADIUS_KM,
+          excludedCheckedInCount: 0
+        };
+      }
 
-      // Get places from google_places_cache within radius, excluding checked-in places
-      // This works directly with Google Place IDs - no conversion needed
-      const candidatePlaces = await this.getCachedPlacesWithinRadius(
-        latitude,
-        longitude,
-        this.DEFAULT_RADIUS_KM,
-        userCheckedInPlaces,
-        limit * 3 // Get more candidates for better filtering with preferences
-      );
+      // Get places from google_places_cache within radius
+      let candidatePlaces;
+      
+      if (savedPlacesOnly) {
+        // Only get places that are in user's saved lists
+        candidatePlaces = await this.getSavedPlacesWithinRadius(
+          latitude,
+          longitude,
+          this.DEFAULT_RADIUS_KM,
+          userSavedPlaces,
+          userCheckedInPlaces
+        );
+      } else {
+        // Get all places as before
+        candidatePlaces = await this.getCachedPlacesWithinRadius(
+          latitude,
+          longitude,
+          this.DEFAULT_RADIUS_KM,
+          userCheckedInPlaces,
+          limit * 3 // Get more candidates for better filtering with preferences
+        );
+      }
 
       // Score and rank the places
       const scoredPlaces = this.scoreAndRankPlaces(
@@ -150,6 +176,121 @@ export class RecommendationService {
         radiusKm: this.DEFAULT_RADIUS_KM,
         excludedCheckedInCount: 0
       };
+    }
+  }
+
+  /**
+   * Get only saved places from Google Places cache within radius
+   * @param latitude - Center latitude
+   * @param longitude - Center longitude
+   * @param radiusKm - Radius in kilometers
+   * @param savedPlaceIds - Google Place IDs from user's lists
+   * @param excludePlaceIds - Google Place IDs to exclude (checked-in places)
+   * @returns Promise<any[]> - Array of cached place data
+   */
+  private async getSavedPlacesWithinRadius(
+    latitude: number,
+    longitude: number,
+    radiusKm: number,
+    savedPlaceIds: string[],
+    excludePlaceIds: string[]
+  ): Promise<any[]> {
+    try {
+      // If no saved places, return empty
+      if (savedPlaceIds.length === 0) {
+        return [];
+      }
+      
+      // Filter to only include saved places that aren't checked-in
+      const placeIdsToQuery = savedPlaceIds.filter(id => !excludePlaceIds.includes(id));
+      
+      if (placeIdsToQuery.length === 0) {
+        return [];
+      }
+      
+      
+      // Direct query to get ALL saved places without any filtering
+      const { data: savedPlaces, error } = await supabase
+        .from('google_places_cache')
+        .select(`
+          google_place_id,
+          name,
+          formatted_address,
+          rating,
+          user_ratings_total,
+          price_level,
+          types,
+          business_status,
+          geometry,
+          photo_urls,
+          website,
+          formatted_phone_number,
+          opening_hours,
+          current_opening_hours
+        `)
+        .in('google_place_id', placeIdsToQuery);
+      
+      if (error) {
+        console.error('[Recommendations] Error fetching saved places:', error);
+        return [];
+      }
+      
+      if (!savedPlaces || savedPlaces.length === 0) {
+        return [];
+      }
+      
+      
+      // Log which places were found
+      const foundIds = savedPlaces.map(p => p.google_place_id);
+      const missingIds = placeIdsToQuery.filter(id => !foundIds.includes(id));
+      
+      
+      // Filter out places with missing essential data
+      const validPlaces = savedPlaces.filter(place => {
+        if (!place.name || place.name.includes('Placeholder')) {
+          return false;
+        }
+        if (!place.google_place_id) {
+          return false;
+        }
+        return true;
+      });
+      
+      
+      // Add distance calculation to each place
+      const placesWithDistance = validPlaces.map(place => {
+        const location = place.geometry?.location || {};
+        const placeLat = location.lat;
+        const placeLng = location.lng;
+        
+        let distanceKm = 999; // Default far distance if coordinates missing
+        
+        if (placeLat && placeLng) {
+          distanceKm = this.calculateDistance(latitude, longitude, placeLat, placeLng);
+        } else {
+        }
+        
+        return {
+          ...place,
+          distance_km: distanceKm
+        };
+      });
+      
+      // Sort by distance but include ALL places
+      placesWithDistance.sort((a, b) => a.distance_km - b.distance_km);
+      
+      // Log distance distribution
+      const within5km = placesWithDistance.filter(p => p.distance_km <= 5).length;
+      const within10km = placesWithDistance.filter(p => p.distance_km <= 10).length;
+      const within15km = placesWithDistance.filter(p => p.distance_km <= 15).length;
+      
+      
+      // Return ALL saved places regardless of distance
+      return placesWithDistance;
+      
+    } catch (error) {
+      console.error('Error in getSavedPlacesWithinRadius:', error);
+      return [];
     }
   }
 
@@ -198,6 +339,7 @@ export class RecommendationService {
         query = query.not('google_place_id', 'in', `(${excludePlaceIds.map(id => `"${id}"`).join(',')})`);
       }
 
+
       // Use PostGIS spatial query for radius filtering
       const { data, error } = await supabase.rpc('get_google_places_within_radius', {
         center_lat: latitude,
@@ -208,13 +350,13 @@ export class RecommendationService {
       });
 
       if (error) {
-        console.error('Error fetching cached places:', error);
+        console.error('[Recommendations] Spatial query error:', error);
         
         // Fallback: get places without spatial filtering
         const { data: fallbackData, error: fallbackError } = await query.limit(limit);
         
         if (fallbackError) {
-          console.error('Fallback query also failed:', fallbackError);
+          console.error('[Recommendations] Fallback query also failed:', fallbackError);
           return [];
         }
         
@@ -281,17 +423,60 @@ export class RecommendationService {
     includeClosedPlaces: boolean = false,
     userSavedPlaces: string[] = []
   ): ScoredPlace[] {
-    // Define allowed place types for recommendations (food & drink only)
-    const allowedTypes = [
-      'restaurant', 'cafe', 'bar', 'bakery', 'coffee_shop',
-      'meal_takeaway', 'meal_delivery', 'food', 'brewery',
-      'wine_bar', 'night_club', 'bistro', 'pub', 'fast_food'
-    ];
+    // For saved-places-only mode, we don't filter by type since users saved these places explicitly
+    const isSavedPlacesOnly = places.every(place => userSavedPlaces.includes(place.google_place_id));
+    
 
     const scoredPlaces: ScoredPlace[] = places
-    // First filter to only food & drink places
+    // Skip type filtering entirely for saved places
     .filter(place => {
+      // If this is saved-places-only mode, don't filter anything
+      if (isSavedPlacesOnly) {
+        return true;
+      }
+      
+      // Otherwise apply normal filtering for mixed mode
       const types = place.types || [];
+      const placeName = place.name?.toLowerCase() || '';
+      const isInUserLists = userSavedPlaces.includes(place.google_place_id);
+      
+      // Skip ALL filtering for saved places
+      if (isInUserLists) {
+        return true;
+      }
+      
+      // Define allowed place types for non-saved places (food & drink only)
+      const allowedTypes = [
+        'restaurant', 'cafe', 'bar', 'bakery', 'coffee_shop',
+        'meal_takeaway', 'meal_delivery', 'food', 'brewery',
+        'wine_bar', 'night_club', 'bistro', 'pub', 'fast_food'
+      ];
+      
+      // List of shopping mall types to exclude
+      const mallTypes = [
+        'shopping_mall', 'shopping_center', 'department_store', 
+        'shopping_plaza', 'mall', 'outlet_mall', 'outlet_store'
+      ];
+      
+      // Known shopping mall names to exclude (case insensitive)
+      const knownMallNames = [
+        'mbk center', 'mbk', 'centralworld', 'central world', 'siam paragon',
+        'siam center', 'siam discovery', 'emporium', 'emquartier', 'terminal 21',
+        'iconsiam', 'icon siam', 'the mall', 'fashion island', 'mega bangna',
+        'seacon square', 'future park', 'central plaza', 'the emdistrict',
+        'samyan mitrtown', 'the commons', 'gateway', 'union mall'
+      ];
+      
+      // Exclude if it has any mall-related type
+      if (types.some((type: string) => mallTypes.includes(type.toLowerCase()))) {
+        return false;
+      }
+      
+      // Exclude if the name matches known malls
+      if (knownMallNames.some(mallName => placeName.includes(mallName))) {
+        return false;
+      }
+      
       // Check if place has at least one allowed type
       return types.some((type: string) => allowedTypes.includes(type));
     })
@@ -368,7 +553,7 @@ export class RecommendationService {
       // Apply boost for places in user's saved lists
       const isInUserLists = userSavedPlaces.includes(place.google_place_id);
       if (isInUserLists) {
-        score += 25; // Significant boost for saved places
+        score += 50; // Major boost for saved places
       }
 
       return {
@@ -395,19 +580,36 @@ export class RecommendationService {
         recommendation_score: Math.round(score * 100) / 100,
         photo_urls: place.photo_urls,
         website: place.website,
-        formatted_phone_number: place.formatted_phone_number
+        formatted_phone_number: place.formatted_phone_number,
+        isInUserLists
       };
     })
-    // Filter out closed places if not including them (but keep places opening soon)
+    // Filter out closed places if not including them (but keep places opening soon and saved places)
     .filter(place => {
       if (includeClosedPlaces) return true;
       if (place.isOpen === true) return true;
       if (place.isOpen === false && place.openingTime?.includes('Opens in')) return true; // Keep places opening soon
+      
+      // Always keep saved places regardless of open status
+      if (place.isInUserLists) {
+        if (place.isOpen === false) {
+        }
+        return true;
+      }
+      
+      if (place.isOpen === false) {
+      }
+      
       return place.isOpen !== false;
     })
-    // Apply aggressive preference filtering
+    // Apply preference filtering (but be lenient for saved places)
     .filter(place => {
       if (userPreference === 'any') return true;
+      
+      // Always include saved places regardless of preference
+      if (place.isInUserLists) {
+        return true;
+      }
       
       const types = place.types || [];
       
@@ -421,16 +623,91 @@ export class RecommendationService {
       }
       
       if (userPreference === 'drink') {
-        // Only include places focused on drinks (cafes, bars, etc)
-        const drinkTypes = ['cafe', 'coffee_shop', 'bar', 'night_club', 'brewery', 'wine_bar', 'pub'];
-        return types.some((type: string) => drinkTypes.includes(type));
+        // Be more inclusive for coffee places
+        const coffeeTypes = ['cafe', 'coffee_shop', 'bakery', 'breakfast_restaurant'];
+        const hasCoffeeType = types.some((type: string) => coffeeTypes.includes(type));
+        
+        // Also include places that might serve coffee based on name
+        const placeName = place.name?.toLowerCase() || '';
+        const coffeeKeywords = ['coffee', 'cafe', 'café', 'espresso', 'latte', 'cappuccino', 'barista'];
+        const hasCoffeeInName = coffeeKeywords.some(keyword => placeName.includes(keyword));
+        
+        if (hasCoffeeType || hasCoffeeInName) {
+          return true;
+        }
+        
+        return false;
       }
       
       return true;
     });
 
-    // Sort by recommendation score descending
-    return scoredPlaces.sort((a, b) => b.recommendation_score - a.recommendation_score);
+    // Sort places with saved places always first, then by recommendation score
+    const sortedPlaces = scoredPlaces.sort((a, b) => {
+      // Use the isInUserLists property we already set
+      const aIsSaved = a.isInUserLists || false;
+      const bIsSaved = b.isInUserLists || false;
+      
+      // If one is saved and the other isn't, saved place comes first
+      if (aIsSaved && !bIsSaved) return -1;
+      if (!aIsSaved && bIsSaved) return 1;
+      
+      // Otherwise sort by recommendation score
+      return b.recommendation_score - a.recommendation_score;
+    });
+    
+    // Log the top few places to verify sorting
+    console.log('[Recommendations] Top 3 places after sorting:');
+    sortedPlaces.slice(0, 3).forEach((place, index) => {
+      console.log(`  ${index + 1}. ${place.name} (saved: ${place.isInUserLists}, score: ${place.recommendation_score})`);
+    });
+    
+    // Skip deduplication for saved-places-only mode
+    if (isSavedPlacesOnly) {
+      const savedPlacesInResults = sortedPlaces.filter(p => p.isInUserLists).length;
+      console.log(`[Recommendations] ${savedPlacesInResults} saved places in final results`);
+      return sortedPlaces;
+    }
+    
+    // For mixed mode, apply deduplication
+    const deduplicatedPlaces: ScoredPlace[] = [];
+    const seenPlaces = new Map<string, ScoredPlace>(); // Map of normalized name to best place
+    
+    for (const place of sortedPlaces) {
+      // More aggressive normalization for deduplication
+      const normalizedName = this.normalizePlaceName(place.name);
+      
+      // Check if this place is in user's saved lists
+      const isInUserLists = userSavedPlaces.includes(place.google_place_id);
+      
+      // If we've seen a similar name
+      const existingPlace = seenPlaces.get(normalizedName);
+      
+      if (existingPlace) {
+        // If this place is saved and the existing one isn't, replace it
+        if (isInUserLists && !existingPlace.isInUserLists) {
+          seenPlaces.set(normalizedName, place);
+        }
+        // If both are saved or both aren't, keep the one with better score
+        else if (isInUserLists === existingPlace.isInUserLists && place.recommendation_score > existingPlace.recommendation_score) {
+          seenPlaces.set(normalizedName, place);
+        }
+        // Otherwise keep the existing one
+      } else {
+        // First time seeing this normalized name
+        seenPlaces.set(normalizedName, place);
+      }
+    }
+    
+    // Convert map values back to array
+    deduplicatedPlaces.push(...seenPlaces.values());
+    
+    
+    // Log how many saved places made it through
+    const savedPlacesInResults = deduplicatedPlaces.filter(p => p.isInUserLists).length;
+    console.log(`[Recommendations] ${savedPlacesInResults} saved places in final results`);
+    
+    return deduplicatedPlaces;
   }
 
   /**
@@ -566,16 +843,13 @@ export class RecommendationService {
         adjustedScore += 3; // Small boost for cafes (some serve food)
       }
     } else if (userPreference === 'drink') {
-      // Boost cafes, bars, and drink places
-      const primaryDrinkTypes = ['cafe', 'coffee_shop', 'bar', 'wine_bar', 'brewery', 'pub'];
-      const secondaryDrinkTypes = ['night_club'];
+      // Boost coffee places specifically
+      const primaryCoffeeTypes = ['cafe', 'coffee_shop'];
       
-      if (types.some((type: string) => primaryDrinkTypes.includes(type))) {
-        adjustedScore += 15; // Significant boost for primary drink places
-      } else if (types.some((type: string) => secondaryDrinkTypes.includes(type))) {
-        adjustedScore += 10; // Medium boost for nightclubs
-      } else if (types.includes('restaurant')) {
-        adjustedScore += 3; // Small boost for restaurants (they serve drinks too)
+      if (types.some((type: string) => primaryCoffeeTypes.includes(type))) {
+        adjustedScore += 20; // Major boost for coffee places
+      } else if (types.includes('bakery')) {
+        adjustedScore += 5; // Small boost for bakeries (often serve coffee)
       }
     }
 
@@ -609,6 +883,47 @@ export class RecommendationService {
    */
   private toRadians(degrees: number): number {
     return degrees * (Math.PI / 180);
+  }
+
+  /**
+   * Normalize a place name for deduplication
+   * Handles various patterns in restaurant names
+   * @param name - The place name to normalize
+   * @returns string - Normalized name
+   */
+  private normalizePlaceName(name: string): string {
+    let normalized = name
+      // Remove location indicators and everything after them
+      .replace(/\s*[@]\s*.+$/gi, '') // @ location
+      .replace(/\s*(at|near|in)\s+.+$/gi, '') // at/near/in location
+      .replace(/\s*[-–—]\s*.+$/g, '') // Dash and everything after
+      .replace(/\s*\(.+\)$/g, '') // Parenthetical content
+      
+      // Remove branch indicators
+      .replace(/\s*(สาขา|Branch|บรานช์|outlet|store).+$/gi, '')
+      
+      // Remove common suffixes
+      .replace(/\s+(Restaurant|Cafe|Coffee|Shop|Bar|Bistro|Kitchen|Eatery|Place|House|เรสเตอรองท์|ร้านอาหาร|คาเฟ่|ร้าน)$/gi, '')
+      
+      // Remove location names that might be appended directly (without separators)
+      .replace(/\s*(centralworld|central world|paragon|emporium|emquartier|terminal 21|siam|silom|sukhumvit|thonglor|ekkamai|asoke|bangkok|bkk)$/gi, '')
+      
+      // Remove numbers at the end
+      .replace(/\s*\d+$/g, '')
+      
+      // Normalize whitespace
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+    
+    // Special handling for Thai names - remove tones and normalize
+    // This is a simple approach; a more sophisticated one would use proper transliteration
+    normalized = normalized
+      .replace(/[่้๊๋์]/g, '') // Remove Thai tone marks
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    return normalized;
   }
 
   /**
