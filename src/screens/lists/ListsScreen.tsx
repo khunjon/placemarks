@@ -89,7 +89,15 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
           // Immediately show cached data
           const defaultListsData = cached.userLists.filter(list => list.is_default);
           const customListsData = cached.userLists.filter(list => !list.is_default);
-          setDefaultLists(defaultListsData);
+          
+          // Sort default lists to ensure Favorites comes before Want to Go
+          const sortedDefaultLists = defaultListsData.sort((a, b) => {
+            if (a.default_list_type === 'favorites') return -1;
+            if (b.default_list_type === 'favorites') return 1;
+            return 0;
+          });
+          
+          setDefaultLists(sortedDefaultLists);
           setCustomLists(customListsData);
           setLoading(false);
           
@@ -118,7 +126,14 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       const defaultListsData = await listsService.getDefaultLists(user.id);
       const customListsData = await listsService.getCustomLists(user.id);
       
-      setDefaultLists(defaultListsData);
+      // Sort default lists to ensure Favorites comes before Want to Go
+      const sortedDefaultLists = defaultListsData.sort((a, b) => {
+        if (a.default_list_type === 'favorites') return -1;
+        if (b.default_list_type === 'favorites') return 1;
+        return 0;
+      });
+      
+      setDefaultLists(sortedDefaultLists);
       setCustomLists(customListsData);
       
       // Cache the loaded data
@@ -138,8 +153,15 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       const defaultListsData = await listsService.getDefaultLists(user.id);
       const customListsData = await listsService.getCustomLists(user.id);
       
+      // Sort default lists to ensure Favorites comes before Want to Go
+      const sortedDefaultLists = defaultListsData.sort((a, b) => {
+        if (a.default_list_type === 'favorites') return -1;
+        if (b.default_list_type === 'favorites') return 1;
+        return 0;
+      });
+      
       // Update state with fresh data
-      setDefaultLists(defaultListsData);
+      setDefaultLists(sortedDefaultLists);
       setCustomLists(customListsData);
       
       // Update cache with fresh data

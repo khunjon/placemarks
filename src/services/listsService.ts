@@ -98,7 +98,7 @@ export class ListsService {
         .eq('user_id', userId)
         // Note: is_curated column doesn't exist in user_lists_with_counts view
         // This view should only contain user lists, not curated lists
-        .order('created_at', { ascending: false });
+        .order('updated_at', { ascending: false });
 
       if (error) {
         throw ErrorFactory.database(
@@ -169,7 +169,7 @@ export class ListsService {
         `)
         .eq('user_id', userId)
         .eq('is_curated', false)
-        .order('created_at', { ascending: false });
+        .order('updated_at', { ascending: false });
 
       if (error) {
         throw ErrorFactory.database(
