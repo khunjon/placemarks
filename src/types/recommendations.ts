@@ -71,4 +71,5 @@ export interface RecommendationResponse {
   generatedAt: Date;
   radiusKm: number;
   excludedCheckedInCount?: number;
+  requestId?: string; // Added for feedback tracking
 } 

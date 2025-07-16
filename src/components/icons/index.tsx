@@ -81,6 +81,8 @@ export const DollarSign = createIcon(MaterialIcons, 'attach-money');
 export const Map = createIcon(MaterialIcons, 'map');
 export const BarChart3 = createIcon(MaterialIcons, 'bar-chart');
 export const Lock = createIcon(MaterialIcons, 'lock');
+export const ThumbsUp = createIcon(MaterialIcons, 'thumb-up');
+export const ThumbsDown = createIcon(MaterialIcons, 'thumb-down');
 
 // Legacy compatibility - some components might import these
 export const LucideIcon = MaterialIcons;

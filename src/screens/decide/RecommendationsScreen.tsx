@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, Clock, Coffee, Utensils, Wine, ShoppingBag, Sparkles } from '../../components/icons';
+import { MapPin, Clock, Coffee, Utensils, Wine, ShoppingBag, Sparkles, ThumbsUp, ThumbsDown } from '../../components/icons';
 import { DarkTheme } from '../../constants/theme';
 import type { DecideStackScreenProps } from '../../navigation/types';
 import { createValidatedCityContext, CityContext } from '../../services/cityContext';
@@ -14,6 +14,8 @@ import { useLocation } from '../../hooks/useLocation';
 import { useAuth } from '../../services/auth-context';
 import { locationUtils } from '../../utils/location';
 import { PlaceNavigationHelper } from '../../components/places';
+import analyticsService from '../../services/analytics';
+import { AnalyticsEventName } from '../../types/analytics';
 
 type RecommendationsScreenProps = DecideStackScreenProps<'Recommendations'>;
 
@@ -53,6 +55,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
   const [databaseRecommendations, setDatabaseRecommendations] = useState<RecommendationResponse | null>(null);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [userPreference, setUserPreference] = useState<UserPreference>('any');
+  const [feedbackGiven, setFeedbackGiven] = useState<{ [key: string]: 'liked' | 'disliked' }>({});
 
   // Update time context every minute
   useEffect(() => {
@@ -82,6 +85,9 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
       loadRecommendations();
     }
   }, [location, cityContext, timeContext, user, userPreference]);
+  
+  // Don't clear feedback when preference changes - maintain visual state
+  // This ensures downvoted places stay visually marked across preference switches
 
   const loadRecommendations = async () => {
     if (!location || !cityContext || !user) return;
@@ -119,7 +125,33 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
     }
   };
 
-  const handleNavigateToPlace = (googlePlaceId: string, placeName: string) => {
+  const handleNavigateToPlace = async (googlePlaceId: string, placeName: string, position: number) => {
+    // Track 'viewed' action when user taps to see place details
+    if (databaseRecommendations?.requestId && user) {
+      const instanceId = await recommendationService.getRecommendationInstance(
+        databaseRecommendations.requestId,
+        googlePlaceId
+      );
+      
+      if (instanceId) {
+        await recommendationService.recordRecommendationFeedback(
+          instanceId,
+          user.id,
+          'viewed'
+        );
+      }
+    }
+    
+    // Track analytics event
+    await analyticsService.track(AnalyticsEventName.RECOMMENDATION_VIEWED, {
+      recommendation_request_id: databaseRecommendations?.requestId,
+      place_id: googlePlaceId,
+      place_name: placeName,
+      position,
+      user_preference: userPreference,
+      time_of_day: timeContext.timeOfDay,
+    });
+    
     // Navigate to PlaceInListDetail since DecideStack doesn't have PlaceDetails
     navigation.navigate('PlaceInListDetail', {
       placeId: googlePlaceId,
@@ -127,6 +159,43 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
       listName: 'Recommendations',
       source: 'suggestion',
     });
+  };
+
+  const handleFeedback = async (googlePlaceId: string, action: 'liked' | 'disliked', position: number, placeName: string) => {
+    if (!databaseRecommendations?.requestId || !user) return;
+    
+    // Get the instance ID for this place
+    const instanceId = await recommendationService.getRecommendationInstance(
+      databaseRecommendations.requestId,
+      googlePlaceId
+    );
+    
+    if (!instanceId) return;
+    
+    // Record the feedback
+    const success = await recommendationService.recordRecommendationFeedback(
+      instanceId,
+      user.id,
+      action
+    );
+    
+    if (success) {
+      // Update local state to show feedback was given
+      // Use composite key to make feedback context-specific
+      const feedbackKey = `${googlePlaceId}-${userPreference}`;
+      setFeedbackGiven(prev => ({ ...prev, [feedbackKey]: action }));
+      
+      // Track analytics event
+      await analyticsService.track(AnalyticsEventName.RECOMMENDATION_FEEDBACK, {
+        recommendation_request_id: databaseRecommendations.requestId,
+        place_id: googlePlaceId,
+        place_name: placeName,
+        position,
+        action,
+        user_preference: userPreference,
+        time_of_day: timeContext.timeOfDay,
+      });
+    }
   };
 
   // UI helper functions - simplified for direct Google Place ID usage
@@ -361,6 +430,25 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
           paddingTop: DarkTheme.spacing.sm,
           paddingBottom: DarkTheme.spacing.lg,
         }}>
+          
+          {/* Feedback Context Text */}
+          {databaseRecommendations && databaseRecommendations.places.length > 0 && (
+            <Text style={[
+              DarkTheme.typography.caption1,
+              { 
+                color: DarkTheme.colors.semantic.secondaryLabel,
+                textAlign: 'center',
+                marginBottom: DarkTheme.spacing.sm,
+                fontStyle: 'italic',
+              }
+            ]}>
+              {userPreference === 'drink' 
+                ? 'Rate these as coffee recommendations'
+                : userPreference === 'eat'
+                ? 'Rate these as food recommendations'
+                : 'Rate these recommendations'}
+            </Text>
+          )}
 
           {/* Recommendations Content */}
           {recommendationsLoading ? (
@@ -429,8 +517,9 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
             </View>
           ) : databaseRecommendations && databaseRecommendations.places.length > 0 ? (
             <View>
-              {databaseRecommendations.places.map((place) => {
+              {databaseRecommendations.places.map((place, index) => {
                 const category = getDatabasePlaceCategory(place.types);
+                const position = index + 1; // Position in recommendation list
                 return (
                   <TouchableOpacity
                     key={place.google_place_id}
@@ -442,7 +531,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                       flexDirection: 'row',
                       alignItems: 'center',
                     }}
-                    onPress={() => handleNavigateToPlace(place.google_place_id, place.name)}
+                    onPress={() => handleNavigateToPlace(place.google_place_id, place.name, position)}
                   >
                     {/* Category Icon */}
                     <View style={{
@@ -568,6 +657,51 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                           </View>
                         )}
                       </View>
+                    </View>
+
+                    {/* Feedback Buttons */}
+                    <View style={{
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginLeft: DarkTheme.spacing.sm,
+                    }}>
+                      <TouchableOpacity
+                        onPress={() => handleFeedback(place.google_place_id, 'liked', position, place.name)}
+                        disabled={!!feedbackGiven[`${place.google_place_id}-${userPreference}`]}
+                        style={{
+                          opacity: feedbackGiven[`${place.google_place_id}-${userPreference}`] ? 0.5 : 1,
+                          marginBottom: DarkTheme.spacing.xs,
+                        }}
+                      >
+                        <ThumbsUp 
+                          size={24} 
+                          color={
+                            feedbackGiven[`${place.google_place_id}-${userPreference}`] === 'liked' 
+                              ? DarkTheme.colors.status.success 
+                              : DarkTheme.colors.semantic.tertiaryLabel
+                          }
+                          strokeWidth={2}
+                        />
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity
+                        onPress={() => handleFeedback(place.google_place_id, 'disliked', position, place.name)}
+                        disabled={!!feedbackGiven[`${place.google_place_id}-${userPreference}`]}
+                        style={{
+                          opacity: feedbackGiven[`${place.google_place_id}-${userPreference}`] ? 0.5 : 1,
+                        }}
+                      >
+                        <ThumbsDown 
+                          size={24} 
+                          color={
+                            feedbackGiven[`${place.google_place_id}-${userPreference}`] === 'disliked' 
+                              ? DarkTheme.colors.status.error 
+                              : DarkTheme.colors.semantic.tertiaryLabel
+                          }
+                          strokeWidth={2}
+                        />
+                      </TouchableOpacity>
                     </View>
                   </TouchableOpacity>
                 );

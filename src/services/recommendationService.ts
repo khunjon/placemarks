@@ -156,13 +156,27 @@ export class RecommendationService {
       // Take top results up to limit
       const topPlaces = scoredPlaces.slice(0, limit);
 
+      // Create recommendation request entry in database
+      const requestId = await this.createRecommendationRequest(userId, {
+        latitude,
+        longitude,
+        userPreference,
+        timeContext
+      });
+
+      // Log each recommendation instance
+      if (requestId && topPlaces.length > 0) {
+        await this.logRecommendationInstances(requestId, topPlaces);
+      }
+
       return {
         places: topPlaces,
         hasMorePlaces: scoredPlaces.length > limit,
         totalAvailable: availabilityResult.placeCount,
         generatedAt: new Date(),
         radiusKm: this.DEFAULT_RADIUS_KM,
-        excludedCheckedInCount: userCheckedInPlaces.length
+        excludedCheckedInCount: userCheckedInPlaces.length,
+        requestId // Include request ID for feedback tracking
       };
 
     } catch (error) {
@@ -942,6 +956,151 @@ export class RecommendationService {
 
     if (longitude < -180 || longitude > 180) {
       throw new Error('Longitude must be between -180 and 180 degrees');
+    }
+  }
+
+  /**
+   * Create a recommendation request entry in the database
+   * @param userId - User ID
+   * @param context - Request context
+   * @returns Promise<string | null> - Request ID or null if failed
+   */
+  private async createRecommendationRequest(
+    userId: string,
+    context: {
+      latitude: number;
+      longitude: number;
+      userPreference: UserPreference;
+      timeContext?: TimeContext;
+    }
+  ): Promise<string | null> {
+    try {
+      const { data, error } = await supabase
+        .from('recommendation_requests')
+        .insert({
+          user_id: userId,
+          context: {
+            location: {
+              latitude: context.latitude,
+              longitude: context.longitude
+            },
+            timestamp: new Date().toISOString()
+          },
+          preferences: {
+            userPreference: context.userPreference,
+            timeOfDay: context.timeContext?.timeOfDay,
+            isWeekend: context.timeContext?.isWeekend
+          }
+        })
+        .select('id')
+        .single();
+
+      if (error) {
+        console.error('Error creating recommendation request:', error);
+        return null;
+      }
+
+      return data?.id || null;
+    } catch (error) {
+      console.error('Error in createRecommendationRequest:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Log recommendation instances to the database
+   * @param requestId - Recommendation request ID
+   * @param places - Array of scored places
+   */
+  private async logRecommendationInstances(
+    requestId: string,
+    places: ScoredPlace[]
+  ): Promise<void> {
+    try {
+      const instances = places.map((place, index) => ({
+        request_id: requestId,
+        google_place_id: place.google_place_id,
+        position: index + 1,
+        score: place.recommendation_score
+      }));
+
+      const { error } = await supabase
+        .from('recommendation_instances')
+        .insert(instances);
+
+      if (error) {
+        console.error('Error logging recommendation instances:', error);
+      }
+    } catch (error) {
+      console.error('Error in logRecommendationInstances:', error);
+    }
+  }
+
+  /**
+   * Record user feedback on a recommendation
+   * @param instanceId - Recommendation instance ID
+   * @param userId - User ID
+   * @param action - Feedback action (liked, disliked, viewed)
+   * @returns Promise<boolean> - Success status
+   */
+  async recordRecommendationFeedback(
+    instanceId: string,
+    userId: string,
+    action: 'liked' | 'disliked' | 'viewed'
+  ): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('recommendation_feedback')
+        .insert({
+          instance_id: instanceId,
+          user_id: userId,
+          action
+        });
+
+      if (error) {
+        // Check if it's a unique constraint violation (duplicate feedback)
+        if (error.code === '23505') {
+          console.log('Feedback already recorded for this instance');
+          return true; // Consider it successful since feedback exists
+        }
+        console.error('Error recording recommendation feedback:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error in recordRecommendationFeedback:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get recommendation instance by place ID and request ID
+   * @param requestId - Recommendation request ID
+   * @param googlePlaceId - Google Place ID
+   * @returns Promise<string | null> - Instance ID or null if not found
+   */
+  async getRecommendationInstance(
+    requestId: string,
+    googlePlaceId: string
+  ): Promise<string | null> {
+    try {
+      const { data, error } = await supabase
+        .from('recommendation_instances')
+        .select('id')
+        .eq('request_id', requestId)
+        .eq('google_place_id', googlePlaceId)
+        .single();
+
+      if (error) {
+        console.error('Error getting recommendation instance:', error);
+        return null;
+      }
+
+      return data?.id || null;
+    } catch (error) {
+      console.error('Error in getRecommendationInstance:', error);
+      return null;
     }
   }
 }

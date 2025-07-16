@@ -93,6 +93,26 @@ export interface SearchPerformedEvent extends BaseAnalyticsEvent {
   search_source: 'main_search' | 'place_search' | 'list_search';
 }
 
+// Recommendation events
+export interface RecommendationViewedEvent extends BaseAnalyticsEvent {
+  recommendation_request_id?: string;
+  place_id: string;
+  place_name?: string;
+  position: number;
+  user_preference: 'eat' | 'drink' | 'any';
+  time_of_day?: string;
+}
+
+export interface RecommendationFeedbackEvent extends BaseAnalyticsEvent {
+  recommendation_request_id?: string;
+  place_id: string;
+  place_name?: string;
+  position: number;
+  action: 'liked' | 'disliked';
+  user_preference: 'eat' | 'drink' | 'any';
+  time_of_day?: string;
+}
+
 // Error events
 export interface ErrorOccurredEvent extends BaseAnalyticsEvent {
   error_type: 'network' | 'authentication' | 'permission' | 'validation' | 'unknown';
@@ -123,6 +143,8 @@ export type AnalyticsEvent =
   | CheckInCreatedEvent
   | CheckInViewedEvent
   | SearchPerformedEvent
+  | RecommendationViewedEvent
+  | RecommendationFeedbackEvent
   | ErrorOccurredEvent
   | PerformanceEvent;
 
@@ -138,6 +160,8 @@ export enum AnalyticsEventName {
   CHECK_IN_CREATED = 'check_in_created',
   CHECK_IN_VIEWED = 'check_in_viewed',
   SEARCH_PERFORMED = 'search_performed',
+  RECOMMENDATION_VIEWED = 'recommendation_viewed',
+  RECOMMENDATION_FEEDBACK = 'recommendation_feedback',
   ERROR_OCCURRED = 'error_occurred',
   PERFORMANCE = 'performance'
 }
