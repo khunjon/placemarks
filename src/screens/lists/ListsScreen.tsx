@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, ScrollView, Modal, Alert, RefreshControl, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Plus, List, Zap, Heart, TrendingUp, Clock, MapPin, ChevronRight, Bookmark } from '../../components/icons';
+import { Plus, List, Zap, Heart, TrendingUp, ChevronRight, Bookmark } from '../../components/icons';
 import { Colors } from '../../constants/Colors';
 import { Spacing } from '../../constants/Spacing';
 import { DarkTheme } from '../../constants/theme';
@@ -289,7 +289,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     placeCount: list.place_count,
     icon: list.icon,
     color: list.color,
-    previewPlaces: list.places.slice(0, 3).map(p => p.place.name),
+    previewPlaces: list.places.slice(0, 3).map(p => p.place.name).filter((name): name is string => name !== undefined),
     isEditable: true,
     onPress: () => handleNavigateToList(list.id, list.name),
     onDelete: () => handleDeleteList(list.id, list.name),
@@ -572,119 +572,6 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
                     </Typography>
                     <Body color="secondary">
                       Places you visit most
-                    </Body>
-                  </View>
-                </View>
-                
-                <ChevronRight 
-                  size={20} 
-                  color={DarkTheme.colors.semantic.tertiaryLabel}
-                  strokeWidth={2}
-                />
-              </View>
-            </Card>
-          </TouchableOpacity>
-
-                    {/* Placeholder Smart Lists */}
-          <TouchableOpacity
-            onPress={() => {
-              Alert.alert('Coming Soon', 'This smart list will be available soon!');
-            }}
-            activeOpacity={0.7}
-          >
-            <Card padding="md" style={{ marginBottom: Spacing.md, opacity: 0.6 }}>
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}>
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  flex: 1,
-                }}>
-                  <View style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: Spacing.sm,
-                    backgroundColor: `${Colors.neutral[500]}20`,
-                  }}>
-                    <Clock 
-                      size={20} 
-                      color={Colors.neutral[500]}
-                      strokeWidth={2}
-                    />
-                  </View>
-                  
-                  <View style={{ flex: 1 }}>
-                    <Typography variant="headline" style={{ 
-                      fontWeight: '600',
-                      color: Colors.neutral[500],
-                      marginBottom: 2,
-                    }}>
-                      Try Next
-                    </Typography>
-                    <Body color="secondary">
-                      Places saved but never visited
-                    </Body>
-                  </View>
-                </View>
-                
-                <ChevronRight 
-                  size={20} 
-                  color={DarkTheme.colors.semantic.tertiaryLabel}
-                  strokeWidth={2}
-                />
-              </View>
-            </Card>
-          </TouchableOpacity>
-
-                    <TouchableOpacity
-            onPress={() => {
-              Alert.alert('Coming Soon', 'This smart list will be available soon!');
-            }}
-            activeOpacity={0.7}
-          >
-            <Card padding="md" style={{ opacity: 0.6 }}>
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}>
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  flex: 1,
-                }}>
-                  <View style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: Spacing.sm,
-                    backgroundColor: `${Colors.neutral[500]}20`,
-                  }}>
-                    <MapPin 
-                      size={20} 
-                      color={Colors.neutral[500]}
-                      strokeWidth={2}
-                    />
-                  </View>
-                  
-                  <View style={{ flex: 1 }}>
-                    <Typography variant="headline" style={{ 
-                      fontWeight: '600',
-                      color: Colors.neutral[500],
-                      marginBottom: 2,
-                    }}>
-                      Weekend Spots
-                    </Typography>
-                    <Body color="secondary">
-                      Your favorite weekend destinations
                     </Body>
                   </View>
                 </View>
