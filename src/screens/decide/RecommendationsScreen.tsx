@@ -1,7 +1,7 @@
 // ✅ Updated for Google Place ID architecture
 // Uses recommendationService and navigates directly to PlaceDetails with Google Place IDs
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MapPin, Clock, Coffee, Utensils, Wine, ShoppingBag, Sparkles, ThumbsUp, ThumbsDown } from '../../components/icons';
 import { DarkTheme } from '../../constants/theme';
@@ -56,6 +56,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [userPreference, setUserPreference] = useState<UserPreference>('any');
   const [feedbackGiven, setFeedbackGiven] = useState<{ [key: string]: 'liked' | 'disliked' }>({});
+  const [refreshing, setRefreshing] = useState(false);
 
   // Update time context every minute
   useEffect(() => {
@@ -122,6 +123,30 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
       });
     } finally {
       setRecommendationsLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    if (!location || !cityContext || !user) return;
+    
+    setRefreshing(true);
+    
+    try {
+      // Clear current recommendations to show loading state
+      setDatabaseRecommendations(null);
+      
+      // Refresh location if using fallback
+      if (isUsingFallback) {
+        await forceLocationRetry();
+      }
+      
+      // Load fresh recommendations
+      await loadRecommendations();
+      
+    } catch (error) {
+      console.error('Error refreshing recommendations:', error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -320,6 +345,14 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: DarkTheme.spacing.xl }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={handleRefresh}
+            tintColor={DarkTheme.colors.bangkok.gold}
+            colors={[DarkTheme.colors.bangkok.gold]} // Android
+          />
+        }
       >
         {/* User Preference Selection */}
         <View style={{
@@ -433,21 +466,34 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
           
           {/* Feedback Context Text */}
           {databaseRecommendations && databaseRecommendations.places.length > 0 && (
-            <Text style={[
-              DarkTheme.typography.caption1,
-              { 
-                color: DarkTheme.colors.semantic.secondaryLabel,
-                textAlign: 'center',
-                marginBottom: DarkTheme.spacing.sm,
-                fontStyle: 'italic',
-              }
-            ]}>
-              {userPreference === 'drink' 
-                ? 'Rate these as coffee recommendations'
-                : userPreference === 'eat'
-                ? 'Rate these as food recommendations'
-                : 'Rate these recommendations'}
-            </Text>
+            <View style={{ marginBottom: DarkTheme.spacing.sm }}>
+              <Text style={[
+                DarkTheme.typography.caption1,
+                { 
+                  color: DarkTheme.colors.semantic.secondaryLabel,
+                  textAlign: 'center',
+                  fontStyle: 'italic',
+                }
+              ]}>
+                {userPreference === 'drink' 
+                  ? 'Rate these as coffee recommendations'
+                  : userPreference === 'eat'
+                  ? 'Rate these as food recommendations'
+                  : 'Rate these recommendations'}
+              </Text>
+              {databaseRecommendations.excludedCheckedInCount && databaseRecommendations.excludedCheckedInCount > 0 && (
+                <Text style={[
+                  DarkTheme.typography.caption2,
+                  { 
+                    color: DarkTheme.colors.semantic.tertiaryLabel,
+                    textAlign: 'center',
+                    marginTop: DarkTheme.spacing.xs,
+                  }
+                ]}>
+                  Hiding {databaseRecommendations.excludedCheckedInCount} places you've visited or disliked
+                </Text>
+              )}
+            </View>
           )}
 
           {/* Recommendations Content */}

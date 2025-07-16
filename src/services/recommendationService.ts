@@ -103,6 +103,14 @@ export class RecommendationService {
 
       // Get user's checked-in places to exclude from recommendations
       const userCheckedInPlaces = await this.getUserCheckedInPlaces(userId);
+      
+      // Get user's disliked places to exclude from recommendations
+      const userDislikedPlaces = await this.getUserDislikedPlaces(userId);
+      
+      // Combine all excluded places (checked-in + disliked)
+      const excludedPlaces = [...new Set([...userCheckedInPlaces, ...userDislikedPlaces])];
+      
+      console.log(`[Recommendations] Excluding ${excludedPlaces.length} places (${userCheckedInPlaces.length} checked-in, ${userDislikedPlaces.length} disliked)`);
 
       // Get user's saved places from lists for boosting
       const userSavedPlaces = await listsService.getAllPlacesFromUserLists(userId);
@@ -129,7 +137,7 @@ export class RecommendationService {
           longitude,
           this.DEFAULT_RADIUS_KM,
           userSavedPlaces,
-          userCheckedInPlaces
+          excludedPlaces
         );
       } else {
         // Get all places as before
@@ -137,7 +145,7 @@ export class RecommendationService {
           latitude,
           longitude,
           this.DEFAULT_RADIUS_KM,
-          userCheckedInPlaces,
+          excludedPlaces,
           limit * 3 // Get more candidates for better filtering with preferences
         );
       }
@@ -175,7 +183,7 @@ export class RecommendationService {
         totalAvailable: availabilityResult.placeCount,
         generatedAt: new Date(),
         radiusKm: this.DEFAULT_RADIUS_KM,
-        excludedCheckedInCount: userCheckedInPlaces.length,
+        excludedCheckedInCount: excludedPlaces.length,
         requestId // Include request ID for feedback tracking
       };
 
@@ -199,7 +207,7 @@ export class RecommendationService {
    * @param longitude - Center longitude
    * @param radiusKm - Radius in kilometers
    * @param savedPlaceIds - Google Place IDs from user's lists
-   * @param excludePlaceIds - Google Place IDs to exclude (checked-in places)
+   * @param excludePlaceIds - Google Place IDs to exclude (checked-in and disliked places)
    * @returns Promise<any[]> - Array of cached place data
    */
   private async getSavedPlacesWithinRadius(
@@ -413,6 +421,38 @@ export class RecommendationService {
 
     } catch (error) {
       console.error('Error in getUserCheckedInPlaces:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get user's disliked Google Place IDs to exclude from recommendations
+   * @param userId - User ID
+   * @returns Promise<string[]> - Array of Google Place IDs
+   */
+  private async getUserDislikedPlaces(userId: string): Promise<string[]> {
+    try {
+      // Use the optimized database function
+      const { data, error } = await supabase.rpc('get_user_disliked_places', {
+        user_uuid: userId
+      });
+
+      if (error) {
+        console.error('Error fetching user disliked places:', error);
+        return [];
+      }
+
+      // Extract Google Place IDs
+      const placeIds = data?.map((item: any) => item.google_place_id).filter(Boolean) || [];
+      
+      if (placeIds.length > 0) {
+        console.log(`[Recommendations] Found ${placeIds.length} disliked places to exclude`);
+      }
+
+      return placeIds;
+
+    } catch (error) {
+      console.error('Error in getUserDislikedPlaces:', error);
       return [];
     }
   }
@@ -1101,6 +1141,36 @@ export class RecommendationService {
     } catch (error) {
       console.error('Error in getRecommendationInstance:', error);
       return null;
+    }
+  }
+
+  /**
+   * Clear user's recommendation feedback
+   * @param userId - User ID
+   * @param feedbackType - Type of feedback to clear: 'all', 'liked', or 'disliked'
+   * @returns Promise<number> - Number of feedback entries cleared
+   */
+  async clearUserFeedback(
+    userId: string,
+    feedbackType: 'all' | 'liked' | 'disliked' = 'all'
+  ): Promise<number> {
+    try {
+      const { data, error } = await supabase.rpc('clear_user_recommendation_feedback', {
+        user_uuid: userId,
+        feedback_type: feedbackType
+      });
+
+      if (error) {
+        console.error('Error clearing user feedback:', error);
+        return 0;
+      }
+
+      console.log(`[Recommendations] Cleared ${data || 0} ${feedbackType} feedback entries for user`);
+      return data || 0;
+
+    } catch (error) {
+      console.error('Error in clearUserFeedback:', error);
+      return 0;
     }
   }
 }
