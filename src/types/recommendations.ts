@@ -70,6 +70,6 @@ export interface RecommendationResponse {
   totalAvailable?: number;
   generatedAt: Date;
   radiusKm: number;
-  excludedCheckedInCount?: number;
+  excludedDislikedCount?: number;
   requestId?: string; // Added for feedback tracking
 } 

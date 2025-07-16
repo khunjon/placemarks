@@ -119,7 +119,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
         hasMorePlaces: false,
         generatedAt: new Date(),
         radiusKm: 15,
-        excludedCheckedInCount: 0
+        excludedDislikedCount: 0
       });
     } finally {
       setRecommendationsLoading(false);
@@ -481,7 +481,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                   ? 'Rate these as food recommendations'
                   : 'Rate these recommendations'}
               </Text>
-              {databaseRecommendations.excludedCheckedInCount && databaseRecommendations.excludedCheckedInCount > 0 && (
+              {databaseRecommendations.excludedDislikedCount && databaseRecommendations.excludedDislikedCount > 0 && (
                 <Text style={[
                   DarkTheme.typography.caption2,
                   { 
@@ -490,7 +490,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                     marginTop: DarkTheme.spacing.xs,
                   }
                 ]}>
-                  Hiding {databaseRecommendations.excludedCheckedInCount} places you've visited or disliked
+                  Hiding {databaseRecommendations.excludedDislikedCount} places you've disliked
                 </Text>
               )}
             </View>

@@ -97,20 +97,17 @@ export class RecommendationService {
           totalAvailable: availabilityResult.placeCount,
           generatedAt: new Date(),
           radiusKm: this.DEFAULT_RADIUS_KM,
-          excludedCheckedInCount: 0
+          excludedDislikedCount: 0
         };
       }
 
-      // Get user's checked-in places to exclude from recommendations
-      const userCheckedInPlaces = await this.getUserCheckedInPlaces(userId);
-      
       // Get user's disliked places to exclude from recommendations
       const userDislikedPlaces = await this.getUserDislikedPlaces(userId);
       
-      // Combine all excluded places (checked-in + disliked)
-      const excludedPlaces = [...new Set([...userCheckedInPlaces, ...userDislikedPlaces])];
+      // Only exclude disliked places (not checked-in places)
+      const excludedPlaces = [...userDislikedPlaces];
       
-      console.log(`[Recommendations] Excluding ${excludedPlaces.length} places (${userCheckedInPlaces.length} checked-in, ${userDislikedPlaces.length} disliked)`);
+      console.log(`[Recommendations] Excluding ${excludedPlaces.length} disliked places`);
 
       // Get user's saved places from lists for boosting
       const userSavedPlaces = await listsService.getAllPlacesFromUserLists(userId);
@@ -123,7 +120,7 @@ export class RecommendationService {
           totalAvailable: 0,
           generatedAt: new Date(),
           radiusKm: this.DEFAULT_RADIUS_KM,
-          excludedCheckedInCount: 0
+          excludedDislikedCount: 0
         };
       }
 
@@ -183,7 +180,7 @@ export class RecommendationService {
         totalAvailable: availabilityResult.placeCount,
         generatedAt: new Date(),
         radiusKm: this.DEFAULT_RADIUS_KM,
-        excludedCheckedInCount: excludedPlaces.length,
+        excludedDislikedCount: excludedPlaces.length,
         requestId // Include request ID for feedback tracking
       };
 
@@ -196,7 +193,7 @@ export class RecommendationService {
         hasMorePlaces: false,
         generatedAt: new Date(),
         radiusKm: this.DEFAULT_RADIUS_KM,
-        excludedCheckedInCount: 0
+        excludedDislikedCount: 0
       };
     }
   }
@@ -207,7 +204,7 @@ export class RecommendationService {
    * @param longitude - Center longitude
    * @param radiusKm - Radius in kilometers
    * @param savedPlaceIds - Google Place IDs from user's lists
-   * @param excludePlaceIds - Google Place IDs to exclude (checked-in and disliked places)
+   * @param excludePlaceIds - Google Place IDs to exclude (disliked places)
    * @returns Promise<any[]> - Array of cached place data
    */
   private async getSavedPlacesWithinRadius(
@@ -223,7 +220,7 @@ export class RecommendationService {
         return [];
       }
       
-      // Filter to only include saved places that aren't checked-in
+      // Filter to only include saved places that aren't disliked
       const placeIdsToQuery = savedPlaceIds.filter(id => !excludePlaceIds.includes(id));
       
       if (placeIdsToQuery.length === 0) {
@@ -356,7 +353,7 @@ export class RecommendationService {
         .not('name', 'is', null)
         .not('geometry', 'is', null);
 
-      // Exclude user's checked-in places
+      // Exclude user's disliked places
       if (excludePlaceIds.length > 0) {
         query = query.not('google_place_id', 'in', `(${excludePlaceIds.map(id => `"${id}"`).join(',')})`);
       }
@@ -394,36 +391,6 @@ export class RecommendationService {
     }
   }
 
-  /**
-   * Get user's checked-in Google Place IDs to exclude from recommendations
-   * @param userId - User ID
-   * @returns Promise<string[]> - Array of Google Place IDs
-   */
-  private async getUserCheckedInPlaces(userId: string): Promise<string[]> {
-    try {
-      const { data, error } = await supabase
-        .from('check_ins')
-        .select('place_id')
-        .eq('user_id', userId)
-        .not('place_id', 'is', null);
-
-      if (error) {
-        console.error('Error fetching user check-ins:', error);
-        return [];
-      }
-
-      // Extract Google Place IDs (place_id column now stores Google Place IDs directly)
-      const placeIds = data
-        ?.map((checkIn: any) => checkIn.place_id)
-        .filter((id: string) => id) || [];
-
-      return [...new Set(placeIds)]; // Remove duplicates
-
-    } catch (error) {
-      console.error('Error in getUserCheckedInPlaces:', error);
-      return [];
-    }
-  }
 
   /**
    * Get user's disliked Google Place IDs to exclude from recommendations
