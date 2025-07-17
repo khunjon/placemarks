@@ -30,6 +30,9 @@ The app uses a comprehensive service-oriented architecture with extensive cachin
 - **auth-context.tsx**: React context for authentication state management
 - **locationService.ts**: Location management with intelligent fallback coordinates
 - **analytics.ts**: Amplitude integration with comprehensive event tracking
+- **recommendationService.ts**: Database-backed recommendation engine with preference filtering
+- **userRatingsService.ts**: User ratings management for places (1-5 stars)
+- **placeAvailability.ts**: Place availability checking for recommendations
 
 **Specialized Cache Services:**
 - **cacheManager.ts**: Centralized cache orchestration with unified invalidation
@@ -56,6 +59,7 @@ This allows easy expansion to new cities while maintaining location-specific fea
 - Four main tabs: Decide (recommendations), Lists, Check In, Profile
 - Navigation tracking integrated with analytics for user flow analysis
 - Each tab has its own stack navigator for deep navigation
+- Profile stack includes RecommendationSettings screen for configuring recommendation preferences
 
 ### Data Management
 - **Supabase Backend**: PostgreSQL with PostGIS for geospatial queries
@@ -76,14 +80,16 @@ EXPO_PUBLIC_AMPLITUDE_API_KEY=your_amplitude_api_key (optional)
 ### Database Schema
 The app uses Supabase with these core tables:
 - `users` - User profiles and authentication
-- `places` - Location data with PostGIS geometry for coordinates
-- `editorial_places` - Curated place content
+- `places` - Location data with PostGIS geometry for coordinates (legacy, migrating to Google Place IDs)
+- `editorial_places` - Curated place content with custom descriptions and tags
 - `check_ins` - User check-ins with ratings and context
-- `lists` - User-created place collections
+- `lists` - User-created place collections (sorted by last_place_added timestamp)
 - `list_places` - Many-to-many relationship between lists and places
-- `user_place_ratings` - User ratings for places
-- `google_places_cache` - Cached Google Places API responses
-- `recommendation_requests` - User recommendation history
+- `user_place_ratings` - User ratings for places (1-5 stars, one rating per user per place)
+- `google_places_cache` - Cached Google Places API responses (primary place data source)
+- `recommendation_requests` - User recommendation history and context
+- `recommendation_instances` - Individual place recommendations for tracking
+- `recommendation_feedback` - User feedback on recommendations (liked/disliked/viewed)
 
 **Supabase MCP Integration**: Use the available Supabase MCP tools for direct database operations, migrations, and administration.
 
@@ -122,7 +128,7 @@ There is a separate web admin UI project that connects to the same Supabase back
 
 ### Fully Working Features ✅
 - User authentication and profile management
-- Lists management with full CRUD operations
+- Lists management with full CRUD operations (sorted by last edited date)
 - Check-in creation and history display
 - Google Places search with optimized caching (90-day TTL)
 - Location services with city detection and 3-minute cache refresh
@@ -130,13 +136,20 @@ There is a separate web admin UI project that connects to the same Supabase back
 - Analytics tracking with Amplitude integration
 - Check-in search optimization with location-based caching
 - Background cache refresh with soft expiry patterns
+- **Decide screen recommendations** - Fully functional database-backed recommendations with:
+  - Personalized recommendations based on saved places
+  - User preference filtering (Food, Coffee, Work)
+  - Thumbs up/down feedback system
+  - Opening hours integration
+  - Distance-based sorting
+  - Recommendation settings in Profile
+- User ratings system for places (1-5 stars)
+- User feedback tracking for recommendation improvement
 
 ### Mock/Incomplete Features ❌
-- Decide screen recommendations (uses mock data)
 - Smart lists generation
 - Photo uploads and management
 - Maps integration
-- Real-time features
 
 ## Folder Structure
 
