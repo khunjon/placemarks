@@ -98,7 +98,8 @@ export class ListsService {
         .eq('user_id', userId)
         // Note: is_curated column doesn't exist in user_lists_with_counts view
         // This view should only contain user lists, not curated lists
-        .order('updated_at', { ascending: false });
+        .order('last_place_added', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false });
 
       if (error) {
         throw ErrorFactory.database(
@@ -109,7 +110,7 @@ export class ListsService {
       }
       
       return lists || [];
-    }, { service: 'lists', operation: 'getUserLists', userId });
+    }, { service: 'lists', operation: 'getUserLists', userId }, []) as Promise<EnhancedList[]>;
   }
 
   /**
@@ -258,7 +259,7 @@ export class ListsService {
       }
 
       return result;
-    }, { service: 'lists', operation: 'getUserListsWithPlaces', userId });
+    }, { service: 'lists', operation: 'getUserListsWithPlaces', userId }, []) as Promise<ListWithPlaces[]>;
   }
 
   /**
