@@ -274,11 +274,6 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
 
   // Helper functions for database recommendations
   const getDatabaseRecommendationReason = (place: ScoredPlace) => {
-    // Show closed status if applicable
-    if (place.isOpen === false) {
-      return 'Currently closed';
-    }
-    
     // Show if it's from user's saved lists
     if (place.isInUserLists) {
       return 'From your lists';
@@ -368,7 +363,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
               fontWeight: '600',
             }
           ]}>
-            What are you looking for?
+            Places are sourced from your saved lists
           </Text>
           
           <View style={{
@@ -481,18 +476,6 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                   ? 'Rate these as food recommendations'
                   : 'Rate these as work-friendly recommendations'}
               </Text>
-              {databaseRecommendations.excludedDislikedCount && databaseRecommendations.excludedDislikedCount > 0 && (
-                <Text style={[
-                  DarkTheme.typography.caption2,
-                  { 
-                    color: DarkTheme.colors.semantic.tertiaryLabel,
-                    textAlign: 'center',
-                    marginTop: DarkTheme.spacing.xs,
-                  }
-                ]}>
-                  Hiding {databaseRecommendations.excludedDislikedCount} places you've disliked
-                </Text>
-              )}
             </View>
           )}
 
