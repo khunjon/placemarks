@@ -70,7 +70,7 @@ export class RecommendationService {
       longitude,
       limit = this.DEFAULT_LIMIT,
       timeContext,
-      userPreference = 'any',
+      userPreference = 'eat',
       includeClosedPlaces = false,
       savedPlacesOnly = true // Default to showing only saved places
     } = request;
@@ -181,7 +181,7 @@ export class RecommendationService {
         generatedAt: new Date(),
         radiusKm: this.DEFAULT_RADIUS_KM,
         excludedDislikedCount: excludedPlaces.length,
-        requestId // Include request ID for feedback tracking
+        requestId: requestId || undefined // Include request ID for feedback tracking
       };
 
     } catch (error) {
@@ -440,7 +440,7 @@ export class RecommendationService {
     userLat: number,
     userLng: number,
     timeContext?: TimeContext,
-    userPreference: UserPreference = 'any',
+    userPreference: UserPreference = 'eat',
     includeClosedPlaces: boolean = false,
     userSavedPlaces: string[] = []
   ): ScoredPlace[] {
@@ -625,8 +625,6 @@ export class RecommendationService {
     })
     // Apply preference filtering (but be lenient for saved places)
     .filter(place => {
-      if (userPreference === 'any') return true;
-      
       // Always include saved places regardless of preference
       if (place.isInUserLists) {
         return true;
@@ -654,6 +652,23 @@ export class RecommendationService {
         const hasCoffeeInName = coffeeKeywords.some(keyword => placeName.includes(keyword));
         
         if (hasCoffeeType || hasCoffeeInName) {
+          return true;
+        }
+        
+        return false;
+      }
+      
+      if (userPreference === 'work') {
+        // For work preference, show coffee shops which are typically work-friendly
+        const workFriendlyTypes = ['cafe', 'coffee_shop', 'bakery'];
+        const hasWorkFriendlyType = types.some((type: string) => workFriendlyTypes.includes(type));
+        
+        // Also include places that might be work-friendly based on name
+        const placeName = place.name?.toLowerCase() || '';
+        const workKeywords = ['coffee', 'cafe', 'café', 'espresso', 'latte', 'cappuccino', 'barista', 'co-working', 'coworking'];
+        const hasWorkKeywordInName = workKeywords.some(keyword => placeName.includes(keyword));
+        
+        if (hasWorkFriendlyType || hasWorkKeywordInName) {
           return true;
         }
         
@@ -844,10 +859,6 @@ export class RecommendationService {
    * @returns number - Adjusted score
    */
   private applyUserPreferenceScoring(baseScore: number, place: any, userPreference: UserPreference): number {
-    if (userPreference === 'any') {
-      return baseScore;
-    }
-
     const types = place.types || [];
     let adjustedScore = baseScore;
 
@@ -871,6 +882,15 @@ export class RecommendationService {
         adjustedScore += 20; // Major boost for coffee places
       } else if (types.includes('bakery')) {
         adjustedScore += 5; // Small boost for bakeries (often serve coffee)
+      }
+    } else if (userPreference === 'work') {
+      // Boost work-friendly places (coffee shops)
+      const workFriendlyTypes = ['cafe', 'coffee_shop'];
+      
+      if (types.some((type: string) => workFriendlyTypes.includes(type))) {
+        adjustedScore += 20; // Major boost for work-friendly coffee places
+      } else if (types.includes('bakery')) {
+        adjustedScore += 10; // Medium boost for bakeries (often have seating and wifi)
       }
     }
 

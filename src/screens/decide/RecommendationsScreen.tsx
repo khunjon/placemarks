@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, Clock, Coffee, Utensils, Wine, ShoppingBag, Sparkles, ThumbsUp, ThumbsDown } from '../../components/icons';
+import { MapPin, Clock, Coffee, Utensils, Wine, ShoppingBag, Sparkles, ThumbsUp, ThumbsDown, Briefcase } from '../../components/icons';
 import { DarkTheme } from '../../constants/theme';
 import type { DecideStackScreenProps } from '../../navigation/types';
 import { createValidatedCityContext, CityContext } from '../../services/cityContext';
@@ -54,7 +54,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
   const [timeContext, setTimeContext] = useState<TimeContext>(getTimeContext());
   const [databaseRecommendations, setDatabaseRecommendations] = useState<RecommendationResponse | null>(null);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
-  const [userPreference, setUserPreference] = useState<UserPreference>('any');
+  const [userPreference, setUserPreference] = useState<UserPreference>('eat');
   const [feedbackGiven, setFeedbackGiven] = useState<{ [key: string]: 'liked' | 'disliked' }>({});
   const [refreshing, setRefreshing] = useState(false);
 
@@ -377,32 +377,6 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
             marginBottom: DarkTheme.spacing.sm,
           }}>
             <TouchableOpacity 
-              onPress={() => setUserPreference('any')}
-              style={{
-                flex: 1,
-                backgroundColor: userPreference === 'any' 
-                  ? DarkTheme.colors.bangkok.gold 
-                  : DarkTheme.colors.semantic.tertiarySystemBackground,
-                paddingVertical: DarkTheme.spacing.sm,
-                paddingHorizontal: DarkTheme.spacing.md,
-                borderRadius: DarkTheme.borderRadius.sm,
-                alignItems: 'center',
-              }}
-            >
-              <Text style={[
-                DarkTheme.typography.caption1,
-                { 
-                  color: userPreference === 'any' 
-                    ? DarkTheme.colors.system.black 
-                    : DarkTheme.colors.semantic.label,
-                  fontWeight: '600',
-                }
-              ]}>
-                Anything
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
               onPress={() => setUserPreference('eat')}
               style={{
                 flex: 1,
@@ -453,6 +427,32 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                 ☕ Coffee
               </Text>
             </TouchableOpacity>
+            
+            <TouchableOpacity 
+              onPress={() => setUserPreference('work')}
+              style={{
+                flex: 1,
+                backgroundColor: userPreference === 'work' 
+                  ? DarkTheme.colors.bangkok.gold 
+                  : DarkTheme.colors.semantic.tertiarySystemBackground,
+                paddingVertical: DarkTheme.spacing.sm,
+                paddingHorizontal: DarkTheme.spacing.md,
+                borderRadius: DarkTheme.borderRadius.sm,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={[
+                DarkTheme.typography.caption1,
+                { 
+                  color: userPreference === 'work' 
+                    ? DarkTheme.colors.system.black 
+                    : DarkTheme.colors.semantic.label,
+                  fontWeight: '600',
+                }
+              ]}>
+                💼 Work
+              </Text>
+            </TouchableOpacity>
           </View>
           
         </View>
@@ -479,7 +479,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                   ? 'Rate these as coffee recommendations'
                   : userPreference === 'eat'
                   ? 'Rate these as food recommendations'
-                  : 'Rate these recommendations'}
+                  : 'Rate these as work-friendly recommendations'}
               </Text>
               {databaseRecommendations.excludedDislikedCount && databaseRecommendations.excludedDislikedCount > 0 && (
                 <Text style={[

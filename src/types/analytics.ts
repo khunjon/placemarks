@@ -99,7 +99,7 @@ export interface RecommendationViewedEvent extends BaseAnalyticsEvent {
   place_id: string;
   place_name?: string;
   position: number;
-  user_preference: 'eat' | 'drink' | 'any';
+  user_preference: 'eat' | 'drink' | 'work';
   time_of_day?: string;
 }
 
@@ -109,7 +109,7 @@ export interface RecommendationFeedbackEvent extends BaseAnalyticsEvent {
   place_name?: string;
   position: number;
   action: 'liked' | 'disliked';
-  user_preference: 'eat' | 'drink' | 'any';
+  user_preference: 'eat' | 'drink' | 'work';
   time_of_day?: string;
 }
 

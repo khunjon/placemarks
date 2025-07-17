@@ -6,7 +6,7 @@ import { Location } from './navigation';
 
 export type TimeOfDay = 'morning' | 'lunch' | 'afternoon' | 'dinner' | 'evening';
 export type CityTier = 'bangkok' | 'standard';
-export type UserPreference = 'eat' | 'drink' | 'any';
+export type UserPreference = 'eat' | 'drink' | 'work';
 
 export interface TimeContext {
   timeOfDay: TimeOfDay;
