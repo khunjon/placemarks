@@ -10,7 +10,8 @@ import {
   ProfileScreen,
   PreferencesScreen,
   AchievementDetailScreen,
-  EditProfileScreen
+  EditProfileScreen,
+  RecommendationSettingsScreen
 } from '../screens/profile';
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
@@ -62,6 +63,15 @@ export default function ProfileStackNavigator() {
                  `${route.params.section || 'preferences'}`.slice(1),
           headerShown: true,
         })}
+      />
+      
+      <Stack.Screen 
+        name="RecommendationSettings" 
+        component={RecommendationSettingsScreen}
+        options={{
+          title: 'Recommendations',
+          headerShown: true,
+        }}
       />
       
       <Stack.Screen 

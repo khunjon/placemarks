@@ -1,17 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, Alert } from 'react-native';
 import { 
-  MapPin, 
-  DollarSign, 
-  Bell, 
-  Map, 
-  Shield, 
   BarChart3,
   Calendar,
   List,
-  Settings,
-  Navigation,
-  TreePine
+  Settings
 } from '../../components/icons';
 import { DarkTheme } from '../../constants/theme';
 import { UserProfileHeader, SettingItem } from '../../components/profile';
@@ -81,8 +74,12 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   };
 
   const handleSettingPress = (setting: string) => {
-    console.log(`${setting} pressed`);
-    Alert.alert(setting, `${setting} settings coming soon!`);
+    if (setting === 'Recommendations') {
+      navigation.navigate('RecommendationSettings');
+    } else {
+      console.log(`${setting} pressed`);
+      Alert.alert(setting, `${setting} settings coming soon!`);
+    }
   };
 
 
@@ -323,26 +320,9 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           <SettingItem
             icon={Settings}
             iconColor={DarkTheme.colors.accent.orange}
-            title="Recommendation Preferences"
-            subtitle="Transit, environment, and price preferences"
-            onPress={() => handleSettingPress('Recommendation Preferences')}
-          />
-          
-          <SettingItem
-            icon={Bell}
-            iconColor={DarkTheme.colors.accent.red}
-            title="Notifications"
-            subtitle="Push notifications and alerts"
-            value="On"
-            onPress={() => handleSettingPress('Notifications')}
-          />
-          
-          <SettingItem
-            icon={Shield}
-            iconColor={DarkTheme.colors.accent.blue}
-            title="Account & Privacy"
-            subtitle="Security and privacy settings"
-            onPress={() => handleSettingPress('Account & Privacy')}
+            title="Recommendations"
+            subtitle="Refine how recommendations are made"
+            onPress={() => handleSettingPress('Recommendations')}
           />
         </View>
       </View>

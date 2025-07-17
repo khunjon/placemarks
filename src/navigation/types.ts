@@ -78,6 +78,7 @@ export type ProfileStackParamList = {
   Preferences: {
     section?: 'location' | 'notifications' | 'privacy' | 'data';
   };
+  RecommendationSettings: undefined;
   AchievementDetail: {
     achievementId: string;
     achievementName: string;
