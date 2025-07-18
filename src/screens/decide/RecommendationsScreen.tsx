@@ -118,7 +118,7 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
         totalAvailable: 0,
         hasMorePlaces: false,
         generatedAt: new Date(),
-        radiusKm: 15,
+        radiusKm: 20,
         excludedDislikedCount: 0
       });
     } finally {

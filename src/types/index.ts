@@ -16,6 +16,7 @@ export {
   ListPlace,
   UserPlaceRating,
   RecommendationRequest,
+  UserRecommendationPreferences,
   
   // Context interfaces
   UserPreferences,

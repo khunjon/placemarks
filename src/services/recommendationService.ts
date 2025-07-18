@@ -50,12 +50,39 @@ export function getTimeContext(date: Date = new Date()): TimeContext {
 
 export class RecommendationService {
   private placeAvailabilityService: PlaceAvailabilityService;
-  private readonly DEFAULT_RADIUS_KM = 15;
+  private readonly DEFAULT_RADIUS_KM = 20;
   private readonly DEFAULT_LIMIT = 10;
   private readonly MINIMUM_PLACES_FOR_RECOMMENDATIONS = 5;
 
   constructor() {
     this.placeAvailabilityService = new PlaceAvailabilityService();
+  }
+
+  /**
+   * Get user's recommendation preferences from database
+   * @param userId - User ID
+   * @returns Promise<{search_radius_km: number, price_ranges: number[]}> - User preferences
+   */
+  private async getUserPreferences(userId: string): Promise<{search_radius_km: number, price_ranges: number[]}> {
+    try {
+      const { data, error } = await supabase.rpc('get_user_recommendation_preferences', {
+        p_user_id: userId
+      });
+
+      if (error) {
+        console.error('Error fetching user preferences:', error);
+        return { search_radius_km: this.DEFAULT_RADIUS_KM, price_ranges: [1, 2, 3, 4] };
+      }
+
+      if (!data || data.length === 0) {
+        return { search_radius_km: this.DEFAULT_RADIUS_KM, price_ranges: [1, 2, 3, 4] };
+      }
+
+      return data[0];
+    } catch (error) {
+      console.error('Error in getUserPreferences:', error);
+      return { search_radius_km: this.DEFAULT_RADIUS_KM, price_ranges: [1, 2, 3, 4] };
+    }
   }
 
   /**
@@ -79,12 +106,18 @@ export class RecommendationService {
       // Validate coordinates
       this.validateCoordinates(latitude, longitude);
 
+      // Get user's radius preference from database
+      const userPreferences = await this.getUserPreferences(userId);
+      const radiusKm = userPreferences.search_radius_km;
+      
+      console.log(`[Recommendations] Using radius: ${radiusKm}km for user ${userId}`);
+
       // Check if there are enough places in the area for recommendations
       const availabilityResult = await this.placeAvailabilityService.checkPlaceAvailability(
         latitude,
         longitude,
         {
-          radiusMeters: this.DEFAULT_RADIUS_KM * 1000,
+          radiusMeters: radiusKm * 1000,
           minimumPlaces: this.MINIMUM_PLACES_FOR_RECOMMENDATIONS
         }
       );
@@ -96,7 +129,7 @@ export class RecommendationService {
           hasMorePlaces: false,
           totalAvailable: availabilityResult.placeCount,
           generatedAt: new Date(),
-          radiusKm: this.DEFAULT_RADIUS_KM,
+          radiusKm: radiusKm,
           excludedDislikedCount: 0
         };
       }
@@ -119,7 +152,7 @@ export class RecommendationService {
           hasMorePlaces: false,
           totalAvailable: 0,
           generatedAt: new Date(),
-          radiusKm: this.DEFAULT_RADIUS_KM,
+          radiusKm: radiusKm,
           excludedDislikedCount: 0
         };
       }
@@ -132,7 +165,7 @@ export class RecommendationService {
         candidatePlaces = await this.getSavedPlacesWithinRadius(
           latitude,
           longitude,
-          this.DEFAULT_RADIUS_KM,
+          radiusKm,
           userSavedPlaces,
           excludedPlaces
         );
@@ -141,7 +174,7 @@ export class RecommendationService {
         candidatePlaces = await this.getCachedPlacesWithinRadius(
           latitude,
           longitude,
-          this.DEFAULT_RADIUS_KM,
+          radiusKm,
           excludedPlaces,
           limit * 3 // Get more candidates for better filtering with preferences
         );
@@ -228,7 +261,7 @@ export class RecommendationService {
       }
       
       
-      // Direct query to get ALL saved places without any filtering
+      // Query to get saved places and calculate distance
       const { data: savedPlaces, error } = await supabase
         .from('google_places_cache')
         .select(`
@@ -287,6 +320,7 @@ export class RecommendationService {
         if (placeLat && placeLng) {
           distanceKm = this.calculateDistance(latitude, longitude, placeLat, placeLng);
         } else {
+          console.warn(`[Recommendations] Place ${place.name} has no coordinates, assigning max distance`);
         }
         
         return {
@@ -295,17 +329,25 @@ export class RecommendationService {
         };
       });
       
-      // Sort by distance but include ALL places
-      placesWithDistance.sort((a, b) => a.distance_km - b.distance_km);
+      // Filter by radius - only include places within the specified radius
+      const placesWithinRadius = placesWithDistance.filter(place => 
+        place.distance_km <= radiusKm
+      );
+      
+      // Sort by distance
+      placesWithinRadius.sort((a, b) => a.distance_km - b.distance_km);
       
       // Log distance distribution
-      const within5km = placesWithDistance.filter(p => p.distance_km <= 5).length;
-      const within10km = placesWithDistance.filter(p => p.distance_km <= 10).length;
-      const within15km = placesWithDistance.filter(p => p.distance_km <= 15).length;
+      const within5km = placesWithinRadius.filter(p => p.distance_km <= 5).length;
+      const within10km = placesWithinRadius.filter(p => p.distance_km <= 10).length;
+      const within15km = placesWithinRadius.filter(p => p.distance_km <= 15).length;
+      const within20km = placesWithinRadius.filter(p => p.distance_km <= 20).length;
       
+      console.log(`[Recommendations] Distance distribution: ${within5km} within 5km, ${within10km} within 10km, ${within15km} within 15km, ${within20km} within 20km`);
+      console.log(`[Recommendations] Filtered ${placesWithDistance.length} saved places to ${placesWithinRadius.length} within ${radiusKm}km`);
       
-      // Return ALL saved places regardless of distance
-      return placesWithDistance;
+      // Return only saved places within radius
+      return placesWithinRadius;
       
     } catch (error) {
       console.error('Error in getSavedPlacesWithinRadius:', error);

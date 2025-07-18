@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Switch, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, Switch, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DarkTheme } from '../../constants/theme';
 import type { ProfileStackScreenProps } from '../../navigation/types';
+import { useAuth } from '../../services/auth-context';
+import { supabase } from '../../services/supabase';
+import { UserRecommendationPreferences } from '../../types';
 
 type RecommendationSettingsScreenProps = ProfileStackScreenProps<'RecommendationSettings'>;
 
@@ -14,17 +17,104 @@ interface FoodPriceRange {
 }
 
 export default function RecommendationSettingsScreen({ navigation }: RecommendationSettingsScreenProps) {
+  const { user } = useAuth();
+  
   // General settings
-  const radiusOptions = [1, 2, 5, 10]; // km
-  const [searchRadius, setSearchRadius] = useState(2); // km
+  const radiusOptions = [2, 5, 10, 20]; // km
+  const [searchRadius, setSearchRadius] = useState(20); // km (default to 20km)
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Food price ranges
   const [foodPriceRanges, setFoodPriceRanges] = useState<FoodPriceRange[]>([
     { id: '1', label: '$', description: 'Budget-friendly', enabled: true },
     { id: '2', label: '$$', description: 'Moderate', enabled: true },
-    { id: '3', label: '$$$', description: 'Expensive', enabled: false },
-    { id: '4', label: '$$$$', description: 'Very Expensive', enabled: false },
+    { id: '3', label: '$$$', description: 'Expensive', enabled: true },
+    { id: '4', label: '$$$$', description: 'Very Expensive', enabled: true },
   ]);
+
+  // Load user preferences on mount
+  useEffect(() => {
+    loadUserPreferences();
+  }, []);
+
+  const loadUserPreferences = async () => {
+    if (!user?.id) return;
+    
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase.rpc('get_user_recommendation_preferences', {
+        p_user_id: user.id
+      });
+      
+      if (error) {
+        console.error('Error loading user preferences:', error);
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        const preferences = data[0];
+        setSearchRadius(preferences.search_radius_km || 20);
+        
+        // Update price ranges based on saved preferences
+        const enabledPrices = preferences.price_ranges || [1, 2, 3, 4];
+        setFoodPriceRanges(prev => 
+          prev.map(range => ({
+            ...range,
+            enabled: enabledPrices.includes(parseInt(range.id))
+          }))
+        );
+      }
+    } catch (error) {
+      console.error('Error in loadUserPreferences:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveUserPreferences = async () => {
+    if (!user?.id) return;
+    
+    try {
+      setIsSaving(true);
+      
+      // Get enabled price ranges
+      const enabledPrices = foodPriceRanges
+        .filter(range => range.enabled)
+        .map(range => parseInt(range.id));
+      
+      const { error } = await supabase.rpc('upsert_user_recommendation_preferences', {
+        p_user_id: user.id,
+        p_search_radius_km: searchRadius,
+        p_price_ranges: enabledPrices
+      });
+      
+      if (error) {
+        console.error('Error saving preferences:', error);
+        Alert.alert('Error', 'Failed to save preferences. Please try again.');
+        return;
+      }
+      
+      Alert.alert('Success', 'Preferences saved successfully!');
+    } catch (error) {
+      console.error('Error in saveUserPreferences:', error);
+      Alert.alert('Error', 'Failed to save preferences. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Auto-save when settings change
+  useEffect(() => {
+    if (!isLoading && user?.id) {
+      // Debounce auto-save
+      const timeoutId = setTimeout(() => {
+        saveUserPreferences();
+      }, 500);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [searchRadius, foodPriceRanges, isLoading, user?.id]);
 
   const togglePriceRange = (id: string) => {
     setFoodPriceRanges(prev => 
@@ -97,6 +187,7 @@ export default function RecommendationSettingsScreen({ navigation }: Recommendat
                         : DarkTheme.colors.semantic.separator,
                     }}
                     onPress={() => setSearchRadius(radius)}
+                    disabled={isSaving}
                   >
                     <Text style={[
                       DarkTheme.typography.body,
@@ -188,6 +279,7 @@ export default function RecommendationSettingsScreen({ navigation }: Recommendat
                   <Switch
                     value={range.enabled}
                     onValueChange={() => togglePriceRange(range.id)}
+                    disabled={isSaving}
                     trackColor={{
                       false: DarkTheme.colors.semantic.tertiarySystemFill,
                       true: DarkTheme.colors.accent.blue + '80'

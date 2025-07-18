@@ -313,3 +313,10 @@ export interface CuratedListFilters {
 export interface CheckInWithPlace extends CheckIn {
   place?: EnrichedPlace;
 }
+
+// User recommendation preferences - matches user_recommendation_preferences table
+export interface UserRecommendationPreferences extends BaseEntity {
+  user_id: string;
+  search_radius_km: number;
+  price_ranges: number[];
+}
