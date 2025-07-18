@@ -69,13 +69,44 @@ This allows easy expansion to new cities while maintaining location-specific fea
 
 ## Key Configuration
 
-### Environment Variables Required
+### Environment Variables
+
+#### Local Development (.env file)
 ```
 EXPO_PUBLIC_SUPABASE_URL=your_supabase_project_url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 EXPO_PUBLIC_GOOGLE_PLACES_API_KEY=your_google_places_api_key
 EXPO_PUBLIC_AMPLITUDE_API_KEY=your_amplitude_api_key (optional)
+EXPO_PUBLIC_GOOGLE_PLACES_CACHE_DAYS=90 (optional, defaults to 90)
 ```
+
+#### EAS Build Environment Variables
+For production builds with EAS, you need to set these environment variables:
+```bash
+# Required for Google Places API to work in production
+eas env:create --environment preview --name GOOGLE_PLACES_API_KEY --value "your-api-key"
+
+# Other required variables (use exact same values as local)
+eas env:create --environment preview --name EXPO_PUBLIC_SUPABASE_URL --value "your-url"
+eas env:create --environment preview --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value "your-key"
+eas env:create --environment preview --name EXPO_PUBLIC_AMPLITUDE_API_KEY --value "your-key"
+eas env:create --environment preview --name EXPO_PUBLIC_GOOGLE_PLACES_CACHE_DAYS --value "90"
+```
+
+**Important**: The `GOOGLE_PLACES_API_KEY` (without EXPO_PUBLIC_ prefix) is required for EAS builds due to how environment variables are processed during the build phase.
+
+### Environment Configuration Architecture
+
+The app uses a centralized environment configuration service (`src/config/environment.ts`) that handles both development and production environments:
+
+1. **Build Time**: `app.config.js` (not app.json) embeds environment variables into the app during EAS builds
+2. **Runtime**: The config service accesses these values through `expo-constants` in production or `process.env` in development
+3. **Fallback Chain**: Production (expo-constants) → Development (process.env) → Default values
+
+This approach ensures environment variables work correctly in:
+- Expo Go (uses .env file via process.env)
+- Development builds (uses .env file)
+- Production builds (uses EAS environment variables via expo-constants)
 
 ### Database Schema
 The app uses Supabase with these core tables:
@@ -194,3 +225,36 @@ All caches are coordinated through the `cacheManager` service and configured via
 - Graceful offline handling with fallback data
 - Centralized cache configuration in `src/config/cacheConfig.ts`
 - Unified cache invalidation through `cacheManager`
+
+## Common Issues & Troubleshooting
+
+### Environment Variables Not Working in Production
+
+**Problem**: API keys work in Expo Go but not in TestFlight/production builds.
+
+**Solution**: This is usually because environment variables aren't properly configured for EAS builds:
+
+1. Ensure you have `GOOGLE_PLACES_API_KEY` (without EXPO_PUBLIC_ prefix) set in EAS
+2. Check that `app.config.js` uses the fallback pattern:
+   ```javascript
+   googlePlacesApiKey: process.env.GOOGLE_PLACES_API_KEY || process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY,
+   ```
+3. Verify environment variables are set: `eas env:list --environment preview`
+
+### Build Number Issues
+
+**Problem**: "You've already submitted this build" error when submitting to TestFlight.
+
+**Solution**: Remove any hardcoded `buildNumber` from `app.config.js` and let EAS auto-increment handle it:
+```javascript
+// Remove this line from ios config:
+// buildNumber: "1",
+```
+
+### Debugging Production Issues
+
+To debug environment variables in production builds, temporarily add debug output to a visible screen:
+```javascript
+import Constants from 'expo-constants';
+console.log('Config available:', Constants.expoConfig?.extra);
+```
