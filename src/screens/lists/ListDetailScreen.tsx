@@ -77,6 +77,9 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
   const { listId, listName: initialListName, listType, isEditable } = route.params;
   const { user } = useAuth();
   
+  // Determine effective editability - curated lists are never editable
+  const effectiveIsEditable = listType !== 'curated' && (isEditable !== false);
+  
   // Track initial mount to prevent duplicate loading
   const isInitialMount = useRef(true);
   
@@ -595,7 +598,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
               textAlignVertical="top"
             />
 
-            {isEditable && (
+            {effectiveIsEditable && (
               <View style={{
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -689,14 +692,16 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                   <SortAsc size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
                 </TouchableOpacity>
                 
-                <TouchableOpacity
-                  onPress={handleAddPlace}
-                  style={{ padding: 4 }}
-                >
-                  <Plus size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
-                </TouchableOpacity>
+                {effectiveIsEditable && (
+                  <TouchableOpacity
+                    onPress={handleAddPlace}
+                    style={{ padding: 4 }}
+                  >
+                    <Plus size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                  </TouchableOpacity>
+                )}
                 
-                {isEditable && (
+                {effectiveIsEditable && (
                   <TouchableOpacity
                     onPress={() => setIsEditing(!isEditing)}
                     style={{ padding: 4 }}
@@ -705,7 +710,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                   </TouchableOpacity>
                 )}
                 
-                {isEditable && (
+                {effectiveIsEditable && (
                   <TouchableOpacity
                     onPress={handleShareList}
                     style={{ padding: 4 }}
@@ -738,7 +743,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
           <EmptyState
             title="No Places Yet"
             description="Start building your list by adding some amazing places!"
-            primaryAction={isEditable ? {
+            primaryAction={effectiveIsEditable ? {
               title: "Add Place",
               onPress: handleAddPlace
             } : undefined}
@@ -759,7 +764,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                 notes={listPlace.notes}
                 onDelete={handleRemovePlace}
                 onAddToWantToGo={handleAddToWantToGo}
-                enableDelete={isEditable}
+                enableDelete={effectiveIsEditable}
                 enableAddToWantToGo={list?.default_list_type !== 'want_to_go'}
               />
             ))}

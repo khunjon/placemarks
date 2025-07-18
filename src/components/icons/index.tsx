@@ -83,6 +83,7 @@ export const BarChart3 = createIcon(MaterialIcons, 'bar-chart');
 export const Lock = createIcon(MaterialIcons, 'lock');
 export const ThumbsUp = createIcon(MaterialIcons, 'thumb-up');
 export const ThumbsDown = createIcon(MaterialIcons, 'thumb-down');
+export const LogOut = createIcon(MaterialIcons, 'logout');
 
 // Legacy compatibility - some components might import these
 export const LucideIcon = MaterialIcons;
@@ -145,4 +146,8 @@ export default {
   DollarSign,
   Map,
   BarChart3,
+  Lock,
+  ThumbsUp,
+  ThumbsDown,
+  LogOut,
 };

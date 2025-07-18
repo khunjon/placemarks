@@ -103,6 +103,8 @@ export default function LoginScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                textContentType="emailAddress"
+                importantForAutofill="yes"
                 leftIcon={
                   <Icon 
                     name="email" 
@@ -127,6 +129,8 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                textContentType="password"
+                importantForAutofill="yes"
                 leftIcon={
                   <Icon 
                     name="lock" 

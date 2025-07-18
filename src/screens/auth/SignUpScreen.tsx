@@ -128,6 +128,8 @@ export default function SignUpScreen() {
                 onChangeText={(value) => handleInputChange('fullName', value)}
                 autoCapitalize="words"
                 returnKeyType="next"
+                textContentType="name"
+                importantForAutofill="yes"
               />
               {errors.fullName && <Text style={styles.errorText}>{errors.fullName}</Text>}
             </View>
@@ -143,6 +145,8 @@ export default function SignUpScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 returnKeyType="next"
+                textContentType="emailAddress"
+                importantForAutofill="yes"
               />
               {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
             </View>
@@ -157,6 +161,8 @@ export default function SignUpScreen() {
                 onChangeText={(value) => handleInputChange('password', value)}
                 secureTextEntry
                 returnKeyType="next"
+                textContentType="newPassword"
+                importantForAutofill="yes"
               />
               {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
             </View>
@@ -172,6 +178,8 @@ export default function SignUpScreen() {
                 secureTextEntry
                 returnKeyType="done"
                 onSubmitEditing={handleSignUp}
+                textContentType="newPassword"
+                importantForAutofill="yes"
               />
               {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
             </View>

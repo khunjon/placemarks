@@ -4,7 +4,8 @@ import {
   BarChart3,
   Calendar,
   List,
-  Settings
+  Settings,
+  LogOut
 } from '../../components/icons';
 import { DarkTheme } from '../../constants/theme';
 import { UserProfileHeader, SettingItem } from '../../components/profile';
@@ -17,7 +18,7 @@ import type { ProfileStackScreenProps } from '../../navigation/types';
 type ProfileScreenProps = ProfileStackScreenProps<'Profile'>;
 
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
-  const { user, loading } = useAuth();
+  const { user, loading, signOut } = useAuth();
   const [userStats, setUserStats] = useState({
     totalCheckIns: 0,
     checkInsThisMonth: 0,
@@ -82,6 +83,32 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     }
   };
 
+  const handleLogout = () => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+              // Navigation to login screen happens automatically due to auth state change
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to log out. Please try again.');
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
 
   // Show loading state while user data is being loaded
   if (loading || !user) {
@@ -323,6 +350,51 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             title="Recommendations"
             subtitle="Refine how recommendations are made"
             onPress={() => handleSettingPress('Recommendations')}
+          />
+        </View>
+      </View>
+
+      {/* Account Section */}
+      <View
+        style={{
+          backgroundColor: DarkTheme.colors.semantic.systemBackground,
+          paddingTop: DarkTheme.spacing.lg,
+          paddingBottom: DarkTheme.spacing.xl,
+        }}
+      >
+        <View
+          style={{
+            paddingHorizontal: DarkTheme.spacing.lg,
+            marginBottom: DarkTheme.spacing.sm,
+          }}
+        >
+          <Text
+            style={[
+              DarkTheme.typography.title3,
+              {
+                color: DarkTheme.colors.semantic.label,
+                fontWeight: 'bold',
+              }
+            ]}
+          >
+            Account
+          </Text>
+        </View>
+
+        <View
+          style={{
+            backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
+            borderTopWidth: 1,
+            borderBottomWidth: 1,
+            borderColor: DarkTheme.colors.semantic.separator,
+          }}
+        >
+          <SettingItem
+            icon={LogOut}
+            iconColor={DarkTheme.colors.accent.red}
+            title="Log Out"
+            showArrow={false}
+            onPress={handleLogout}
           />
         </View>
       </View>
