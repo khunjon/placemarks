@@ -16,12 +16,16 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.placemarks.app",
+      "buildNumber": "1",
       "config": {
-        "googleMapsApiKey": "process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY"
+        "googleMapsApiKey": "EXPO_PUBLIC_GOOGLE_PLACES_API_KEY"
       },
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "This app uses location to help you discover and save places around you.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app uses location to help you discover and save places around you.",
+        "NSLocationWhenInUseUsageDescription": "Placemarks uses your location to help you discover nearby places, show relevant recommendations, and save your favorite spots with location context.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Placemarks uses your location to help you discover nearby places, show relevant recommendations, and save your favorite spots with location context.",
+        "NSCameraUsageDescription": "Placemarks needs access to your camera to let you take photos of places you visit and add them to your check-ins.",
+        "NSPhotoLibraryUsageDescription": "Placemarks needs access to your photo library to let you select photos of places you visit and add them to your check-ins.",
+        "NSPhotoLibraryAddUsageDescription": "Placemarks needs permission to save photos you take of places to your photo library.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -34,7 +38,7 @@
       "package": "com.placemarks.app",
       "config": {
         "googleMaps": {
-          "apiKey": "process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY"
+          "apiKey": "EXPO_PUBLIC_GOOGLE_PLACES_API_KEY"
         }
       },
       "permissions": [
@@ -48,7 +52,9 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-location"
+      "expo-location",
+      "expo-image-picker",
+      "expo-camera"
     ],
     "extra": {
       "eas": {

@@ -73,7 +73,7 @@ This allows easy expansion to new cities while maintaining location-specific fea
 ```
 EXPO_PUBLIC_SUPABASE_URL=your_supabase_project_url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+EXPO_PUBLIC_GOOGLE_PLACES_API_KEY=your_google_places_api_key
 EXPO_PUBLIC_AMPLITUDE_API_KEY=your_amplitude_api_key (optional)
 ```
 

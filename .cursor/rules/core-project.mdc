@@ -51,7 +51,7 @@ The app uses the following main tables:
 Required environment variables (see env.example):
 - EXPO_PUBLIC_SUPABASE_URL
 - EXPO_PUBLIC_SUPABASE_ANON_KEY
-- EXPO_PUBLIC_GOOGLE_MAPS_API_KEY (for maps)
+- EXPO_PUBLIC_GOOGLE_PLACES_API_KEY (for maps and places)
 - OAuth credentials (if using social login)
 
 ## Supabase MCP Integration

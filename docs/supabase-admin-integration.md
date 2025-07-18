@@ -114,7 +114,7 @@ SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_KEY=your_supabase_service_role_key  # For admin operations
 
 # Optional: Google Places API (if managing places)
-GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+GOOGLE_PLACES_API_KEY=your_google_places_api_key
 ```
 
 ### Installation
