@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.placemarks.app",
+      "bundleIdentifier": "xyz.placemarks.app",
       "buildNumber": "1",
       "config": {
         "googleMapsApiKey": "EXPO_PUBLIC_GOOGLE_PLACES_API_KEY"
@@ -35,7 +35,7 @@
         "backgroundColor": "#2563eb"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.placemarks.app",
+      "package": "xyz.placemarks.app",
       "config": {
         "googleMaps": {
           "apiKey": "EXPO_PUBLIC_GOOGLE_PLACES_API_KEY"
