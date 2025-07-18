@@ -17,10 +17,6 @@ export default () => {
       ios: {
         supportsTablet: true,
         bundleIdentifier: "xyz.placemarks.app",
-        associatedDomains: [
-          "applinks:placemarks.xyz",
-          "webcredentials:placemarks.xyz"
-        ],
         infoPlist: {
           NSLocationWhenInUseUsageDescription: "Placemarks uses your location to help you discover nearby places, show relevant recommendations, and save your favorite spots with location context.",
           NSLocationAlwaysAndWhenInUseUsageDescription: "Placemarks uses your location to help you discover nearby places, show relevant recommendations, and save your favorite spots with location context.",
