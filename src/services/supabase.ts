@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, Place, CheckIn, List } from '../types';
 import { ErrorFactory, ErrorLogger, safeAsync } from '../utils/errorHandling';
+import { config } from '../config/environment';
 
 // Database type definitions for Supabase
 export interface Database {
@@ -68,18 +69,8 @@ export interface Database {
   };
 }
 
-// Supabase configuration
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw ErrorFactory.config(
-    'Missing Supabase environment variables. Please check your .env file.',
-    { service: 'supabase', operation: 'initialization' }
-  );
-}
-
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+// Initialize Supabase client with configuration
+export const supabase = createClient<Database>(config.supabaseUrl, config.supabaseAnonKey, {
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,

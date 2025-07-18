@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { Colors } from '../../constants/Colors';
 import { CACHE_CONFIG } from '../../config/cacheConfig';
+import { config } from '../../config/environment';
 import { Spacing } from '../../constants/Spacing';
 import { 
   Typography, 
@@ -174,7 +175,7 @@ export default function CheckInSearchScreen({ navigation }: CheckInSearchScreenP
         }
       }
 
-      const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY;
+      const GOOGLE_PLACES_API_KEY = config.googlePlacesApiKey;
       
       if (!GOOGLE_PLACES_API_KEY) {
         throw new Error('Google Places API key not configured');

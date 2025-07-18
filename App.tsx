@@ -22,7 +22,7 @@ function AppNavigator() {
   // Initialize analytics and navigation tracking when user state changes
   useEffect(() => {
     const initializeServices = async () => {
-      const amplitudeApiKey = process.env.EXPO_PUBLIC_AMPLITUDE_API_KEY;
+      const amplitudeApiKey = config.amplitudeApiKey;
       
       if (amplitudeApiKey) {
         await analyticsService.initialize({

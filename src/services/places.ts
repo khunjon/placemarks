@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 import { getPlaceTimezone } from '../utils/operatingHours';
 import { ErrorFactory, ErrorLogger, safeAsync, withRetry, withTimeout, ErrorType } from '../utils/errorHandling';
 import { CACHE_CONFIG } from '../config/cacheConfig';
+import { config } from '../config/environment';
 
 interface GooglePlaceResult {
   place_id: string;
@@ -67,7 +68,7 @@ export class PlacesService {
   private readonly AUTOCOMPLETE_CACHE_DURATION = CACHE_CONFIG.PLACES_SERVICE.AUTOCOMPLETE_CACHE_DURATION_MS;
 
   constructor() {
-    this.apiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || '';
+    this.apiKey = config.googlePlacesApiKey;
     if (!this.apiKey) {
       ErrorLogger.log(
         ErrorFactory.config(

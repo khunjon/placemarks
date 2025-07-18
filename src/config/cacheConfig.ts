@@ -4,10 +4,12 @@
  * and other cache-related configuration.
  */
 
+import { config } from './environment';
+
 export const CACHE_CONFIG = {
   // Google Places API Cache
   GOOGLE_PLACES: {
-    CACHE_DURATION_DAYS: parseInt(process.env.EXPO_PUBLIC_GOOGLE_PLACES_CACHE_DAYS || '90', 10),
+    CACHE_DURATION_DAYS: config.googlePlacesCacheDays,
     STALE_TIME_DAYS: 180, // 6 months before data is considered truly stale
     RATE_LIMIT_DELAY_MS: 100, // Delay between API calls to avoid rate limits
   },

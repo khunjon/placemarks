@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { CACHE_CONFIG } from '../config/cacheConfig';
+import { config } from '../config/environment';
 
 export interface GooglePlacesCacheEntry {
   google_place_id: string;
@@ -81,7 +82,7 @@ export interface GooglePlacesApiResponse {
 }
 
 class GooglePlacesCacheService {
-  private readonly GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY;
+  private readonly GOOGLE_PLACES_API_KEY = config.googlePlacesApiKey;
   private readonly CACHE_DURATION_DAYS = CACHE_CONFIG.GOOGLE_PLACES.CACHE_DURATION_DAYS;
   private readonly DEFAULT_FIELDS = [
     'place_id',

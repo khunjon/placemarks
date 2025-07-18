@@ -7,28 +7,20 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "credentialsSource": "remote",
-      "env": {
-        "EXPO_PUBLIC_GOOGLE_PLACES_API_KEY": "$GOOGLE_PLACES_API_KEY"
-      }
+      "credentialsSource": "remote"
     },
     "preview": {
       "distribution": "store",
       "autoIncrement": true,
-      "credentialsSource": "remote",
-      "env": {
-        "EXPO_PUBLIC_GOOGLE_PLACES_API_KEY": "$GOOGLE_PLACES_API_KEY"
-      }
+      "credentialsSource": "remote"
     },
     "production": {
       "autoIncrement": true,
-      "credentialsSource": "remote",
-      "env": {
-        "EXPO_PUBLIC_GOOGLE_PLACES_API_KEY": "$GOOGLE_PLACES_API_KEY"
-      }
+      "credentialsSource": "remote"
     }
   },
   "submit": {
+    "preview": {},
     "production": {}
   }
 }
