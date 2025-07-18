@@ -13,7 +13,7 @@
       }
     },
     "preview": {
-      "distribution": "internal",
+      "distribution": "store",
       "autoIncrement": true,
       "credentialsSource": "remote",
       "env": {
