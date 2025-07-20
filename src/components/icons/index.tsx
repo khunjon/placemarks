@@ -60,6 +60,7 @@ export const Phone = createIcon(MaterialIcons, 'phone');
 export const Navigation = createIcon(MaterialIcons, 'navigation');
 export const Share = createIcon(MaterialIcons, 'share');
 export const CheckSquare = createIcon(MaterialIcons, 'check-box');
+export const Square = createIcon(MaterialIcons, 'check-box-outline-blank');
 export const ExternalLink = createIcon(MaterialIcons, 'open-in-new');
 export const Eye = createIcon(MaterialIcons, 'visibility');
 export const EyeOff = createIcon(MaterialIcons, 'visibility-off');
@@ -132,6 +133,7 @@ export default {
   Navigation,
   Share,
   CheckSquare,
+  Square,
   ExternalLink,
   Eye,
   EyeOff,
