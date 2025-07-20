@@ -114,6 +114,57 @@ export class ListsService {
   }
 
   /**
+   * Get lightweight list summaries for a user (optimized for lists screen)
+   * This method uses an RPC function to fetch only essential list data without loading all places
+   */
+  async getUserListSummaries(userId: string): Promise<ListWithPlaces[]> {
+    return safeAsync(async () => {
+      console.log('[ListsService] Fetching list summaries for user:', userId);
+      const startTime = Date.now();
+      
+      const { data: summaries, error } = await supabase
+        .rpc('get_user_list_summaries', { user_id_param: userId });
+
+      if (error) {
+        throw ErrorFactory.database(
+          `Failed to get user list summaries: ${error.message}`,
+          { service: 'lists', operation: 'getUserListSummaries', userId },
+          error
+        );
+      }
+
+      const result: ListWithPlaces[] = (summaries || []).map((summary: any) => ({
+        id: summary.id,
+        user_id: userId,
+        name: summary.name,
+        auto_generated: false,
+        visibility: summary.visibility,
+        description: summary.description,
+        list_type: summary.list_type,
+        icon: summary.icon,
+        color: summary.color,
+        type: summary.is_default ? 'user' : 'user',
+        is_default: summary.is_default,
+        default_list_type: summary.default_list_type,
+        is_curated: false,
+        publisher_name: null,
+        publisher_logo_url: null,
+        external_link: null,
+        location_scope: null,
+        curator_priority: null,
+        created_at: summary.created_at,
+        places: [], // Empty array for summaries
+        place_count: Number(summary.place_count) || 0
+      }));
+
+      const elapsed = Date.now() - startTime;
+      console.log(`[ListsService] Fetched ${result.length} list summaries in ${elapsed}ms`);
+      
+      return result;
+    }, { service: 'lists', operation: 'getUserListSummaries', userId }, []) as Promise<ListWithPlaces[]>;
+  }
+
+  /**
    * Get lists with their places for a user
    */
   async getUserListsWithPlaces(userId: string): Promise<ListWithPlaces[]> {
@@ -266,7 +317,7 @@ export class ListsService {
    * Get default lists (Favorites and Want to Go) for a user
    */
   async getDefaultLists(userId: string): Promise<ListWithPlaces[]> {
-    const allLists = await this.getUserListsWithPlaces(userId);
+    const allLists = await this.getUserListSummaries(userId);
     return allLists.filter(list => list.is_default);
   }
 
@@ -274,7 +325,7 @@ export class ListsService {
    * Get custom (non-default) lists for a user
    */
   async getCustomLists(userId: string): Promise<ListWithPlaces[]> {
-    const allLists = await this.getUserListsWithPlaces(userId);
+    const allLists = await this.getUserListSummaries(userId);
     return allLists.filter(list => !list.is_default);
   }
 

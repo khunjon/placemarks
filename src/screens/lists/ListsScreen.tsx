@@ -64,7 +64,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       if (user) {
         console.log('ListsScreen focused, checking cache...');
         // Only refresh if we don't have recent cached data
-        cacheManager.lists.hasCache(user.id).then(hasCache => {
+        cacheManager.lists.hasSummariesCache(user.id).then(hasCache => {
           if (!hasCache) {
             // No cache, do a normal load
             loadAllLists();
@@ -83,12 +83,12 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     try {
       // Check cache first if not forcing refresh
       if (!forceRefresh) {
-        const cached = await cacheManager.lists.get(user.id);
+        const cached = await cacheManager.lists.getSummaries(user.id);
         if (cached) {
-          console.log('ListsScreen: Using cached lists data');
+          console.log('ListsScreen: Using cached list summaries');
           // Immediately show cached data
-          const defaultListsData = cached.userLists.filter(list => list.is_default);
-          const customListsData = cached.userLists.filter(list => !list.is_default);
+          const defaultListsData = cached.userListSummaries.filter(list => list.is_default);
+          const customListsData = cached.userListSummaries.filter(list => !list.is_default);
           
           // Sort default lists to ensure Favorites comes before Want to Go
           const sortedDefaultLists = defaultListsData.sort((a, b) => {
@@ -122,9 +122,15 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     if (!user?.id) return;
     
     try {
+      console.log('[ListsScreen] Starting to load user lists...');
+      const startTime = Date.now();
+      
       // Load default lists (Favorites + Want to Go) and custom lists separately
       const defaultListsData = await listsService.getDefaultLists(user.id);
       const customListsData = await listsService.getCustomLists(user.id);
+      
+      const loadTime = Date.now() - startTime;
+      console.log(`[ListsScreen] Loaded ${defaultListsData.length + customListsData.length} lists in ${loadTime}ms`);
       
       // Sort default lists to ensure Favorites comes before Want to Go
       const sortedDefaultLists = defaultListsData.sort((a, b) => {
@@ -136,9 +142,9 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       setDefaultLists(sortedDefaultLists);
       setCustomLists(customListsData);
       
-      // Cache the loaded data
+      // Cache the loaded summaries
       const allUserLists = [...defaultListsData, ...customListsData];
-      await cacheManager.lists.store(allUserLists, [], user.id);
+      await cacheManager.lists.storeSummaries(allUserLists, user.id);
     } catch (error) {
       console.error('Error loading user lists:', error);
       Alert.alert('Error', 'Failed to load user lists');
@@ -149,9 +155,15 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     if (!user?.id) return;
     
     try {
+      console.log('[ListsScreen] Starting background refresh...');
+      const startTime = Date.now();
+      
       // Load fresh data silently in background
       const defaultListsData = await listsService.getDefaultLists(user.id);
       const customListsData = await listsService.getCustomLists(user.id);
+      
+      const loadTime = Date.now() - startTime;
+      console.log(`[ListsScreen] Background refresh completed in ${loadTime}ms`);
       
       // Sort default lists to ensure Favorites comes before Want to Go
       const sortedDefaultLists = defaultListsData.sort((a, b) => {
@@ -164,9 +176,9 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       setDefaultLists(sortedDefaultLists);
       setCustomLists(customListsData);
       
-      // Update cache with fresh data
+      // Update cache with fresh summaries
       const allUserLists = [...defaultListsData, ...customListsData];
-      await cacheManager.lists.store(allUserLists, [], user.id);
+      await cacheManager.lists.storeSummaries(allUserLists, user.id);
     } catch (error) {
       console.warn('Background list refresh failed:', error);
       // Don't show error to user for background refresh failures
@@ -232,8 +244,12 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       // Immediately update the UI by adding to custom lists
       setCustomLists(prev => [...prev, newListWithPlaces]);
       
-      // Update cache with the new list
-      await cacheManager.lists.addList(newListWithPlaces, user.id);
+      // Update summaries cache with the new list (full cache will be updated on next detail load)
+      const currentSummaries = await cacheManager.lists.getSummaries(user.id);
+      if (currentSummaries) {
+        const updatedSummaries = [...currentSummaries.userListSummaries, newListWithPlaces];
+        await cacheManager.lists.storeSummaries(updatedSummaries, user.id);
+      }
       
       setShowCreateModal(false);
       Alert.alert('Success', `"${listData.name}" list created!`);
@@ -262,9 +278,13 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
               // Immediately update UI by removing from state
               setCustomLists(prev => prev.filter(list => list.id !== listId));
               
-              // Update cache by removing the list
+              // Update summaries cache by removing the list
               if (user?.id) {
-                await cacheManager.lists.removeList(listId, user.id);
+                const currentSummaries = await cacheManager.lists.getSummaries(user.id);
+                if (currentSummaries) {
+                  const updatedSummaries = currentSummaries.userListSummaries.filter(list => list.id !== listId);
+                  await cacheManager.lists.storeSummaries(updatedSummaries, user.id);
+                }
               }
               
               Alert.alert('Success', 'List deleted');
@@ -311,7 +331,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     placeCount: list.place_count,
     icon: list.icon,
     color: list.color,
-    previewPlaces: list.places.slice(0, 3).map(p => p.place.name).filter((name): name is string => name !== undefined),
+    previewPlaces: [], // Not used in current UI, removed to improve performance
     isEditable: true,
     onPress: () => handleNavigateToList(list.id, list.name),
     onDelete: () => handleDeleteList(list.id, list.name),

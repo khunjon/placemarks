@@ -8,6 +8,11 @@ interface ListsData {
   smartLists: EnhancedList[];
 }
 
+interface ListSummariesData {
+  userListSummaries: ListWithPlaces[]; // These have empty places arrays
+  lastUpdated: Date;
+}
+
 const CACHE_CONFIG_LISTS: CacheConfig = {
   keyPrefix: '@placemarks_lists_cache',
   validityDurationMs: CACHE_CONFIG.LISTS.VALIDITY_DURATION_MS,
@@ -16,20 +21,68 @@ const CACHE_CONFIG_LISTS: CacheConfig = {
   enableLogging: true
 };
 
+// Separate class for summaries cache
+class ListSummariesCache extends BaseAsyncStorageCache<ListSummariesData> {
+  constructor(config: CacheConfig) {
+    super(config);
+  }
+
+  protected generateCacheKey(userId: string): string {
+    return `${this.config.keyPrefix}_${userId}_summaries`;
+  }
+
+  // Public wrapper methods to expose protected functionality
+  async save(userId: string, data: ListSummariesData): Promise<void> {
+    const key = this.generateCacheKey(userId);
+    return this.saveToCache(key, data, userId);
+  }
+
+  async get(userId: string, allowStale: boolean = false) {
+    const key = this.generateCacheKey(userId);
+    return this.getFromCache(key, userId, allowStale);
+  }
+
+  async hasValid(userId: string): Promise<boolean> {
+    const key = this.generateCacheKey(userId);
+    return this.hasValidCache(key, userId);
+  }
+
+  async update(
+    userId: string,
+    updateFn: (data: ListSummariesData) => ListSummariesData,
+    preserveMetadata: boolean = true
+  ): Promise<void> {
+    const key = this.generateCacheKey(userId);
+    return this.updateCache(key, updateFn, userId, preserveMetadata);
+  }
+
+  async clear(userId: string): Promise<void> {
+    const key = this.generateCacheKey(userId);
+    return this.clearCache(key);
+  }
+}
+
 class ListsCacheService extends BaseAsyncStorageCache<ListsData> {
   private static readonly CACHE_KEY = 'default';
+  private static readonly SUMMARIES_SUFFIX = '_summaries';
+  
+  // Separate cache instance for summaries  
+  private summariesCache: ListSummariesCache;
   
   constructor() {
     super(CACHE_CONFIG_LISTS);
+    // Create a separate cache instance for summaries with the same config
+    this.summariesCache = new ListSummariesCache(CACHE_CONFIG_LISTS);
   }
 
   /**
    * Generate cache key - lists cache uses a single key per user
    */
-  protected generateCacheKey(userId?: string): string {
+  protected generateCacheKey(userId?: string, isSummary: boolean = false): string {
+    const suffix = isSummary ? ListsCacheService.SUMMARIES_SUFFIX : '';
     return userId 
-      ? `${this.config.keyPrefix}_${userId}`
-      : `${this.config.keyPrefix}_${ListsCacheService.CACHE_KEY}`;
+      ? `${this.config.keyPrefix}_${userId}${suffix}`
+      : `${this.config.keyPrefix}_${ListsCacheService.CACHE_KEY}${suffix}`;
   }
 
   /**
@@ -193,6 +246,85 @@ class ListsCacheService extends BaseAsyncStorageCache<ListsData> {
    */
   async clearCache(): Promise<void> {
     await this.clearAllCaches();
+  }
+
+  // ========== Summary-specific methods ==========
+
+  /**
+   * Save list summaries to cache (lightweight data for lists screen)
+   */
+  async saveListSummaries(
+    userListSummaries: ListWithPlaces[],
+    userId: string
+  ): Promise<void> {
+    const summariesData: ListSummariesData = {
+      userListSummaries,
+      lastUpdated: new Date(),
+    };
+    
+    await this.summariesCache.save(userId, summariesData);
+  }
+
+  /**
+   * Get cached list summaries if they're still valid
+   * @param allowStale - Allow serving stale cache for immediate response
+   */
+  async getCachedListSummaries(userId: string, allowStale: boolean = false): Promise<{
+    userListSummaries: ListWithPlaces[];
+    isStale?: boolean;
+  } | null> {
+    const cached = await this.summariesCache.get(userId, allowStale);
+    
+    if (!cached) {
+      return null;
+    }
+    
+    return {
+      userListSummaries: cached.data.userListSummaries,
+      isStale: cached.isStale,
+    };
+  }
+
+  /**
+   * Clear cached list summaries for a specific user
+   */
+  async clearListSummariesCache(userId: string): Promise<void> {
+    await this.summariesCache.clear(userId);
+  }
+
+  /**
+   * Check if we have cached list summaries for the user
+   */
+  async hasSummariesCache(userId: string): Promise<boolean> {
+    return await this.summariesCache.hasValid(userId);
+  }
+
+  /**
+   * Update a specific list in the summaries cache (for optimistic updates)
+   */
+  async updateListInSummariesCache(
+    listId: string, 
+    updatedList: Partial<ListWithPlaces>,
+    userId: string
+  ): Promise<void> {
+    await this.summariesCache.update(
+      userId,
+      (data) => ({
+        ...data,
+        userListSummaries: data.userListSummaries.map(list => 
+          list.id === listId ? { ...list, ...updatedList } : list
+        )
+      }),
+      true
+    );
+  }
+
+  /**
+   * Clear all caches (both full data and summaries)
+   */
+  async clearAllUserCaches(userId: string): Promise<void> {
+    await this.clearListsCache(userId);
+    await this.clearListSummariesCache(userId);
   }
 }
 

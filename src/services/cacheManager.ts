@@ -209,6 +209,42 @@ export class CacheManager {
      */
     invalidate: async (userId: string): Promise<void> => {
       return ListsCache.invalidateCache(userId);
+    },
+
+    // ========== Summary-specific methods ==========
+    
+    /**
+     * Get cached list summaries (lightweight data for lists screen)
+     */
+    getSummaries: async (userId: string): Promise<{
+      userListSummaries: ListWithPlaces[];
+      isStale?: boolean;
+    } | null> => {
+      return ListsCache.getCachedListSummaries(userId);
+    },
+
+    /**
+     * Save list summaries to cache
+     */
+    storeSummaries: async (
+      userListSummaries: ListWithPlaces[],
+      userId: string
+    ): Promise<void> => {
+      return ListsCache.saveListSummaries(userListSummaries, userId);
+    },
+
+    /**
+     * Check if we have cached summaries for user
+     */
+    hasSummariesCache: async (userId: string): Promise<boolean> => {
+      return ListsCache.hasSummariesCache(userId);
+    },
+
+    /**
+     * Clear all caches (both full data and summaries)
+     */
+    clearAll: async (userId: string): Promise<void> => {
+      return ListsCache.clearAllUserCaches(userId);
     }
   };
 
