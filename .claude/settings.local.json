@@ -24,7 +24,9 @@
       "mcp__ide__getDiagnostics",
       "mcp__supabase__get_advisors",
       "mcp__supabase__list_migrations",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "mcp__supabase__search_docs",
+      "WebFetch(domain:supabase.com)"
     ],
     "deny": []
   },

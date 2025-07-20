@@ -43,6 +43,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   updateProfile: (updates: ProfileUpdate) => Promise<{ error: any }>;
   refreshUser: () => Promise<void>;
+  refreshSession: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
   resendEmailVerification: () => Promise<{ error: any }>;
 }
@@ -121,20 +122,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
       
-              // Auth state change handled
+      console.log('Auth state change event:', event);
+      
+      // Update session state
       setSession(session);
       
       if (session?.user) {
-        // Only load profile if it's a new user or sign in event
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          try {
-            await loadUserProfile(session.user.id);
-          } catch (error) {
-            console.warn('Failed to load user profile during auth state change:', error);
+        // Handle different auth events
+        switch (event) {
+          case 'SIGNED_IN':
+          case 'TOKEN_REFRESHED':
+          case 'USER_UPDATED':
+            try {
+              await loadUserProfile(session.user.id);
+            } catch (error) {
+              console.warn('Failed to load user profile during auth state change:', error);
+              clearFailsafeAndSetLoading(false);
+            }
+            break;
+          case 'SIGNED_OUT':
+            setUser(null);
             clearFailsafeAndSetLoading(false);
-          }
+            break;
+          default:
+            // For other events, just ensure loading is false
+            if (loading) {
+              clearFailsafeAndSetLoading(false);
+            }
         }
-      } else {
+      } else if (event === 'SIGNED_OUT') {
+        // Only clear user on explicit sign out
         setUser(null);
         clearFailsafeAndSetLoading(false);
       }
@@ -261,6 +278,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const refreshSession = async () => {
+    try {
+      console.log('Attempting to refresh session...');
+      
+      // Try to refresh the session
+      const { data, error } = await supabase.auth.refreshSession();
+      
+      if (error) {
+        console.error('Session refresh error:', error);
+        
+        // If refresh fails, try to get the current session
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError || !sessionData.session) {
+          console.error('Failed to recover session:', sessionError);
+          // Don't automatically sign out - let the user continue using the app
+          // The auth state change listener will handle sign out if truly necessary
+          return;
+        }
+        
+        // Update session if we recovered it
+        setSession(sessionData.session);
+        if (sessionData.session?.user) {
+          await loadUserProfile(sessionData.session.user.id);
+        }
+      } else if (data.session) {
+        console.log('Session refreshed successfully');
+        setSession(data.session);
+        
+        // Update user profile if needed
+        if (data.session.user && (!user || user.id !== data.session.user.id)) {
+          await loadUserProfile(data.session.user.id);
+        }
+      }
+    } catch (error) {
+      console.error('Unexpected error during session refresh:', error);
+      // Don't throw - gracefully handle the error and let the user continue
+    }
+  };
+
   const resetPassword = async (email: string) => {
     try {
       return await authService.resetPassword(email);
@@ -287,6 +344,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signOut,
     updateProfile,
     refreshUser,
+    refreshSession,
     resetPassword,
     resendEmailVerification,
   }), [user, session, loading]);

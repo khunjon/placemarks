@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { AppState, AppStateStatus } from 'react-native';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AuthProvider, useAuth } from './src/services/auth-context';
@@ -10,14 +11,64 @@ import type { RootStackParamList } from './src/navigation/types';
 import { analyticsService } from './src/services/analytics';
 import { NAVIGATION_METHODS } from './src/constants/ScreenNames';
 import { FullScreenLoading } from './src/components/common/LoadingState';
+import { config } from './src/config/environment';
+import { supabase } from './src/services/supabase';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function AppNavigator() {
-  const { user, loading } = useAuth();
+  const { user, loading, refreshSession } = useAuth();
   const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
   const routeNameRef = useRef<string | undefined>(undefined);
   const previousStateRef = useRef<any>(undefined);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+
+  // Handle app state changes (foreground/background)
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+      // App has come to the foreground
+      if (
+        appStateRef.current.match(/inactive|background/) &&
+        nextAppState === 'active'
+      ) {
+        console.log('App has come to the foreground, refreshing session...');
+        
+        // Refresh the session when app comes to foreground
+        if (user) {
+          try {
+            await refreshSession();
+            console.log('Session refreshed successfully');
+          } catch (error) {
+            console.error('Failed to refresh session:', error);
+          }
+        }
+        
+        // Start auto-refresh
+        supabase.auth.startAutoRefresh();
+      } else if (nextAppState.match(/inactive|background/)) {
+        // App has gone to the background
+        console.log('App has gone to the background, stopping auto-refresh...');
+        
+        // Stop auto-refresh when app goes to background
+        supabase.auth.stopAutoRefresh();
+      }
+
+      appStateRef.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    // Start auto-refresh on mount if app is active
+    if (AppState.currentState === 'active') {
+      supabase.auth.startAutoRefresh();
+    }
+
+    return () => {
+      subscription.remove();
+      // Stop auto-refresh on unmount
+      supabase.auth.stopAutoRefresh();
+    };
+  }, [user, refreshSession]);
 
   // Initialize analytics and navigation tracking when user state changes
   useEffect(() => {
