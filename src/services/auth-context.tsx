@@ -3,6 +3,8 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { authService } from './auth';
 import { AuthProvider as AuthProviderType, UserUpdate as ProfileUpdate, User as AppUser } from '../types';
+import { networkService } from './networkService';
+import { ErrorFactory, ErrorLogger } from '../utils/errorHandling';
 
 // Utility function to add timeout to promises
 const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
@@ -22,12 +24,45 @@ const withRetry = async <T,>(
 ): Promise<T> => {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
+      // Check network before attempting operation
+      if (!networkService.isConnected()) {
+        console.log('No network connection, waiting for connection...');
+        const connected = await networkService.waitForConnection(5000);
+        if (!connected) {
+          throw ErrorFactory.network(
+            'No network connection available',
+            { service: 'auth', operation: 'retry' }
+          );
+        }
+      }
+      
       return await operation();
-    } catch (error) {
-      if (attempt === maxRetries) throw error;
+    } catch (error: any) {
+      // Check if this is a network error
+      const isNetworkError = 
+        error.name === 'AuthRetryableFetchError' || 
+        error.message?.includes('Network request failed') ||
+        error.message?.includes('Failed to fetch') ||
+        error.type === 'NETWORK_ERROR';
+      
+      if (attempt === maxRetries || !isNetworkError) throw error;
       
       const delay = baseDelay * Math.pow(2, attempt);
       console.warn(`Auth operation failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms:`, error);
+      
+      // Log the error for monitoring
+      ErrorLogger.log(
+        ErrorFactory.network(
+          `Auth retry attempt ${attempt + 1}/${maxRetries + 1}`,
+          { 
+            service: 'auth', 
+            operation: 'retry',
+            metadata: { attempt, maxRetries, delay }
+          },
+          error
+        )
+      );
+      
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
@@ -66,6 +101,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isNetworkAvailable, setIsNetworkAvailable] = useState(true);
   const failsafeTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   // Helper function to clear failsafe timeout and set loading to false
@@ -79,6 +115,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     let isMounted = true;
+
+    // Set up network monitoring
+    const removeNetworkListener = networkService.addListener((isConnected) => {
+      setIsNetworkAvailable(isConnected);
+      if (isConnected && session?.user && !user) {
+        // Try to reload user profile when network comes back
+        loadUserProfile(session.user.id).catch(console.error);
+      }
+    });
 
     // Maximum loading time failsafe - increased to 10 seconds to allow for retries
     failsafeTimeoutRef.current = setTimeout(() => {
@@ -110,7 +155,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       .catch((error) => {
         if (!isMounted) return;
         
-        console.warn('Auth session check failed after retries:', error);
+        // Enhanced error logging
+        const isNetworkError = 
+          error.name === 'AuthRetryableFetchError' || 
+          error.message?.includes('Network request failed');
+        
+        if (isNetworkError) {
+          console.warn('Auth session check failed due to network error:', error.message);
+          ErrorLogger.log(
+            ErrorFactory.network(
+              'Failed to check authentication status due to network error',
+              { 
+                service: 'auth', 
+                operation: 'initialize',
+                metadata: { 
+                  errorName: error.name,
+                  errorMessage: error.message 
+                }
+              },
+              error
+            )
+          );
+        } else {
+          console.warn('Auth session check failed after retries:', error);
+        }
+        
         setSession(null);
         setUser(null);
         clearFailsafeAndSetLoading(false);
@@ -163,6 +232,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         clearTimeout(failsafeTimeoutRef.current);
       }
       subscription.unsubscribe();
+      removeNetworkListener();
     };
   }, []);
 
@@ -188,6 +258,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signIn = async (provider: AuthProviderType | 'email', email?: string, password?: string) => {
     setLoading(true);
     try {
+      // Check network before sign in
+      if (!isNetworkAvailable) {
+        const connected = await networkService.waitForConnection(5000);
+        if (!connected) {
+          return { 
+            error: ErrorFactory.network(
+              'No network connection. Please check your internet and try again.',
+              { service: 'auth', operation: 'signIn' }
+            )
+          };
+        }
+      }
+      
       let result;
       
       switch (provider) {
@@ -212,6 +295,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       return { error: result.error };
     } catch (error: any) {
+      // Enhanced error handling for network issues
+      if (error.name === 'AuthRetryableFetchError' || 
+          error.message?.includes('Network request failed')) {
+        return { 
+          error: ErrorFactory.network(
+            'Sign in failed due to network error. Please try again.',
+            { service: 'auth', operation: 'signIn' },
+            error
+          )
+        };
+      }
       return { error };
     } finally {
       clearFailsafeAndSetLoading(false);

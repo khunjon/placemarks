@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, Place, CheckIn, List } from '../types';
 import { ErrorFactory, ErrorLogger, safeAsync } from '../utils/errorHandling';
 import { config } from '../config/environment';
+import { createFetchWithRetry } from '../utils/fetchWithRetry';
 
 // Database type definitions for Supabase
 export interface Database {
@@ -69,6 +70,17 @@ export interface Database {
   };
 }
 
+// Create custom fetch with retry logic for better network handling
+const customFetch = createFetchWithRetry({
+  maxRetries: 3,
+  initialDelay: 1000,
+  maxDelay: 10000,
+  timeout: 30000,
+  onRetry: (attempt, error) => {
+    console.log(`Supabase fetch retry attempt ${attempt}:`, error.message);
+  },
+});
+
 // Initialize Supabase client with configuration
 export const supabase = createClient<Database>(config.supabaseUrl, config.supabaseAnonKey, {
   auth: {
@@ -81,6 +93,7 @@ export const supabase = createClient<Database>(config.supabaseUrl, config.supaba
     headers: {
       'Cache-Control': 'no-cache',
     },
+    fetch: customFetch,
   },
   // Add timeout configuration for better network handling
   realtime: {

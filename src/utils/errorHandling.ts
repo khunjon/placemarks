@@ -115,6 +115,10 @@ export class AppError extends Error {
     // Return user-friendly messages based on error type
     switch (this.type) {
       case ErrorType.NETWORK_ERROR:
+        // Special handling for auth network errors
+        if (this.code === 'AUTH_NETWORK_ERROR' || this.originalError?.name === 'AuthRetryableFetchError') {
+          return 'Unable to connect to authentication service. Please check your internet connection and try again.';
+        }
         return 'Network connection issue. Please check your internet connection and try again.';
       case ErrorType.TIMEOUT_ERROR:
         return 'The request took too long. Please try again.';
@@ -263,6 +267,12 @@ export const DEFAULT_RETRY_CONFIG: RetryConfig = {
         ErrorType.RATE_LIMIT_ERROR
       ].includes(error.type);
     }
+    // Also retry on specific auth errors
+    if (error.name === 'AuthRetryableFetchError' || 
+        error.message?.includes('AuthRetryableFetchError') ||
+        error.message?.includes('Network request failed')) {
+      return true;
+    }
     return false;
   }
 };
@@ -397,8 +407,11 @@ export const ErrorFactory = {
   permission: (action: string, context: Partial<ErrorContext>) =>
     new AppError(`Permission denied for ${action}`, ErrorType.PERMISSION_ERROR, 'PERMISSION_DENIED', ErrorSeverity.MEDIUM, context),
     
-  network: (message: string, context: Partial<ErrorContext>, originalError?: Error) =>
-    new AppError(message, ErrorType.NETWORK_ERROR, 'NETWORK_ERROR', ErrorSeverity.MEDIUM, context, originalError),
+  network: (message: string, context: Partial<ErrorContext>, originalError?: Error) => {
+    // Special handling for auth network errors
+    const code = originalError?.name === 'AuthRetryableFetchError' ? 'AUTH_NETWORK_ERROR' : 'NETWORK_ERROR';
+    return new AppError(message, ErrorType.NETWORK_ERROR, code, ErrorSeverity.MEDIUM, context, originalError);
+  },
     
   googlePlaces: (message: string, statusCode: string, context: Partial<ErrorContext>, originalError?: Error) =>
     new AppError(message, ErrorType.GOOGLE_PLACES_ERROR, `GOOGLE_PLACES_${statusCode}`, ErrorSeverity.MEDIUM, context, originalError),
