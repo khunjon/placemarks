@@ -165,63 +165,16 @@ export class ListsService {
   }
 
   /**
-   * Get lists with their places for a user
+   * Get lists with their places for a user (optimized version)
+   * Note: This is kept for backward compatibility but now uses the optimized RPC function
    */
   async getUserListsWithPlaces(userId: string): Promise<ListWithPlaces[]> {
     return safeAsync(async () => {
-      const { data: listData, error } = await supabase
-        .from('lists')
-        .select(`
-          id,
-          user_id,
-          name,
-          auto_generated,
-          visibility,
-          description,
-          list_type,
-          icon,
-          color,
-          type,
-          is_default,
-          default_list_type,
-          is_curated,
-          publisher_name,
-          publisher_logo_url,
-          external_link,
-          location_scope,
-          curator_priority,
-          created_at,
-          list_places (
-            list_id,
-            place_id,
-            added_at,
-            notes,
-            personal_rating,
-            visit_count,
-            sort_order,
-            enriched_places (
-              google_place_id,
-              name,
-              formatted_address,
-              geometry,
-              types,
-              rating,
-              price_level,
-              formatted_phone_number,
-              website,
-              opening_hours,
-              photo_urls,
-              primary_image_url,
-              display_description,
-              is_featured,
-              has_editorial_content,
-              business_status
-            )
-          )
-        `)
-        .eq('user_id', userId)
-        .eq('is_curated', false)
-        .order('updated_at', { ascending: false });
+      console.log('[ListsService] Fetching all user lists with places (optimized)');
+      const startTime = Date.now();
+      
+      const { data: result, error } = await supabase
+        .rpc('get_user_lists_with_places', { user_id_param: userId });
 
       if (error) {
         throw ErrorFactory.database(
@@ -231,85 +184,48 @@ export class ListsService {
         );
       }
 
-      const result: ListWithPlaces[] = [];
-
-      for (const list of listData || []) {
-        // Get places for this list separately with manual join
-        const { data: listPlacesData, error: placesError } = await supabase
-          .from('list_places')
-          .select(`
-            list_id,
-            place_id,
-            added_at,
-            notes,
-            personal_rating,
-            visit_count,
-            sort_order
-          `)
-          .eq('list_id', list.id)
-          .order('sort_order', { ascending: true });
-
-        if (placesError) {
-          console.error(`Error fetching places for list ${list.name}:`, placesError);
-          continue;
-        }
-
-        const places: EnrichedListPlace[] = [];
-        
-        // For each list place, get the enriched place data
-        for (const listPlace of listPlacesData || []) {
-          const { data: enrichedPlace, error: enrichedError } = await supabase
-            .from('enriched_places')
-            .select('*')
-            .eq('google_place_id', listPlace.place_id)
-            .single();
-
-          if (enrichedError) {
-            console.warn(`Could not find enriched place for ${listPlace.place_id}:`, enrichedError);
-            continue;
-          }
-
-          // Include places that are operational or have unknown status (null)
-          if (enrichedPlace && (enrichedPlace.business_status === 'OPERATIONAL' || enrichedPlace.business_status === null)) {
-            places.push({
-              list_id: listPlace.list_id,
-              place_id: listPlace.place_id,
-              added_at: listPlace.added_at,
-              notes: listPlace.notes,
-              personal_rating: listPlace.personal_rating,
-              visit_count: listPlace.visit_count,
-              sort_order: listPlace.sort_order,
-              place: enrichedPlace as EnrichedPlace
-            });
-          }
-        }
-
-        result.push({
-          id: list.id,
-          user_id: list.user_id,
-          name: list.name,
-          auto_generated: list.auto_generated,
-          visibility: list.visibility,
-          description: list.description,
-          list_type: list.list_type,
-          icon: list.icon,
-          color: list.color,
-          type: list.type,
-          is_default: list.is_default,
-          default_list_type: list.default_list_type,
-          is_curated: list.is_curated,
-          publisher_name: list.publisher_name,
-          publisher_logo_url: list.publisher_logo_url,
-          external_link: list.external_link,
-          location_scope: list.location_scope,
-          curator_priority: list.curator_priority,
-          created_at: list.created_at,
-          places,
-          place_count: places.length
-        });
+      if (!result || !Array.isArray(result)) {
+        return [];
       }
 
-      return result;
+      // Transform the JSON result into our TypeScript types
+      const lists: ListWithPlaces[] = result.map((listData: any) => ({
+        id: listData.id,
+        user_id: listData.user_id,
+        name: listData.name,
+        auto_generated: listData.auto_generated,
+        visibility: listData.visibility,
+        description: listData.description,
+        list_type: listData.list_type,
+        icon: listData.icon,
+        color: listData.color,
+        type: listData.type,
+        is_default: listData.is_default,
+        default_list_type: listData.default_list_type,
+        is_curated: listData.is_curated,
+        publisher_name: listData.publisher_name,
+        publisher_logo_url: listData.publisher_logo_url,
+        external_link: listData.external_link,
+        location_scope: listData.location_scope,
+        curator_priority: listData.curator_priority,
+        created_at: listData.created_at,
+        places: listData.places.map((p: any) => ({
+          list_id: p.list_id,
+          place_id: p.place_id,
+          added_at: p.added_at,
+          notes: p.notes,
+          personal_rating: p.personal_rating,
+          visit_count: p.visit_count,
+          sort_order: p.sort_order,
+          place: p.place as EnrichedPlace
+        })),
+        place_count: listData.place_count
+      }));
+
+      const elapsed = Date.now() - startTime;
+      console.log(`[ListsService] Fetched ${lists.length} lists with places in ${elapsed}ms`);
+      
+      return lists;
     }, { service: 'lists', operation: 'getUserListsWithPlaces', userId }, []) as Promise<ListWithPlaces[]>;
   }
 
@@ -327,6 +243,74 @@ export class ListsService {
   async getCustomLists(userId: string): Promise<ListWithPlaces[]> {
     const allLists = await this.getUserListSummaries(userId);
     return allLists.filter(list => !list.is_default);
+  }
+
+  /**
+   * Get a single list with all its places (optimized for list details screen)
+   * This method uses an RPC function to fetch everything in a single query
+   */
+  async getListDetailsOptimized(listId: string, userId: string): Promise<ListWithPlaces | null> {
+    return safeAsync(async () => {
+      console.log('[ListsService] Fetching optimized list details for:', listId);
+      const startTime = Date.now();
+      
+      const { data: result, error } = await supabase
+        .rpc('get_list_with_places_details', { 
+          list_id_param: listId,
+          user_id_param: userId 
+        });
+
+      if (error) {
+        throw ErrorFactory.database(
+          `Failed to get list details: ${error.message}`,
+          { service: 'lists', operation: 'getListDetailsOptimized', metadata: { listId }, userId },
+          error
+        );
+      }
+
+      if (!result) {
+        return null;
+      }
+
+      // Transform the JSON result into our TypeScript types
+      const listData: ListWithPlaces = {
+        id: result.id,
+        user_id: result.user_id,
+        name: result.name,
+        auto_generated: result.auto_generated,
+        visibility: result.visibility,
+        description: result.description,
+        list_type: result.list_type,
+        icon: result.icon,
+        color: result.color,
+        type: result.type,
+        is_default: result.is_default,
+        default_list_type: result.default_list_type,
+        is_curated: result.is_curated,
+        publisher_name: result.publisher_name,
+        publisher_logo_url: result.publisher_logo_url,
+        external_link: result.external_link,
+        location_scope: result.location_scope,
+        curator_priority: result.curator_priority,
+        created_at: result.created_at,
+        places: result.places.map((p: any) => ({
+          list_id: p.list_id,
+          place_id: p.place_id,
+          added_at: p.added_at,
+          notes: p.notes,
+          personal_rating: p.personal_rating,
+          visit_count: p.visit_count,
+          sort_order: p.sort_order,
+          place: p.place as EnrichedPlace
+        })),
+        place_count: result.place_count
+      };
+
+      const elapsed = Date.now() - startTime;
+      console.log(`[ListsService] Fetched list with ${listData.places.length} places in ${elapsed}ms`);
+      
+      return listData;
+    }, { service: 'lists', operation: 'getListDetailsOptimized', metadata: { listId }, userId }, null) as Promise<ListWithPlaces | null>;
   }
 
   /**
@@ -1062,6 +1046,76 @@ export class ListsService {
   }
 
   // 7. CURATED LISTS METHODS
+  
+  /**
+   * Get a single curated list with all its places (optimized)
+   */
+  async getCuratedListDetailsOptimized(listId: string): Promise<ListWithPlaces | null> {
+    return safeAsync(async () => {
+      console.log('[ListsService] Fetching optimized curated list details for:', listId);
+      const startTime = Date.now();
+      
+      // For curated lists, we pass a dummy user ID since they're public
+      const dummyUserId = '00000000-0000-0000-0000-000000000000';
+      
+      const { data: result, error } = await supabase
+        .rpc('get_list_with_places_details', { 
+          list_id_param: listId,
+          user_id_param: dummyUserId 
+        });
+
+      if (error) {
+        throw ErrorFactory.database(
+          `Failed to get curated list details: ${error.message}`,
+          { service: 'lists', operation: 'getCuratedListDetailsOptimized', metadata: { listId } },
+          error
+        );
+      }
+
+      if (!result) {
+        return null;
+      }
+
+      // Transform the JSON result into our TypeScript types
+      const listData: ListWithPlaces = {
+        id: result.id,
+        user_id: result.user_id,
+        name: result.name,
+        auto_generated: result.auto_generated,
+        visibility: result.visibility,
+        description: result.description,
+        list_type: result.list_type,
+        icon: result.icon,
+        color: result.color,
+        type: result.type,
+        is_default: result.is_default,
+        default_list_type: result.default_list_type,
+        is_curated: result.is_curated,
+        publisher_name: result.publisher_name,
+        publisher_logo_url: result.publisher_logo_url,
+        external_link: result.external_link,
+        location_scope: result.location_scope,
+        curator_priority: result.curator_priority,
+        created_at: result.created_at,
+        places: result.places.map((p: any) => ({
+          list_id: p.list_id,
+          place_id: p.place_id,
+          added_at: p.added_at,
+          notes: p.notes,
+          personal_rating: p.personal_rating,
+          visit_count: p.visit_count,
+          sort_order: p.sort_order,
+          place: p.place as EnrichedPlace
+        })),
+        place_count: result.place_count
+      };
+
+      const elapsed = Date.now() - startTime;
+      console.log(`[ListsService] Fetched curated list with ${listData.places.length} places in ${elapsed}ms`);
+      
+      return listData;
+    }, { service: 'lists', operation: 'getCuratedListDetailsOptimized', metadata: { listId } }, null) as Promise<ListWithPlaces | null>;
+  }
 
   /**
    * Get curated lists (admin-managed lists)

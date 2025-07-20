@@ -234,18 +234,26 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
   };
 
   /**
-   * Load list with places using the simplified service
+   * Load list with places using the optimized service
    */
   const loadListWithPlaces = async (): Promise<ListWithPlaces | null> => {
+    console.log('[ListDetailScreen] Loading list with optimized method');
+    const startTime = Date.now();
+    
+    let result: ListWithPlaces | null = null;
+    
     if (listType === 'curated') {
-      // Load curated lists with places
-      const curatedLists = await listsService.getCuratedLists();
-      return curatedLists.find(l => l.id === listId) || null;
+      // Load curated list with optimized method
+      result = await listsService.getCuratedListDetailsOptimized(listId);
     } else {
-      // Load user lists with places
-      const lists = await listsService.getUserListsWithPlaces(user!.id);
-      return lists.find(l => l.id === listId) || null;
+      // Load user list with optimized method
+      result = await listsService.getListDetailsOptimized(listId, user!.id);
     }
+    
+    const elapsed = Date.now() - startTime;
+    console.log(`[ListDetailScreen] List loaded in ${elapsed}ms`);
+    
+    return result;
   };
 
   /**
