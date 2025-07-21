@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   View, 
-  ScrollView, 
+  ScrollView,
+  FlatList,
   Text, 
   TouchableOpacity, 
   Alert, 
   RefreshControl,
   Modal,
-  Share as RNShare
+  Share as RNShare,
+  ListRenderItem
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -478,6 +480,29 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
     }
   };
 
+  /**
+   * Render individual place item for FlatList
+   */
+  const renderPlaceItem: ListRenderItem<EnrichedListPlace> = useCallback(({ item: listPlace }) => {
+    return (
+      <SwipeablePlaceCard
+        googlePlaceId={listPlace.place_id}
+        place={listPlace.place}
+        name={listPlace.place?.name || 'Unknown Place'}
+        address={listPlace.place?.formatted_address || ''}
+        distance=""
+        onCheckIn={handleCheckIn}
+        onPress={() => handlePlacePress(listPlace.place_id, listPlace.place?.name || 'Unknown Place')}
+        showCheckInButton={false}
+        notes={listPlace.notes}
+        onDelete={handleRemovePlace}
+        onAddToWantToGo={handleAddToWantToGo}
+        enableDelete={effectiveIsEditable}
+        enableAddToWantToGo={list?.default_list_type !== 'want_to_go'}
+      />
+    );
+  }, [effectiveIsEditable, list?.default_list_type, handleCheckIn, handlePlacePress, handleRemovePlace, handleAddToWantToGo]);
+
   // Only show loading state if we have no data AND we're loading (first time load)
   if (loading && !list) {
     return (
@@ -604,18 +629,18 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
 
 
       {/* Places List */}
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: Spacing.lg }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={DarkTheme.colors.bangkok.gold}
-          />
-        }
-      >
-        {sortedPlaces.length === 0 ? (
+      {sortedPlaces.length === 0 ? (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingHorizontal: Spacing.lg }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={DarkTheme.colors.bangkok.gold}
+            />
+          }
+        >
           <EmptyState
             title="No Places Yet"
             description="Start building your list by adding some amazing places!"
@@ -624,29 +649,35 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
               onPress: handleAddPlace
             } : undefined}
           />
-        ) : (
-          <View style={{ paddingVertical: Spacing.md, gap: Spacing.sm }}>
-            {sortedPlaces.map((listPlace, index) => (
-              <SwipeablePlaceCard
-                key={`${listPlace.place_id}-${index}`}
-                googlePlaceId={listPlace.place_id}
-                place={listPlace.place}
-                name={listPlace.place?.name || 'Unknown Place'}
-                address={listPlace.place?.formatted_address || ''}
-                distance=""
-                onCheckIn={handleCheckIn}
-                onPress={() => handlePlacePress(listPlace.place_id, listPlace.place?.name || 'Unknown Place')}
-                showCheckInButton={false}
-                notes={listPlace.notes}
-                onDelete={handleRemovePlace}
-                onAddToWantToGo={handleAddToWantToGo}
-                enableDelete={effectiveIsEditable}
-                enableAddToWantToGo={list?.default_list_type !== 'want_to_go'}
-              />
-            ))}
-          </View>
-        )}
-      </ScrollView>
+        </ScrollView>
+      ) : (
+        <FlatList
+          data={sortedPlaces}
+          keyExtractor={(item, index) => `${item.place_id}-${index}`}
+          renderItem={renderPlaceItem}
+          contentContainerStyle={{ 
+            paddingHorizontal: Spacing.lg,
+            paddingVertical: Spacing.md
+          }}
+          ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={DarkTheme.colors.bangkok.gold}
+            />
+          }
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          removeClippedSubviews={true}
+          getItemLayout={(data, index) => ({
+            length: 100, // Approximate height of SwipeablePlaceCard
+            offset: 100 * index + Spacing.sm * index,
+            index,
+          })}
+        />
+      )}
 
       {/* Sort Modal */}
       <Modal

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useLayoutEffect } from 'react';
+import React, { useRef, useState, useLayoutEffect, memo } from 'react';
 import { View, Text, Alert, Animated, PanResponder, LayoutChangeEvent } from 'react-native';
 import { Trash2, Plus } from '../icons';
 import { DarkTheme } from '../../constants/theme';
@@ -16,7 +16,7 @@ const SWIPE_THRESHOLD = 80; // Reduced threshold for easier triggering
 const MAX_SWIPE = 120; // Reduced max swipe distance
 const ACTIVATION_THRESHOLD = 20; // Minimum distance to show action
 
-export default function SwipeablePlaceCard({
+const SwipeablePlaceCard = memo(function SwipeablePlaceCard({
   onDelete,
   onAddToWantToGo,
   enableDelete = false,
@@ -246,4 +246,6 @@ export default function SwipeablePlaceCard({
       </Animated.View>
     </View>
   );
-}
+});
+
+export default SwipeablePlaceCard;

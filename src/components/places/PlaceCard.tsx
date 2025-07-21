@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useMemo } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { DarkTheme } from '../../constants/theme';
@@ -111,7 +111,7 @@ const shortenPlaceName = (name: string): string => {
 
 // Note: inferPlaceTypeFromGoogleTypes is now imported from utils/placeTypeMapping.ts
 
-export default function PlaceCard({
+const PlaceCard = memo(function PlaceCard({
   googlePlaceId,
   name,
   type,
@@ -129,21 +129,21 @@ export default function PlaceCard({
   notes,
   style,
 }: PlaceCardProps) {
-  // Calculate real-time open/closed status using our utility
-  const calculateIsOpen = (placeObj: EnrichedPlace | undefined): boolean | null => {
-    if (!placeObj?.opening_hours || !placeObj?.geometry?.location) {
+  // Memoize the open/closed calculation to avoid recalculating on every render
+  const calculatedIsOpen = useMemo(() => {
+    if (!place?.opening_hours || !place?.geometry?.location) {
       return null;
     }
     
     return isPlaceCurrentlyOpen(
-      placeObj.opening_hours,
+      place.opening_hours,
       {
-        lat: placeObj.geometry.location.lat,
-        lng: placeObj.geometry.location.lng
+        lat: place.geometry.location.lat,
+        lng: place.geometry.location.lng
       },
-      placeObj.timezone // Use cached timezone if available
+      place.timezone // Use cached timezone if available
     );
-  };
+  }, [place?.opening_hours, place?.geometry?.location, place?.timezone]);
 
   // Use place object data if provided, otherwise use individual props
   const placeData = place ? {
@@ -155,7 +155,7 @@ export default function PlaceCard({
     distance: distance || '',
     rating: place.rating,
     priceLevel: place.price_level,
-    isOpen: calculateIsOpen(place),
+    isOpen: calculatedIsOpen,
     btsStation: btsStation // BTS station would come from Bangkok context
   } : {
     googlePlaceId,
@@ -411,4 +411,18 @@ export default function PlaceCard({
       )}
     </TouchableOpacity>
   );
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison function for memo
+  // Only re-render if these props change
+  return (
+    prevProps.googlePlaceId === nextProps.googlePlaceId &&
+    prevProps.name === nextProps.name &&
+    prevProps.address === nextProps.address &&
+    prevProps.notes === nextProps.notes &&
+    prevProps.showCheckInButton === nextProps.showCheckInButton &&
+    prevProps.place?.opening_hours === nextProps.place?.opening_hours &&
+    prevProps.place?.business_status === nextProps.place?.business_status
+  );
+});
+
+export default PlaceCard;
