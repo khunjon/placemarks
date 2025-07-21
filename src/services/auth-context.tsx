@@ -1,16 +1,19 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from 'react';
-import { Session, User } from '@supabase/supabase-js';
+import { Session } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { authService } from './auth';
 import { AuthProvider as AuthProviderType, UserUpdate as ProfileUpdate, User as AppUser } from '../types';
 import { networkService } from './networkService';
 import { ErrorFactory, ErrorLogger } from '../utils/errorHandling';
+import { authMonitor } from '../utils/authMonitoring';
 
 // Constants for session persistence
 const SESSION_STORAGE_KEY = '@placemarks/session';
 const USER_STORAGE_KEY = '@placemarks/user';
-const SESSION_TIMEOUT = 30000; // Increased to 30 seconds
+const SESSION_TIMEOUT = 60000; // 60 seconds for operations
+const SESSION_CHECK_INTERVAL = 5 * 60 * 1000; // Check session every 5 minutes
+const SESSION_PERSIST_KEY = '@placemarks/session_persist_timestamp';
 
 // Utility function to add timeout to promises
 const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
@@ -112,6 +115,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const failsafeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastValidSessionRef = useRef<Session | null>(null);
   const lastValidUserRef = useRef<AppUser | null>(null);
+  const hasInitializedRef = useRef(false);
 
   // Helper function to clear failsafe timeout and set loading to false
   const clearFailsafeAndSetLoading = (value: boolean) => {
@@ -126,15 +130,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const persistSession = async (session: Session | null, user: AppUser | null) => {
     try {
       if (session && user) {
-        await AsyncStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-        await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+        await AsyncStorage.multiSet([
+          [SESSION_STORAGE_KEY, JSON.stringify(session)],
+          [USER_STORAGE_KEY, JSON.stringify(user)],
+          [SESSION_PERSIST_KEY, Date.now().toString()]
+        ]);
         lastValidSessionRef.current = session;
         lastValidUserRef.current = user;
       } else {
         // Only clear storage on explicit sign out, not on errors
         if (!isRecoveringSession) {
-          await AsyncStorage.removeItem(SESSION_STORAGE_KEY);
-          await AsyncStorage.removeItem(USER_STORAGE_KEY);
+          await AsyncStorage.multiRemove([SESSION_STORAGE_KEY, USER_STORAGE_KEY, SESSION_PERSIST_KEY]);
           lastValidSessionRef.current = null;
           lastValidUserRef.current = null;
         }
@@ -147,22 +153,47 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Recover session from AsyncStorage
   const recoverSession = async (): Promise<{ session: Session | null; user: AppUser | null }> => {
     try {
+      // Prevent concurrent recovery attempts
+      if (isRecoveringSession) {
+        console.log('Session recovery already in progress, skipping');
+        return { session: lastValidSessionRef.current, user: lastValidUserRef.current };
+      }
       setIsRecoveringSession(true);
-      const [storedSession, storedUser] = await Promise.all([
-        AsyncStorage.getItem(SESSION_STORAGE_KEY),
-        AsyncStorage.getItem(USER_STORAGE_KEY)
-      ]);
+      const results = await AsyncStorage.multiGet([SESSION_STORAGE_KEY, USER_STORAGE_KEY, SESSION_PERSIST_KEY]);
+      const storedSession = results[0][1];
+      const storedUser = results[1][1];
+      const lastPersistTime = results[2][1];
 
       if (storedSession && storedUser) {
         const session = JSON.parse(storedSession) as Session;
         const user = JSON.parse(storedUser) as AppUser;
         
-        // Validate session is not expired
+        // Check if session is still valid
         const expiresAt = session.expires_at || 0;
         const now = Math.floor(Date.now() / 1000);
         
-        if (expiresAt > now) {
+        // For JWT tokens, Supabase typically uses 1 hour expiry
+        // We'll accept sessions that expired up to 24 hours ago for recovery
+        const gracePeriod = 24 * 60 * 60; // 24 hours in seconds
+        
+        if (expiresAt > now || (now - expiresAt) < gracePeriod) {
+          // Store in refs for future use
+          lastValidSessionRef.current = session;
+          lastValidUserRef.current = user;
+          
+          const logDetails = {
+            expired: expiresAt <= now,
+            expiresIn: expiresAt > now ? `${Math.floor((expiresAt - now) / 60)} minutes` : 'expired',
+            lastPersisted: lastPersistTime ? new Date(parseInt(lastPersistTime)).toISOString() : 'unknown'
+          };
+          console.log('Session recovered from storage', logDetails);
+          authMonitor.logEvent('session_recovered', logDetails, session);
+          
           return { session, user };
+        } else {
+          console.log('Session too old to recover', {
+            expiredHoursAgo: Math.floor((now - expiresAt) / 3600)
+          });
         }
       }
     } catch (error) {
@@ -176,6 +207,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     let isMounted = true;
+    
+    // Prevent re-initialization
+    if (hasInitializedRef.current) {
+      console.log('Auth context already initialized, skipping');
+      return;
+    }
+    hasInitializedRef.current = true;
+    
+    // Initialize auth monitoring
+    authMonitor.loadLogs().then(() => {
+      authMonitor.logEvent('auth_context_initialized', {
+        hasStoredSession: !!lastValidSessionRef.current,
+        hasStoredUser: !!lastValidUserRef.current
+      }, lastValidSessionRef.current);
+    });
 
     // Set up network monitoring
     const removeNetworkListener = networkService.addListener((isConnected) => {
@@ -192,10 +238,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setSession(recoveredSession);
         setUser(recoveredUser);
         console.log('Recovered session from storage');
+        authMonitor.logEvent('session_initial_recovery', { source: 'startup' }, recoveredSession);
+        
+        // If we recovered an expired session, immediately try to refresh it
+        const expiresAt = recoveredSession.expires_at || 0;
+        const now = Math.floor(Date.now() / 1000);
+        if (expiresAt <= now) {
+          console.log('Recovered session is expired, attempting refresh');
+          authMonitor.logEvent('session_expired_on_recovery', { expiresAt }, recoveredSession);
+          refreshSession().catch(console.error);
+        }
       }
     });
 
-    // Maximum loading time failsafe - increased to 30 seconds
+    // Maximum loading time failsafe
     failsafeTimeoutRef.current = setTimeout(() => {
       if (isMounted && loading) {
         console.warn('Auth initialization timed out, using cached session if available');
@@ -231,49 +287,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       .catch(async (error) => {
         if (!isMounted) return;
         
-        // Enhanced error handling without clearing auth state
+        // Enhanced error handling - NEVER clear auth state on network errors
         const isNetworkError = 
           error.name === 'AuthRetryableFetchError' || 
           error.message?.includes('Network request failed') ||
           error.message?.includes('Failed to fetch') ||
-          error.message?.includes('timed out');
+          error.message?.includes('timed out') ||
+          error.message?.includes('ECONNREFUSED') ||
+          error.message?.includes('ENETUNREACH') ||
+          error.message?.includes('ETIMEDOUT');
         
         if (isNetworkError) {
-          console.warn('Network error during auth check, maintaining current session:', error.message);
+          console.warn('Network error during auth check, maintaining session:', error.message);
           
-          // Try to use recovered session
+          // Always try to use recovered session on network errors
           const { session: recoveredSession, user: recoveredUser } = await recoverSession();
           if (recoveredSession && recoveredUser) {
             setSession(recoveredSession);
             setUser(recoveredUser);
             console.log('Using recovered session after network error');
+          } else if (lastValidSessionRef.current && lastValidUserRef.current) {
+            // Use last valid session if recovery fails
+            setSession(lastValidSessionRef.current);
+            setUser(lastValidUserRef.current);
+            console.log('Using last valid session after network error');
           }
-          
-          // Log for monitoring but don't sign out user
-          ErrorLogger.log(
-            ErrorFactory.network(
-              'Network error during auth check - session maintained',
-              { 
-                service: 'auth', 
-                operation: 'initialize',
-                metadata: { 
-                  errorName: error.name,
-                  errorMessage: error.message,
-                  hasRecoveredSession: !!recoveredSession
-                }
-              },
-              error
-            )
-          );
+          // Never clear auth on network errors
         } else {
-          // For non-network errors, still try to recover
-          console.warn('Auth check failed, attempting recovery:', error);
+          // For non-network errors, still try to maintain session
+          console.warn('Auth check error, attempting recovery:', error);
           const { session: recoveredSession, user: recoveredUser } = await recoverSession();
           if (recoveredSession && recoveredUser) {
             setSession(recoveredSession);
             setUser(recoveredUser);
+            console.log('Recovered session after auth error');
+          } else if (lastValidSessionRef.current && lastValidUserRef.current) {
+            // Try last valid session before giving up
+            setSession(lastValidSessionRef.current);
+            setUser(lastValidUserRef.current);
+            console.log('Using last valid session after auth error');
           } else {
-            // Only clear if recovery also failed
+            // Only clear if all recovery attempts failed AND it's not a network error
+            console.log('All recovery attempts failed, clearing session');
             setSession(null);
             setUser(null);
           }
@@ -282,6 +337,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         clearFailsafeAndSetLoading(false);
       });
 
+    // Note: Session monitoring moved to separate effect
+
     // Listen for auth changes
     const {
       data: { subscription },
@@ -289,6 +346,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (!isMounted) return;
       
       console.log('Auth state change event:', event);
+      authMonitor.logEvent('auth_state_change', { event }, session);
       
       // Update session state
       setSession(session);
@@ -337,7 +395,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       subscription.unsubscribe();
       removeNetworkListener();
     };
-  }, []);
+  }, []); // Run only once on mount
+
+  // Separate effect for session monitoring
+  useEffect(() => {
+    if (!session) return;
+
+    const sessionCheckInterval = setInterval(() => {
+      const expiresAt = session.expires_at || 0;
+      const now = Math.floor(Date.now() / 1000);
+      const minutesUntilExpiry = Math.floor((expiresAt - now) / 60);
+      
+      // Refresh if less than 10 minutes until expiry
+      if (minutesUntilExpiry < 10 && minutesUntilExpiry > -5) {
+        console.log(`Session expiring in ${minutesUntilExpiry} minutes, refreshing...`);
+        refreshSession().catch(error => {
+          console.error('Periodic session refresh failed:', error);
+        });
+      }
+    }, SESSION_CHECK_INTERVAL);
+
+    return () => {
+      clearInterval(sessionCheckInterval);
+    };
+  }, [session]); // Re-run when session changes
 
   const loadUserProfile = async (userId: string): Promise<AppUser | null> => {
     try {
@@ -361,21 +442,56 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         );
       
       if (isNetworkError) {
-        // For network errors, keep existing user state
-        console.log('Maintaining existing user state due to network error');
-        return user; // Return current user state
-      } else {
-        // For auth errors, check if we have a valid session
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        if (currentSession) {
-          // Session is valid but profile load failed, keep minimal auth
-          console.log('Session valid but profile load failed, maintaining auth');
-          return user || { id: userId, email: currentSession.user.email } as AppUser;
-        } else {
-          // No valid session, clear user
-          setUser(null);
-          return null;
+        // For network errors, always keep existing user state
+        console.log('Network error loading profile, maintaining existing user state');
+        if (user) {
+          return user;
+        } else if (lastValidUserRef.current) {
+          // Try to use last valid user
+          setUser(lastValidUserRef.current);
+          return lastValidUserRef.current;
         }
+        // Create minimal user object from session if available
+        if (session?.user) {
+          const minimalUser = { 
+            id: userId, 
+            email: session.user.email,
+            full_name: session.user.user_metadata?.full_name
+          } as AppUser;
+          setUser(minimalUser);
+          return minimalUser;
+        }
+        return null;
+      } else {
+        // For non-network errors, still try to maintain user state
+        console.log('Profile load error (non-network), attempting to maintain state');
+        
+        // Return existing user if available
+        if (user) {
+          return user;
+        } else if (lastValidUserRef.current) {
+          return lastValidUserRef.current;
+        }
+        
+        // Only as last resort, check session validity
+        try {
+          const { data: { session: currentSession } } = await supabase.auth.getSession();
+          if (currentSession) {
+            // Session is valid but profile load failed, create minimal user
+            const minimalUser = { 
+              id: userId, 
+              email: currentSession.user.email,
+              full_name: currentSession.user.user_metadata?.full_name
+            } as AppUser;
+            setUser(minimalUser);
+            return minimalUser;
+          }
+        } catch (sessionError) {
+          console.error('Failed to check session validity:', sessionError);
+        }
+        
+        // Only clear user if absolutely no recovery is possible
+        return null;
       }
     } finally {
       clearFailsafeAndSetLoading(false);
@@ -384,6 +500,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signIn = async (provider: AuthProviderType | 'email', email?: string, password?: string) => {
     setLoading(true);
+    authMonitor.logEvent('sign_in_started', { provider }, session);
     try {
       // Check network before sign in
       if (!isNetworkAvailable) {
@@ -420,6 +537,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           return { error: new Error('Invalid provider') };
       }
       
+      if (!result.error) {
+        authMonitor.logEvent('sign_in_success', { provider }, session);
+      } else {
+        authMonitor.logEvent('sign_in_failed', { provider, error: result.error.message }, session);
+      }
       return { error: result.error };
     } catch (error: any) {
       // Enhanced error handling for network issues
@@ -453,10 +575,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signOut = async () => {
     setLoading(true);
+    authMonitor.logEvent('sign_out_started', {}, session);
     try {
       await authService.signOut();
+      authMonitor.logEvent('sign_out_success', {}, null);
     } catch (error) {
       console.error('Sign out error:', error);
+      authMonitor.logEvent('sign_out_error', { error: error instanceof Error ? error.message : 'Unknown error' }, session);
     } finally {
       clearFailsafeAndSetLoading(false);
     }
@@ -501,16 +626,45 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const refreshSession = async () => {
     try {
-      console.log('Attempting to refresh session...');
+      console.log('Starting session refresh...');
+      authMonitor.logEvent('session_refresh_started', {}, session);
+      
+      // First, check if we have a session to refresh
+      const currentSession = session || lastValidSessionRef.current;
+      if (!currentSession) {
+        console.log('No session to refresh, attempting recovery');
+        const recovered = await recoverSession();
+        if (recovered.session && recovered.user) {
+          setSession(recovered.session);
+          setUser(recovered.user);
+          // Try to refresh the recovered session
+          const { data, error } = await supabase.auth.refreshSession({ refresh_token: recovered.session.refresh_token });
+          if (!error && data?.session) {
+            setSession(data.session);
+            await persistSession(data.session, recovered.user);
+          }
+        }
+        return;
+      }
       
       // Try to refresh the session with retry
       const { data, error } = await withRetry(
-        () => withTimeout(supabase.auth.refreshSession(), SESSION_TIMEOUT),
-        2,
-        3000
+        async () => {
+          // Use the current session's refresh token explicitly
+          const refreshToken = currentSession.refresh_token;
+          if (!refreshToken) {
+            throw new Error('No refresh token available');
+          }
+          return await withTimeout(
+            supabase.auth.refreshSession({ refresh_token: refreshToken }), 
+            SESSION_TIMEOUT
+          );
+        },
+        3, // More retries
+        2000
       ).catch(async (retryError) => {
         // If refresh with retry fails, try to use stored session
-        console.log('Session refresh failed, attempting recovery from storage');
+        console.log('Session refresh failed after retries, attempting recovery');
         const recovered = await recoverSession();
         if (recovered.session && recovered.user) {
           return { data: { session: recovered.session, user: recovered.session.user }, error: null };
@@ -525,52 +679,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const isNetworkError = 
           error.message?.includes('Network') ||
           error.message?.includes('Failed to fetch') ||
+          error.message?.includes('timed out') ||
           error.name === 'AuthRetryableFetchError';
         
         if (isNetworkError) {
-          // For network errors, maintain current session
-          console.log('Network error during refresh, maintaining current session');
+          // For network errors, absolutely maintain current session
+          console.log('Network error during refresh, keeping current session active');
+          // Don't change anything - just keep the current session
           return;
         }
         
-        // For auth errors, try to get the current session
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError || !sessionData.session) {
-          console.error('Session validation failed:', sessionError);
-          // Still don't sign out - wait for explicit sign out or auth state change
-          return;
-        }
-        
-        // Update session if we recovered it
-        setSession(sessionData.session);
-        if (sessionData.session?.user) {
-          const userProfile = await loadUserProfile(sessionData.session.user.id);
-          if (userProfile) {
-            await persistSession(sessionData.session, userProfile);
+        // For non-network errors, check if it's a refresh token issue
+        if (error.message?.includes('refresh_token') || error.message?.includes('invalid')) {
+          console.log('Refresh token invalid, attempting to recover from storage');
+          const recovered = await recoverSession();
+          if (recovered.session && recovered.user) {
+            setSession(recovered.session);
+            setUser(recovered.user);
           }
+          return;
         }
+        
+        // For other auth errors, maintain current state
+        console.log('Auth error during refresh, maintaining current state');
+        return;
       } else if (data?.session) {
         console.log('Session refreshed successfully');
+        authMonitor.logEvent('session_refresh_success', {
+          hadToRetry: false,
+          newExpiresAt: data.session.expires_at
+        }, data.session);
         setSession(data.session);
         
-        // Update user profile if needed
-        if (data.session.user) {
-          const userProfile = await loadUserProfile(data.session.user.id);
-          if (userProfile) {
-            await persistSession(data.session, userProfile);
-          }
+        // Always persist the refreshed session
+        const userProfile = user || (await loadUserProfile(data.session.user.id));
+        if (userProfile) {
+          await persistSession(data.session, userProfile);
         }
       }
     } catch (error) {
       console.error('Unexpected error during session refresh:', error);
       
-      // Try to recover from storage as last resort
-      const { session: recoveredSession, user: recoveredUser } = await recoverSession();
-      if (recoveredSession && recoveredUser) {
-        setSession(recoveredSession);
-        setUser(recoveredUser);
-        console.log('Recovered session after refresh error');
+      // Always try to maintain auth state on errors
+      if (!session && lastValidSessionRef.current && lastValidUserRef.current) {
+        console.log('Using last valid session after refresh error');
+        setSession(lastValidSessionRef.current);
+        setUser(lastValidUserRef.current);
       }
     }
   };

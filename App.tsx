@@ -17,11 +17,12 @@ import { supabase } from './src/services/supabase';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function AppNavigator() {
-  const { user, loading, refreshSession } = useAuth();
+  const { user, loading, refreshSession, session } = useAuth();
   const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
   const routeNameRef = useRef<string | undefined>(undefined);
   const previousStateRef = useRef<any>(undefined);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const backgroundTimestampRef = useRef<number | null>(null);
 
   // Handle app state changes (foreground/background)
   useEffect(() => {
@@ -32,31 +33,46 @@ function AppNavigator() {
       
       // App has come to the foreground
       if (isComingToForeground) {
-        console.log('App has come to the foreground');
+        const backgroundDuration = backgroundTimestampRef.current 
+          ? Date.now() - backgroundTimestampRef.current 
+          : 0;
+        
+        console.log('App has come to the foreground', {
+          backgroundDurationSeconds: Math.floor(backgroundDuration / 1000),
+          hasUser: !!user,
+          hasSession: !!session
+        });
         
         // Always start auto-refresh when coming to foreground
         supabase.auth.startAutoRefresh();
         
-        // Only refresh session if user exists and we've been in background for a while
-        if (user) {
-          // Don't await this - let it happen in background
-          refreshSession().catch(error => {
+        // Always refresh session when coming from background if we have a user
+        if (user || session) {
+          // Immediate refresh for better UX
+          console.log('Refreshing session after background period');
+          refreshSession().catch(() => {
             // Silently handle refresh errors - the auth context will maintain state
-            console.log('Background session refresh failed, but maintaining auth state');
+            console.log('Background session refresh handled gracefully');
           });
         }
+        
+        // Clear background timestamp
+        backgroundTimestampRef.current = null;
       } else if (isGoingToBackground) {
         // App has gone to the background
         console.log('App has gone to the background');
         
-        // Keep auto-refresh running for a bit in background
-        // This helps with quick app switches
+        // Record when we went to background
+        backgroundTimestampRef.current = Date.now();
+        
+        // Keep auto-refresh running for 2 minutes in background
+        // This helps with quick app switches and iOS app suspension
         setTimeout(() => {
           if (AppState.currentState.match(/inactive|background/)) {
-            console.log('Stopping auto-refresh after background timeout');
+            console.log('Stopping auto-refresh after extended background timeout');
             supabase.auth.stopAutoRefresh();
           }
-        }, 30000); // 30 seconds
+        }, 2 * 60 * 1000); // 2 minutes
       }
 
       appStateRef.current = nextAppState;
@@ -85,7 +101,7 @@ function AppNavigator() {
       // Stop auto-refresh on unmount
       supabase.auth.stopAutoRefresh();
     };
-  }, [user, refreshSession]);
+  }, [user, refreshSession, session]);
 
   // Initialize analytics on app mount
   useEffect(() => {
