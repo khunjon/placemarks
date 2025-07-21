@@ -3,11 +3,9 @@ import {
   View, 
   ScrollView, 
   Text, 
-  TextInput, 
   TouchableOpacity, 
   Alert, 
   RefreshControl,
-  Switch,
   Modal,
   Share as RNShare
 } from 'react-native';
@@ -35,8 +33,6 @@ import {
   Title3, 
   Body, 
   SecondaryText,
-  PrimaryButton,
-  SecondaryButton,
   Card,
   ElevatedCard,
   LoadingState,
@@ -87,10 +83,6 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
   const [list, setList] = useState<ListWithPlaces | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedName, setEditedName] = useState(initialListName);
-  const [editedDescription, setEditedDescription] = useState('');
-  const [isPublic, setIsPublic] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('date_added');
   const [showSortModal, setShowSortModal] = useState(false);
   const [userRatings, setUserRatings] = useState<Record<string, UserRatingType>>({});
@@ -155,9 +147,6 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
         if (cached) {
           // Immediately show cached data
           setList(cached.list);
-          setEditedName(cached.list.name);
-          setEditedDescription(cached.list.description || '');
-          setIsPublic(cached.list.visibility === 'public');
           setUserRatings(cached.userRatings);
           setLoading(false);
           
@@ -206,9 +195,6 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       
       // Update state
       setList(listWithPlaces);
-      setEditedName(listWithPlaces.name);
-      setEditedDescription(listWithPlaces.description || '');
-      setIsPublic(listWithPlaces.visibility === 'public');
       setUserRatings(userRatingsData);
       
       // Cache the loaded data
@@ -265,49 +251,6 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
     setRefreshing(false);
   };
 
-  /**
-   * Handle list editing
-   */
-  const handleSaveEdit = async () => {
-    if (!editedName.trim()) {
-      showToast('List name cannot be empty', 'error');
-      return;
-    }
-    
-    try {
-      await listsService.updateList(listId, {
-        name: editedName.trim(),
-        description: editedDescription.trim(),
-        visibility: isPublic ? 'public' : 'private',
-      });
-      
-      setIsEditing(false);
-      showToast('List updated successfully');
-      
-      // Update local state
-      if (list) {
-        const updatedList = {
-          ...list,
-          name: editedName.trim(),
-          description: editedDescription.trim(),
-          visibility: isPublic ? 'public' : 'private',
-        };
-        setList(updatedList);
-        
-        // Update cache with new metadata
-        if (user?.id) {
-          await cacheManager.listDetails.updateMetadata(listId, {
-            name: editedName.trim(),
-            description: editedDescription.trim(),
-            visibility: isPublic ? 'public' : 'private',
-          }, user.id);
-        }
-      }
-    } catch (error) {
-      console.error('Error updating list:', error);
-      showToast('Failed to update list', 'error');
-    }
-  };
 
   /**
    * Handle list deletion
@@ -484,6 +427,22 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
   };
 
   /**
+   * Navigate to edit screen
+   */
+  const handleEditList = () => {
+    if (!list) return;
+    
+    navigation.navigate('EditList', {
+      listId: list.id,
+      listName: list.name,
+      listDescription: list.description || '',
+      listIcon: list.icon || 'heart',
+      listType: list.list_type || 'general',
+      listVisibility: (list.visibility === 'curated' ? 'private' : list.visibility) || 'private',
+    });
+  };
+
+  /**
    * Sort places based on selected option
    */
   const getSortedPlaces = (): EnrichedListPlace[] => {
@@ -551,8 +510,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       edges={['left', 'right', 'bottom']}
     >
       {/* Sticky Header - Progress bar for all lists */}
-      {(
-        <View style={{
+      <View style={{
           backgroundColor: DarkTheme.colors.semantic.systemBackground,
           paddingHorizontal: Spacing.lg,
           paddingTop: 8,
@@ -560,95 +518,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
           borderBottomWidth: 1,
           borderBottomColor: DarkTheme.colors.semantic.separator,
         }}>
-        {isEditing ? (
-          // Edit Mode
-          <View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md }}>
-              <TouchableOpacity
-                onPress={() => navigation.goBack()}
-                style={{ padding: Spacing.xs, marginRight: Spacing.sm }}
-              >
-                <ArrowLeft size={24} color={DarkTheme.colors.semantic.label} strokeWidth={2} />
-              </TouchableOpacity>
-              <TextInput
-                value={editedName}
-                onChangeText={setEditedName}
-                style={{
-                  fontSize: 24,
-                  fontWeight: '700',
-                  color: DarkTheme.colors.semantic.label,
-                  backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
-                  paddingHorizontal: Spacing.sm,
-                  paddingVertical: Spacing.xs,
-                  borderRadius: 8,
-                  flex: 1,
-                }}
-                placeholder="List name"
-                placeholderTextColor={DarkTheme.colors.semantic.tertiaryLabel}
-              />
-            </View>
-
-            <TextInput
-              value={editedDescription}
-              onChangeText={setEditedDescription}
-              style={{
-                backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
-                paddingHorizontal: Spacing.sm,
-                paddingVertical: Spacing.sm,
-                borderRadius: 8,
-                color: DarkTheme.colors.semantic.label,
-                marginBottom: Spacing.md,
-                minHeight: 60,
-              }}
-              placeholder="Add a description..."
-              placeholderTextColor={DarkTheme.colors.semantic.tertiaryLabel}
-              multiline
-              textAlignVertical="top"
-            />
-
-            {effectiveIsEditable && (
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: Spacing.md,
-              }}>
-                <Body>Make list public</Body>
-                <Switch
-                  value={isPublic}
-                  onValueChange={setIsPublic}
-                  trackColor={{ 
-                    false: DarkTheme.colors.semantic.tertiarySystemBackground, 
-                    true: DarkTheme.colors.bangkok.gold 
-                  }}
-                  thumbColor={DarkTheme.colors.semantic.systemBackground}
-                />
-              </View>
-            )}
-
-            <View style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-            }}>
-              <SecondaryButton
-                title="Cancel"
-                onPress={() => {
-                  setIsEditing(false);
-                  setEditedName(list.name);
-                  setEditedDescription(list.description || '');
-                  setIsPublic(list.visibility === 'public');
-                }}
-                style={{ flex: 1, marginRight: Spacing.sm }}
-              />
-              <PrimaryButton
-                title="Save"
-                onPress={handleSaveEdit}
-                style={{ flex: 1 }}
-              />
-            </View>
-          </View>
-        ) : (
-          // Display Mode - Progress Bar
+          {/* Display Mode - Progress Bar */}
           <View>
             {/* Progress Bar */}
             <View style={{
@@ -711,7 +581,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                 
                 {effectiveIsEditable && (
                   <TouchableOpacity
-                    onPress={() => setIsEditing(!isEditing)}
+                    onPress={handleEditList}
                     style={{ padding: 4 }}
                   >
                     <Edit3 size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
@@ -729,9 +599,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
               </View>
             </View>
           </View>
-        )}
-        </View>
-      )}
+      </View>
 
 
 

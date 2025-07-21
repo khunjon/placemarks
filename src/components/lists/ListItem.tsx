@@ -24,7 +24,9 @@ import {
   Book,
   Gamepad2,
   Dumbbell,
-  Pin
+  Pin,
+  Trophy,
+  Trees
 } from '../icons';
 import { DarkTheme } from '../../constants/theme';
 
@@ -49,6 +51,8 @@ const getIconComponent = (iconKey: string) => {
       return Heart;
     case 'coffee':
       return Coffee;
+    case 'trophy':
+      return Trophy;
     case 'briefcase':
       return Briefcase;
     case 'star':
@@ -63,8 +67,12 @@ const getIconComponent = (iconKey: string) => {
       return Music;
     case 'shopping-bag':
       return ShoppingBag;
+    case 'trees':
+      return Trees;
     case 'plane':
       return Plane;
+    case 'map-pin':
+      return MapPin;
     case 'home':
       return Home;
     case 'users':

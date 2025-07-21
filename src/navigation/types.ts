@@ -57,6 +57,7 @@ export type ListsStackParamList = {
     listDescription?: string;
     listIcon?: string;
     listType?: string;
+    listVisibility?: 'private' | 'friends' | 'public';
   };
   CreateList: undefined;
   AddPlaceToList: {

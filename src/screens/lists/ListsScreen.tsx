@@ -312,6 +312,7 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
         listDescription: listToEdit.description || '',
         listIcon: listToEdit.icon || 'list',
         listType: listToEdit.list_type || 'general',
+        listVisibility: (listToEdit.visibility === 'curated' ? 'private' : listToEdit.visibility) || 'private',
       });
     }
   };

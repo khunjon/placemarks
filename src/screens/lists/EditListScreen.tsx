@@ -44,7 +44,7 @@ const iconOptions = [
 ];
 
 export default function EditListScreen({ route, navigation }: EditListScreenProps) {
-  const { listId, listName, listDescription = '', listIcon = 'heart', listType = 'general' } = route.params;
+  const { listId, listName, listDescription = '', listIcon = 'heart', listType = 'general', listVisibility = 'private' } = route.params;
   const { user } = useAuth();
   
   // Check if this is the Favorites list
@@ -52,11 +52,28 @@ export default function EditListScreen({ route, navigation }: EditListScreenProp
   
   const [name, setName] = useState(listName);
   const [description, setDescription] = useState(listDescription);
+  const [visibility, setVisibility] = useState<'private' | 'friends' | 'public'>(listVisibility);
   
   // Find the selected icon from the options, fallback to first option if not found
   const initialIcon = iconOptions.find(option => option.key === listIcon) || iconOptions[0];
   const [selectedIcon, setSelectedIcon] = useState(initialIcon);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Track initial values for change detection
+  const initialValues = {
+    name: listName,
+    description: listDescription,
+    icon: listIcon,
+    visibility: listVisibility
+  };
+  
+  // Check if any changes have been made
+  const hasChanges = () => {
+    return name !== initialValues.name ||
+           description !== initialValues.description ||
+           selectedIcon.key !== initialValues.icon ||
+           visibility !== initialValues.visibility;
+  };
   
   // Toast state
   const [showToast, setShowToast] = useState(false);
@@ -88,6 +105,7 @@ export default function EditListScreen({ route, navigation }: EditListScreenProp
         description: description.trim(),
         icon: selectedIcon.key,
         color: selectedIcon.color,
+        visibility: visibility,
         list_type: listType, // Preserve the original list type
         type: 'user' as const,
       };
@@ -322,9 +340,9 @@ export default function EditListScreen({ route, navigation }: EditListScreenProp
 
         <TouchableOpacity
           onPress={handleSave}
-          disabled={!name.trim() || isLoading}
+          disabled={!name.trim() || isLoading || !hasChanges()}
           style={{
-            backgroundColor: (!name.trim() || isLoading) 
+            backgroundColor: (!name.trim() || isLoading || !hasChanges()) 
               ? DarkTheme.colors.semantic.tertiaryLabel 
               : DarkTheme.colors.bangkok.gold,
             paddingHorizontal: DarkTheme.spacing.sm,
@@ -332,7 +350,7 @@ export default function EditListScreen({ route, navigation }: EditListScreenProp
             borderRadius: DarkTheme.borderRadius.sm,
             flexDirection: 'row',
             alignItems: 'center',
-            opacity: (!name.trim() || isLoading) ? 0.5 : 1,
+            opacity: (!name.trim() || isLoading || !hasChanges()) ? 0.5 : 1,
           }}
           activeOpacity={0.8}
         >
@@ -362,105 +380,6 @@ export default function EditListScreen({ route, navigation }: EditListScreenProp
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Preview */}
-        <View style={{
-          backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
-          borderColor: DarkTheme.colors.semantic.separator,
-          borderWidth: 1,
-          borderRadius: DarkTheme.borderRadius.md,
-          padding: DarkTheme.spacing.md,
-          marginBottom: DarkTheme.spacing.lg,
-          ...DarkTheme.shadows.small,
-        }}>
-          <Text style={[
-            DarkTheme.typography.subhead,
-            { 
-              color: DarkTheme.colors.semantic.secondaryLabel,
-              marginBottom: DarkTheme.spacing.sm,
-              fontWeight: '600',
-            }
-          ]}>
-            Preview
-          </Text>
-          
-          {/* Header Row - matching ListCard format */}
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: DarkTheme.spacing.sm,
-          }}>
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              flex: 1,
-            }}>
-              <View 
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginRight: DarkTheme.spacing.sm,
-                  backgroundColor: `${selectedIcon.color}20`,
-                }}
-              >
-                <selectedIcon.icon 
-                  size={20} 
-                  color={selectedIcon.color}
-                  strokeWidth={2}
-                />
-              </View>
-              
-              <View style={{ flex: 1 }}>
-                <Text 
-                  style={[
-                    DarkTheme.typography.headline,
-                    { 
-                      color: DarkTheme.colors.semantic.label,
-                      marginBottom: 2,
-                    }
-                  ]}
-                  numberOfLines={1}
-                >
-                  {name || 'My List'}
-                </Text>
-                
-                <Text 
-                  style={[
-                    DarkTheme.typography.caption1,
-                    { 
-                      color: DarkTheme.colors.semantic.secondaryLabel,
-                      fontWeight: '600' 
-                    }
-                  ]}
-                >
-                  0 places
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Description preview */}
-          {description && (
-            <View style={{
-              backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
-              borderRadius: DarkTheme.borderRadius.xs,
-              padding: DarkTheme.spacing.sm,
-              marginTop: DarkTheme.spacing.xs,
-            }}>
-              <Text style={[
-                DarkTheme.typography.caption1,
-                { 
-                  color: DarkTheme.colors.semantic.secondaryLabel,
-                }
-              ]}>
-                {description}
-              </Text>
-            </View>
-          )}
-        </View>
 
         {/* List Name Input */}
         <View style={{ marginBottom: DarkTheme.spacing.lg }}>
@@ -549,6 +468,91 @@ export default function EditListScreen({ route, navigation }: EditListScreenProp
             multiline
             returnKeyType="done"
           />
+        </View>
+
+        {/* Visibility Toggle */}
+        <View style={{ marginBottom: DarkTheme.spacing.lg }}>
+          <Text style={[
+            DarkTheme.typography.headline,
+            { 
+              color: DarkTheme.colors.semantic.label,
+              marginBottom: DarkTheme.spacing.sm,
+              fontWeight: '600',
+            }
+          ]}>
+            List Visibility
+          </Text>
+          
+          <TouchableOpacity
+            style={{
+              backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
+              borderColor: DarkTheme.colors.semantic.separator,
+              borderWidth: 1,
+              borderRadius: DarkTheme.borderRadius.md,
+              padding: DarkTheme.spacing.md,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+            onPress={() => {
+              // Cycle through visibility options
+              if (visibility === 'private') {
+                setVisibility('friends');
+              } else if (visibility === 'friends') {
+                setVisibility('public');
+              } else {
+                setVisibility('private');
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <View>
+              <Text style={[
+                DarkTheme.typography.body,
+                { 
+                  color: DarkTheme.colors.semantic.label,
+                  marginBottom: DarkTheme.spacing.xs,
+                }
+              ]}>
+                {visibility === 'private' ? 'Private List' : visibility === 'friends' ? 'Friends Only' : 'Public List'}
+              </Text>
+              <Text style={[
+                DarkTheme.typography.caption1,
+                { color: DarkTheme.colors.semantic.secondaryLabel }
+              ]}>
+                {visibility === 'private' 
+                  ? 'Only you can see this list' 
+                  : visibility === 'friends' 
+                  ? 'Your friends can see this list' 
+                  : 'Anyone can discover this list'}
+              </Text>
+            </View>
+            
+            <View style={{
+              backgroundColor: visibility === 'public' 
+                ? DarkTheme.colors.bangkok.gold 
+                : visibility === 'friends'
+                ? DarkTheme.colors.accent.blue
+                : DarkTheme.colors.semantic.tertiarySystemBackground,
+              paddingHorizontal: DarkTheme.spacing.sm,
+              paddingVertical: DarkTheme.spacing.xs,
+              borderRadius: DarkTheme.borderRadius.sm,
+              borderWidth: visibility === 'private' ? 1 : 0,
+              borderColor: visibility === 'private' ? DarkTheme.colors.semantic.separator : 'transparent',
+            }}>
+              <Text style={[
+                DarkTheme.typography.caption1,
+                { 
+                  color: visibility === 'private' 
+                    ? DarkTheme.colors.semantic.label 
+                    : DarkTheme.colors.system.black,
+                  fontWeight: '600',
+                }
+              ]}>
+                {visibility.charAt(0).toUpperCase() + visibility.slice(1)}
+              </Text>
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Icon Selection */}
