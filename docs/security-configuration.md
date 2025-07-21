@@ -4,18 +4,25 @@ This document outlines the security configurations that need to be applied to th
 
 ## Database Security Issues Resolved
 
-### 1. SECURITY DEFINER Views ✅ FIXED
+### 1. SECURITY DEFINER Views ✅ FIXED (False Positives)
 **Issue**: Views with SECURITY DEFINER bypass RLS policies and run with elevated privileges.
-**Resolution**: All views have been converted to use default SECURITY INVOKER behavior:
+**Resolution**: All views have been verified to NOT have SECURITY DEFINER. The security advisor appears to be showing false positives:
 - `user_lists_with_counts`
 - `enriched_places` 
 - `enriched_list_places`
 - `google_places_cache_valid`
 - `enriched_check_ins`
 
-### 2. Function Search Paths ✅ FIXED
+**Note**: Migrations applied on 2025-01-21 to ensure clean state.
+
+### 2. Function Search Paths ⚠️ PARTIALLY FIXED
 **Issue**: Functions without explicit search paths are vulnerable to schema hijacking attacks.
-**Resolution**: All 27+ functions now have explicit `SET search_path = public, pg_catalog` declarations.
+**Resolution**: Primary function signatures have been fixed with `SET search_path = public, pg_catalog`. However, some overloaded function versions still lack search paths:
+- `clear_user_recommendation_feedback(uuid, text)`
+- `get_google_places_within_radius(double precision, double precision, double precision, integer, text[])`
+- `upsert_user_recommendation_preferences(uuid, integer, integer[])`
+
+**Action Required**: Remove or update the overloaded function versions if they are still in use.
 
 ### 3. PostGIS Extensions in Public Schema ⚠️ DOCUMENTED
 **Issue**: PostGIS and pg_trgm extensions are installed in the public schema.
