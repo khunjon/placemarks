@@ -223,12 +223,16 @@ export class ErrorLogger {
     // Analytics tracking for significant errors
     if (error instanceof AppError && error.severity !== ErrorSeverity.LOW) {
       analyticsService.track(AnalyticsEventName.ERROR_OCCURRED, {
-        error_type: error.type,
+        error_type: (() => {
+          switch (error.type) {
+            case ErrorType.NETWORK_ERROR: return 'network';
+            case ErrorType.PERMISSION_ERROR: return 'permission';
+            case ErrorType.VALIDATION_ERROR: return 'validation';
+            default: return 'unknown';
+          }
+        })(),
         error_code: error.code,
-        error_severity: error.severity,
-        service: error.context.service,
-        operation: error.context.operation,
-        user_message: error.getUserMessage()
+        error_message: error.getUserMessage()
       });
     }
   }

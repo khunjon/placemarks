@@ -83,7 +83,7 @@ export class PlacesService {
    * Search nearby places and cache results in google_places_cache
    */
   async searchNearbyPlaces(location: Location, radius: number, type?: string): Promise<EnrichedPlace[]> {
-    return safeAsync(async () => {
+    const result = await safeAsync(async () => {
       // First check for cached places in the area
       const cachedPlaces = await this.getCachedNearbyPlaces(location, radius, type);
       if (cachedPlaces.length > 0) {
@@ -184,6 +184,7 @@ export class PlacesService {
 
       return enrichedPlaces;
     }, { service: 'places', operation: 'searchNearbyPlaces', metadata: { location, radius, type } });
+    return result || [];
   }
 
   /**
@@ -212,7 +213,7 @@ export class PlacesService {
    * Get autocomplete suggestions with caching
    */
   async getPlaceAutocomplete(query: string, location?: Location): Promise<PlaceSuggestion[]> {
-    return safeAsync(async () => {
+    const result = await safeAsync(async () => {
       // Validate input
       if (!query || typeof query !== 'string') {
         throw ErrorFactory.validation(
@@ -295,6 +296,7 @@ export class PlacesService {
       console.log('📝 AUTOCOMPLETE SUCCESS:', { query: sanitizedQuery, resultCount: suggestions.length });
       return suggestions;
     }, { service: 'places', operation: 'getPlaceAutocomplete', metadata: { query, location } });
+    return result || [];
   }
 
   /**

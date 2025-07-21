@@ -149,7 +149,9 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
         if (cached) {
           // Immediately show cached data
           setList(cached.list);
-          setUserRatings(cached.userRatings);
+          setUserRatings(Object.fromEntries(
+            Object.entries(cached.userRatings).map(([placeId, rating]) => [placeId, rating.rating_type])
+          ));
           setLoading(false);
           
           // Load fresh data in background without showing loading state

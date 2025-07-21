@@ -221,11 +221,11 @@ export class AuthService {
 
       // Get user profile from database with longer timeout and better error handling
       const result = await withTimeout(
-        supabase
+        Promise.resolve(supabase
           .from('users')
           .select('*')
           .eq('id', user.id)
-          .single(),
+          .single()),
 10000
       ) as { data: any; error: any };
       

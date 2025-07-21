@@ -36,8 +36,8 @@ export class PlaceMigrationUtils {
     return {
       id: legacyId || place.google_place_id, // Fallback to google_place_id if no UUID
       google_place_id: place.google_place_id,
-      name: place.name,
-      address: place.formatted_address,
+      name: place.name || 'Unknown Place',
+      address: place.formatted_address || '',
       coordinates: this.geometryToCoordinates(place.geometry),
       place_type: place.types?.[0],
       google_types: place.types,

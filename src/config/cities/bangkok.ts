@@ -132,7 +132,7 @@ export const bangkokConfig: CityConfig = {
     
     noise_level_rules: {
       'mall': 'moderate',
-      'market': 'loud',
+      'market': 'busy',
       'street': 'moderate',
       'rooftop': 'quiet',
       'riverside': 'quiet',

@@ -63,7 +63,7 @@ export interface CityConfig {
       [googlePriceLevel: number]: string;
     };
     noise_level_rules: {
-      [locationType: string]: 'quiet' | 'moderate' | 'loud';
+      [locationType: string]: 'quiet' | 'moderate' | 'busy';
     };
   };
   

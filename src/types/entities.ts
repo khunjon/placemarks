@@ -151,6 +151,13 @@ export interface EnrichedPlace extends Place {
   timezone?: string; // Computed timezone
   has_editorial_content?: boolean; // Whether place has editorial content
   display_description?: string; // Computed display description
+  
+  // Migration utility fields
+  primary_image_url?: string; // Computed primary image (featured_image_url or first photo)
+  effective_rating?: number; // Computed effective rating (Google + user ratings)
+  effective_rating_count?: number; // Computed rating count
+  enhanced_types?: string[]; // Enhanced place types array
+  effective_priority_score?: number; // Computed priority score for recommendations
 }
 
 // Check-in entity - matches check_ins table

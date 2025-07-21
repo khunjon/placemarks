@@ -135,7 +135,7 @@ export const authService = {
       if (error) {
         throw ErrorFactory.database(
           `Failed to create user account: ${error.message}`,
-          { service: 'auth', operation: 'signUp', userId: data.user?.id },
+          { service: 'auth', operation: 'signUp' },
           error
         );
       }
@@ -262,7 +262,7 @@ export const placesService = {
         google_place_id: place.google_place_id,
         name: place.name,
         address: place.address,
-        coordinates: `POINT(${place.coordinates[1]} ${place.coordinates[0]})`,
+        coordinates: place.coordinates ? `POINT(${place.coordinates[1]} ${place.coordinates[0]})` : null,
         place_type: place.place_type,
         price_level: place.price_level,
         bangkok_context: place.bangkok_context,

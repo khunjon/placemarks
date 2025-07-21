@@ -114,8 +114,8 @@ export default function PlacesSearchScreen() {
     }
     
     Alert.alert(
-      place.name,
-      `${place.address}${contextInfo}`,
+      place.name || 'Unknown Place',
+      `${place.address || place.formatted_address || 'Unknown Address'}${contextInfo}`,
       [{ text: 'OK' }]
     );
   };
@@ -144,7 +144,7 @@ export default function PlacesSearchScreen() {
   };
 
   const calculateDistance = (place: Place): number => {
-    if (!currentLocation) return 0;
+    if (!currentLocation || !place.coordinates) return 0;
     
     const R = 6371; // Earth's radius in kilometers
     const dLat = (place.coordinates[1] - currentLocation.latitude) * Math.PI / 180;
@@ -158,11 +158,11 @@ export default function PlacesSearchScreen() {
 
   const renderPlace = ({ item }: { item: Place }) => (
     <PlaceCard
-      id={item.id}
-      name={item.name}
+      googlePlaceId={item.google_place_id}
+      name={item.name || 'Unknown Place'}
       type={item.primary_type as any || 'restaurant'}
       description={item.place_type || ''}
-      address={item.address}
+      address={item.address || item.formatted_address || ''}
       distance={currentLocation ? `${calculateDistance(item).toFixed(1)}km away` : ''}
       rating={item.price_level}
       onCheckIn={(placeId, placeName) => {

@@ -372,7 +372,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
     if (!place) return;
     
     // Use Google Place ID for most accurate directions
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(place.name)}&destination_place_id=${googlePlaceId}`;
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(place.name || 'Unknown Place')}&destination_place_id=${googlePlaceId}`;
     
     Linking.openURL(url).catch((error) => {
       console.error('Failed to open directions:', error);
@@ -578,9 +578,9 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
           }}
         >
           {/* Place Photos - prioritize editorial/featured images */}
-          {place.primary_image_url && (
+          {(place.primary_image_url || place.featured_image_url) && (
             <Image
-              source={{ uri: place.primary_image_url }}
+              source={{ uri: place.primary_image_url || place.featured_image_url }}
               style={{
                 width: screenWidth,
                 height: 240,
@@ -591,7 +591,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
           )}
           
           {/* Google Photos - lazy loaded */}
-          {!place.primary_image_url && place.photo_urls && place.photo_urls.length > 0 && (
+          {!(place.primary_image_url || place.featured_image_url) && place.photo_urls && place.photo_urls.length > 0 && (
             <View>
               {showPhotos ? (
                 <Image
@@ -692,7 +692,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                   <TouchableOpacity 
                     style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}
                     onPress={() => {
-                      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}&query_place_id=${googlePlaceId}`;
+                      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name || 'Unknown Place')}&query_place_id=${googlePlaceId}`;
                       Linking.openURL(url).catch((error) => {
                         console.error('Failed to open maps:', error);
                         showToast('Unable to open maps', 'error');
