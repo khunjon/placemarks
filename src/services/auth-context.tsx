@@ -1,10 +1,16 @@
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { authService } from './auth';
 import { AuthProvider as AuthProviderType, UserUpdate as ProfileUpdate, User as AppUser } from '../types';
 import { networkService } from './networkService';
 import { ErrorFactory, ErrorLogger } from '../utils/errorHandling';
+
+// Constants for session persistence
+const SESSION_STORAGE_KEY = '@placemarks/session';
+const USER_STORAGE_KEY = '@placemarks/user';
+const SESSION_TIMEOUT = 30000; // Increased to 30 seconds
 
 // Utility function to add timeout to promises
 const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
@@ -102,7 +108,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isNetworkAvailable, setIsNetworkAvailable] = useState(true);
-  const failsafeTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const [isRecoveringSession, setIsRecoveringSession] = useState(false);
+  const failsafeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastValidSessionRef = useRef<Session | null>(null);
+  const lastValidUserRef = useRef<AppUser | null>(null);
 
   // Helper function to clear failsafe timeout and set loading to false
   const clearFailsafeAndSetLoading = (value: boolean) => {
@@ -111,6 +120,58 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       failsafeTimeoutRef.current = null;
     }
     setLoading(value);
+  };
+
+  // Persist session to AsyncStorage
+  const persistSession = async (session: Session | null, user: AppUser | null) => {
+    try {
+      if (session && user) {
+        await AsyncStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+        await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+        lastValidSessionRef.current = session;
+        lastValidUserRef.current = user;
+      } else {
+        // Only clear storage on explicit sign out, not on errors
+        if (!isRecoveringSession) {
+          await AsyncStorage.removeItem(SESSION_STORAGE_KEY);
+          await AsyncStorage.removeItem(USER_STORAGE_KEY);
+          lastValidSessionRef.current = null;
+          lastValidUserRef.current = null;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to persist session:', error);
+    }
+  };
+
+  // Recover session from AsyncStorage
+  const recoverSession = async (): Promise<{ session: Session | null; user: AppUser | null }> => {
+    try {
+      setIsRecoveringSession(true);
+      const [storedSession, storedUser] = await Promise.all([
+        AsyncStorage.getItem(SESSION_STORAGE_KEY),
+        AsyncStorage.getItem(USER_STORAGE_KEY)
+      ]);
+
+      if (storedSession && storedUser) {
+        const session = JSON.parse(storedSession) as Session;
+        const user = JSON.parse(storedUser) as AppUser;
+        
+        // Validate session is not expired
+        const expiresAt = session.expires_at || 0;
+        const now = Math.floor(Date.now() / 1000);
+        
+        if (expiresAt > now) {
+          return { session, user };
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to recover session from storage:', error);
+    } finally {
+      setIsRecoveringSession(false);
+    }
+    
+    return { session: null, user: null };
   };
 
   useEffect(() => {
@@ -125,21 +186,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     });
 
-    // Maximum loading time failsafe - increased to 10 seconds to allow for retries
-    failsafeTimeoutRef.current = setTimeout(() => {
-      if (isMounted) {
-        console.warn('Auth initialization timed out, proceeding without auth');
-        setLoading(false);
-        setSession(null);
-        setUser(null);
+    // Try to recover session from storage first
+    recoverSession().then(({ session: recoveredSession, user: recoveredUser }) => {
+      if (recoveredSession && recoveredUser && isMounted) {
+        setSession(recoveredSession);
+        setUser(recoveredUser);
+        console.log('Recovered session from storage');
       }
-    }, 10000);
+    });
+
+    // Maximum loading time failsafe - increased to 30 seconds
+    failsafeTimeoutRef.current = setTimeout(() => {
+      if (isMounted && loading) {
+        console.warn('Auth initialization timed out, using cached session if available');
+        // Use last valid session if available instead of clearing
+        if (lastValidSessionRef.current && lastValidUserRef.current) {
+          setSession(lastValidSessionRef.current);
+          setUser(lastValidUserRef.current);
+        }
+        setLoading(false);
+      }
+    }, SESSION_TIMEOUT);
 
     // Get initial session with timeout and retry logic
     withRetry(
-      () => withTimeout(supabase.auth.getSession(), 5000), // Increased timeout to 5 seconds
-      2, // Retry up to 2 times
-      1000 // Start with 1 second delay
+      () => withTimeout(supabase.auth.getSession(), SESSION_TIMEOUT),
+      3, // Increased retries
+      2000 // Increased delay
     )
       .then(({ data: { session } }) => {
         if (!isMounted) return;
@@ -148,40 +221,64 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (session?.user) {
           loadUserProfile(session.user.id);
         } else {
-          setUser(null);
+          // Only clear if we don't have a cached session
+          if (!lastValidSessionRef.current) {
+            setUser(null);
+          }
           clearFailsafeAndSetLoading(false);
         }
       })
-      .catch((error) => {
+      .catch(async (error) => {
         if (!isMounted) return;
         
-        // Enhanced error logging
+        // Enhanced error handling without clearing auth state
         const isNetworkError = 
           error.name === 'AuthRetryableFetchError' || 
-          error.message?.includes('Network request failed');
+          error.message?.includes('Network request failed') ||
+          error.message?.includes('Failed to fetch') ||
+          error.message?.includes('timed out');
         
         if (isNetworkError) {
-          console.warn('Auth session check failed due to network error:', error.message);
+          console.warn('Network error during auth check, maintaining current session:', error.message);
+          
+          // Try to use recovered session
+          const { session: recoveredSession, user: recoveredUser } = await recoverSession();
+          if (recoveredSession && recoveredUser) {
+            setSession(recoveredSession);
+            setUser(recoveredUser);
+            console.log('Using recovered session after network error');
+          }
+          
+          // Log for monitoring but don't sign out user
           ErrorLogger.log(
             ErrorFactory.network(
-              'Failed to check authentication status due to network error',
+              'Network error during auth check - session maintained',
               { 
                 service: 'auth', 
                 operation: 'initialize',
                 metadata: { 
                   errorName: error.name,
-                  errorMessage: error.message 
+                  errorMessage: error.message,
+                  hasRecoveredSession: !!recoveredSession
                 }
               },
               error
             )
           );
         } else {
-          console.warn('Auth session check failed after retries:', error);
+          // For non-network errors, still try to recover
+          console.warn('Auth check failed, attempting recovery:', error);
+          const { session: recoveredSession, user: recoveredUser } = await recoverSession();
+          if (recoveredSession && recoveredUser) {
+            setSession(recoveredSession);
+            setUser(recoveredUser);
+          } else {
+            // Only clear if recovery also failed
+            setSession(null);
+            setUser(null);
+          }
         }
         
-        setSession(null);
-        setUser(null);
         clearFailsafeAndSetLoading(false);
       });
 
@@ -203,14 +300,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           case 'TOKEN_REFRESHED':
           case 'USER_UPDATED':
             try {
-              await loadUserProfile(session.user.id);
+              const userProfile = await loadUserProfile(session.user.id);
+              if (userProfile) {
+                await persistSession(session, userProfile);
+              }
             } catch (error) {
               console.warn('Failed to load user profile during auth state change:', error);
+              // Don't clear user state on profile load failure
               clearFailsafeAndSetLoading(false);
             }
             break;
           case 'SIGNED_OUT':
             setUser(null);
+            await persistSession(null, null);
             clearFailsafeAndSetLoading(false);
             break;
           default:
@@ -222,6 +324,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } else if (event === 'SIGNED_OUT') {
         // Only clear user on explicit sign out
         setUser(null);
+        await persistSession(null, null);
         clearFailsafeAndSetLoading(false);
       }
     });
@@ -236,20 +339,44 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
-  const loadUserProfile = async (userId: string) => {
+  const loadUserProfile = async (userId: string): Promise<AppUser | null> => {
     try {
       // Loading user profile with timeout and retry logic
       const userProfile = await withRetry(
-        () => withTimeout(authService.getCurrentUser(), 5000), // Increased timeout to 5 seconds
-        2, // Retry up to 2 times
-        1000 // Start with 1 second delay
+        () => withTimeout(authService.getCurrentUser(), SESSION_TIMEOUT),
+        3, // Increased retries
+        2000 // Increased delay
       );
       setUser(userProfile);
+      return userProfile;
     } catch (error) {
       console.warn('Error loading user profile after retries:', error);
-      // Don't set user to null immediately - they might still be authenticated
-      // Just proceed without the profile data for now
-      setUser(null);
+      
+      // Check if it's a network error
+      const isNetworkError = 
+        error instanceof Error && (
+          error.message?.includes('Network') ||
+          error.message?.includes('Failed to fetch') ||
+          error.message?.includes('timed out')
+        );
+      
+      if (isNetworkError) {
+        // For network errors, keep existing user state
+        console.log('Maintaining existing user state due to network error');
+        return user; // Return current user state
+      } else {
+        // For auth errors, check if we have a valid session
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (currentSession) {
+          // Session is valid but profile load failed, keep minimal auth
+          console.log('Session valid but profile load failed, maintaining auth');
+          return user || { id: userId, email: currentSession.user.email } as AppUser;
+        } else {
+          // No valid session, clear user
+          setUser(null);
+          return null;
+        }
+      }
     } finally {
       clearFailsafeAndSetLoading(false);
     }
@@ -376,39 +503,75 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       console.log('Attempting to refresh session...');
       
-      // Try to refresh the session
-      const { data, error } = await supabase.auth.refreshSession();
+      // Try to refresh the session with retry
+      const { data, error } = await withRetry(
+        () => withTimeout(supabase.auth.refreshSession(), SESSION_TIMEOUT),
+        2,
+        3000
+      ).catch(async (retryError) => {
+        // If refresh with retry fails, try to use stored session
+        console.log('Session refresh failed, attempting recovery from storage');
+        const recovered = await recoverSession();
+        if (recovered.session && recovered.user) {
+          return { data: { session: recovered.session, user: recovered.session.user }, error: null };
+        }
+        return { data: null, error: retryError };
+      });
       
       if (error) {
         console.error('Session refresh error:', error);
         
-        // If refresh fails, try to get the current session
+        // Check if it's a network error
+        const isNetworkError = 
+          error.message?.includes('Network') ||
+          error.message?.includes('Failed to fetch') ||
+          error.name === 'AuthRetryableFetchError';
+        
+        if (isNetworkError) {
+          // For network errors, maintain current session
+          console.log('Network error during refresh, maintaining current session');
+          return;
+        }
+        
+        // For auth errors, try to get the current session
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError || !sessionData.session) {
-          console.error('Failed to recover session:', sessionError);
-          // Don't automatically sign out - let the user continue using the app
-          // The auth state change listener will handle sign out if truly necessary
+          console.error('Session validation failed:', sessionError);
+          // Still don't sign out - wait for explicit sign out or auth state change
           return;
         }
         
         // Update session if we recovered it
         setSession(sessionData.session);
         if (sessionData.session?.user) {
-          await loadUserProfile(sessionData.session.user.id);
+          const userProfile = await loadUserProfile(sessionData.session.user.id);
+          if (userProfile) {
+            await persistSession(sessionData.session, userProfile);
+          }
         }
-      } else if (data.session) {
+      } else if (data?.session) {
         console.log('Session refreshed successfully');
         setSession(data.session);
         
         // Update user profile if needed
-        if (data.session.user && (!user || user.id !== data.session.user.id)) {
-          await loadUserProfile(data.session.user.id);
+        if (data.session.user) {
+          const userProfile = await loadUserProfile(data.session.user.id);
+          if (userProfile) {
+            await persistSession(data.session, userProfile);
+          }
         }
       }
     } catch (error) {
       console.error('Unexpected error during session refresh:', error);
-      // Don't throw - gracefully handle the error and let the user continue
+      
+      // Try to recover from storage as last resort
+      const { session: recoveredSession, user: recoveredUser } = await recoverSession();
+      if (recoveredSession && recoveredUser) {
+        setSession(recoveredSession);
+        setUser(recoveredUser);
+        console.log('Recovered session after refresh error');
+      }
     }
   };
 

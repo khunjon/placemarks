@@ -88,6 +88,7 @@ export type ProfileStackParamList = {
 // Root Stack Params (for auth flow)
 export type RootStackParamList = {
   Login: undefined;
+  SignUp: undefined;
   MainTabs: NavigatorScreenParams<BottomTabParamList>;
 };
 

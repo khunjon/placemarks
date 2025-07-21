@@ -6,7 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AuthProvider, useAuth } from './src/services/auth-context';
 import { Colors } from './src/constants/Colors';
 import BottomTabNavigator from './src/navigation/BottomTabNavigator';
-import { LoginScreen } from './src/screens/auth';
+import { LoginScreen, SignUpScreen } from './src/screens/auth';
 import type { RootStackParamList } from './src/navigation/types';
 import { analyticsService } from './src/services/analytics';
 import { NAVIGATION_METHODS } from './src/constants/ScreenNames';
@@ -26,31 +26,37 @@ function AppNavigator() {
   // Handle app state changes (foreground/background)
   useEffect(() => {
     const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+      const wasInBackground = appStateRef.current.match(/inactive|background/);
+      const isComingToForeground = wasInBackground && nextAppState === 'active';
+      const isGoingToBackground = nextAppState.match(/inactive|background/);
+      
       // App has come to the foreground
-      if (
-        appStateRef.current.match(/inactive|background/) &&
-        nextAppState === 'active'
-      ) {
-        console.log('App has come to the foreground, refreshing session...');
+      if (isComingToForeground) {
+        console.log('App has come to the foreground');
         
-        // Refresh the session when app comes to foreground
-        if (user) {
-          try {
-            await refreshSession();
-            console.log('Session refreshed successfully');
-          } catch (error) {
-            console.error('Failed to refresh session:', error);
-          }
-        }
-        
-        // Start auto-refresh
+        // Always start auto-refresh when coming to foreground
         supabase.auth.startAutoRefresh();
-      } else if (nextAppState.match(/inactive|background/)) {
-        // App has gone to the background
-        console.log('App has gone to the background, stopping auto-refresh...');
         
-        // Stop auto-refresh when app goes to background
-        supabase.auth.stopAutoRefresh();
+        // Only refresh session if user exists and we've been in background for a while
+        if (user) {
+          // Don't await this - let it happen in background
+          refreshSession().catch(error => {
+            // Silently handle refresh errors - the auth context will maintain state
+            console.log('Background session refresh failed, but maintaining auth state');
+          });
+        }
+      } else if (isGoingToBackground) {
+        // App has gone to the background
+        console.log('App has gone to the background');
+        
+        // Keep auto-refresh running for a bit in background
+        // This helps with quick app switches
+        setTimeout(() => {
+          if (AppState.currentState.match(/inactive|background/)) {
+            console.log('Stopping auto-refresh after background timeout');
+            supabase.auth.stopAutoRefresh();
+          }
+        }, 30000); // 30 seconds
       }
 
       appStateRef.current = nextAppState;
@@ -62,17 +68,28 @@ function AppNavigator() {
     if (AppState.currentState === 'active') {
       supabase.auth.startAutoRefresh();
     }
+    
+    // Set up periodic session validation (every 5 minutes)
+    const sessionCheckInterval = setInterval(() => {
+      if (user && AppState.currentState === 'active') {
+        // Silently validate/refresh session in background
+        refreshSession().catch(() => {
+          // Errors are handled in auth context, no action needed here
+        });
+      }
+    }, 5 * 60 * 1000); // 5 minutes
 
     return () => {
       subscription.remove();
+      clearInterval(sessionCheckInterval);
       // Stop auto-refresh on unmount
       supabase.auth.stopAutoRefresh();
     };
   }, [user, refreshSession]);
 
-  // Initialize analytics and navigation tracking when user state changes
+  // Initialize analytics on app mount
   useEffect(() => {
-    const initializeServices = async () => {
+    const initializeAnalytics = async () => {
       const amplitudeApiKey = config.amplitudeApiKey;
       
       if (amplitudeApiKey) {
@@ -87,22 +104,28 @@ function AppNavigator() {
         if (navigationRef.current) {
           analyticsService.initializeNavigation(navigationRef.current);
         }
-
-        // Identify user if logged in
-        if (user?.id) {
-          await analyticsService.identify(user.id, {
-            user_id: user.id,
-            email: user.email,
-            signup_date: user.created_at,
-            last_active_date: new Date().toISOString(),
-          });
-        }
       } else if (__DEV__) {
         console.warn('Amplitude API key not found. Analytics will not be initialized.');
       }
     };
 
-    initializeServices();
+    initializeAnalytics();
+  }, []); // Empty dependency array - only run once on mount
+
+  // Identify user when user state changes
+  useEffect(() => {
+    const identifyUser = async () => {
+      if (user?.id && analyticsService.isInitialized()) {
+        await analyticsService.identify(user.id, {
+          user_id: user.id,
+          email: user.email,
+          signup_date: user.created_at,
+          last_active_date: new Date().toISOString(),
+        });
+      }
+    };
+
+    identifyUser();
   }, [user]);
 
   // Navigation state change handler for automatic screen tracking
@@ -118,8 +141,10 @@ function AppNavigator() {
       state
     );
 
-    // Track the screen change
-    await analyticsService.trackScreen(screenName, navigationMethod, params);
+    // Track the screen change only if analytics is initialized
+    if (analyticsService.isInitialized()) {
+      await analyticsService.trackScreen(screenName, navigationMethod, params);
+    }
 
     // Save the current route name for next time
     routeNameRef.current = screenName;
@@ -136,13 +161,16 @@ function AppNavigator() {
           routeNameRef.current = screenName;
           previousStateRef.current = state;
           
-          // Track initial screen
-          analyticsService.trackScreen(screenName, NAVIGATION_METHODS.INITIAL_LOAD);
+          // Track initial screen only if analytics is initialized
+          if (analyticsService.isInitialized()) {
+            analyticsService.trackScreen(screenName, NAVIGATION_METHODS.INITIAL_LOAD);
+          }
         }
       }
     }
   };
 
+  // Show loading screen with a minimum duration to prevent flashing
   if (loading) {
     return <FullScreenLoading message="Loading Placemarks..." />;
   }
@@ -174,11 +202,18 @@ function AppNavigator() {
             options={{ headerShown: false }}
           />
         ) : (
-          <Stack.Screen 
-            name="Login" 
-            component={LoginScreen}
-            options={{ headerShown: false }}
-          />
+          <>
+            <Stack.Screen 
+              name="Login" 
+              component={LoginScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen 
+              name="SignUp" 
+              component={SignUpScreen}
+              options={{ headerShown: false }}
+            />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>

@@ -88,6 +88,9 @@ export const supabase = createClient<Database>(config.supabaseUrl, config.supaba
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    // Refresh session 5 minutes before token expires
+    // This helps prevent unexpected sign-outs
+    storageKey: 'placemarks-auth',
   },
   global: {
     headers: {
@@ -102,6 +105,12 @@ export const supabase = createClient<Database>(config.supabaseUrl, config.supaba
     },
   },
 });
+
+// Note: JWT expiry time should be configured in Supabase Dashboard:
+// 1. Go to Authentication > Settings
+// 2. Set JWT expiry to 3600 seconds (1 hour) or higher
+// 3. Enable "Refresh Token Rotation" for better security
+// 4. Set "Refresh Token Reuse Interval" to 10 seconds (default)
 
 // Auth service functions
 export const authService = {
