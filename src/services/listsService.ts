@@ -246,6 +246,21 @@ export class ListsService {
   }
 
   /**
+   * Get both default and custom lists for a user in a single call
+   * This is more efficient than calling getDefaultLists and getCustomLists separately
+   */
+  async getDefaultAndCustomLists(userId: string): Promise<{
+    defaultLists: ListWithPlaces[],
+    customLists: ListWithPlaces[]
+  }> {
+    const allLists = await this.getUserListSummaries(userId);
+    return {
+      defaultLists: allLists.filter(list => list.is_default),
+      customLists: allLists.filter(list => !list.is_default)
+    };
+  }
+
+  /**
    * Get a single list with all its places (optimized for list details screen)
    * This method uses an RPC function to fetch everything in a single query
    */

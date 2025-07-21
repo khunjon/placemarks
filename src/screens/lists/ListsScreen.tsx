@@ -125,9 +125,9 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       console.log('[ListsScreen] Starting to load user lists...');
       const startTime = Date.now();
       
-      // Load default lists (Favorites + Want to Go) and custom lists separately
-      const defaultListsData = await listsService.getDefaultLists(user.id);
-      const customListsData = await listsService.getCustomLists(user.id);
+      // Load both default and custom lists in a single call
+      const { defaultLists: defaultListsData, customLists: customListsData } = 
+        await listsService.getDefaultAndCustomLists(user.id);
       
       const loadTime = Date.now() - startTime;
       console.log(`[ListsScreen] Loaded ${defaultListsData.length + customListsData.length} lists in ${loadTime}ms`);
@@ -158,9 +158,9 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
       console.log('[ListsScreen] Starting background refresh...');
       const startTime = Date.now();
       
-      // Load fresh data silently in background
-      const defaultListsData = await listsService.getDefaultLists(user.id);
-      const customListsData = await listsService.getCustomLists(user.id);
+      // Load both default and custom lists in a single call
+      const { defaultLists: defaultListsData, customLists: customListsData } = 
+        await listsService.getDefaultAndCustomLists(user.id);
       
       const loadTime = Date.now() - startTime;
       console.log(`[ListsScreen] Background refresh completed in ${loadTime}ms`);
