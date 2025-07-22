@@ -122,6 +122,9 @@ export class ListsService {
       console.log('[ListsService] Fetching list summaries for user:', userId);
       const startTime = Date.now();
       
+      // Ensure default lists exist before fetching
+      await this.ensureDefaultLists(userId);
+      
       const { data: summaries, error } = await supabase
         .rpc('get_user_list_summaries', { user_id_param: userId });
 
@@ -172,6 +175,9 @@ export class ListsService {
     return safeAsync(async () => {
       console.log('[ListsService] Fetching all user lists with places (optimized)');
       const startTime = Date.now();
+      
+      // Ensure default lists exist before fetching
+      await this.ensureDefaultLists(userId);
       
       const { data: result, error } = await supabase
         .rpc('get_user_lists_with_places', { user_id_param: userId });
@@ -342,6 +348,86 @@ export class ListsService {
   async getWantToGoList(userId: string): Promise<ListWithPlaces | null> {
     const allLists = await this.getUserListsWithPlaces(userId);
     return allLists.find(list => list.is_default && list.default_list_type === 'want_to_go') || null;
+  }
+
+  /**
+   * Ensure default lists exist for a user (Favorites and Want to Go)
+   */
+  async ensureDefaultLists(userId: string): Promise<void> {
+    return safeAsync(async () => {
+      // Check which default lists already exist
+      const { data: existingLists, error: checkError } = await supabase
+        .from('lists')
+        .select('list_type')
+        .eq('user_id', userId)
+        .eq('is_default', true);
+
+      if (checkError) {
+        console.error('Error checking existing default lists:', checkError);
+        return;
+      }
+
+      const existingTypes = existingLists?.map(list => list.list_type) || [];
+      const listsToCreate = [];
+
+      // Create Favorites list if it doesn't exist
+      if (!existingTypes.includes('favorites')) {
+        listsToCreate.push({
+          user_id: userId,
+          name: 'Favorites',
+          description: 'Your favorite places',
+          auto_generated: false,
+          visibility: 'private',
+          list_type: 'favorites',
+          icon: '❤️',
+          color: '#EF4444', // Red
+          type: 'user',
+          is_default: true,
+          is_curated: false
+        });
+      }
+
+      // Create Want to Go list if it doesn't exist
+      if (!existingTypes.includes('want_to_go')) {
+        listsToCreate.push({
+          user_id: userId,
+          name: 'Want to Go',
+          description: 'Places you want to visit',
+          auto_generated: false,
+          visibility: 'private',
+          list_type: 'want_to_go',
+          icon: '🎯',
+          color: '#3B82F6', // Blue
+          type: 'user',
+          is_default: true,
+          is_curated: false
+        });
+      }
+
+      // Create missing lists
+      if (listsToCreate.length > 0) {
+        console.log(`Creating ${listsToCreate.length} missing default lists for user ${userId}:`, 
+          listsToCreate.map(list => list.name));
+        
+        const { error: insertError } = await supabase
+          .from('lists')
+          .insert(listsToCreate);
+
+        if (insertError) {
+          console.error('Error creating default lists:', insertError);
+          console.error('Failed lists data:', listsToCreate);
+          throw ErrorFactory.database(
+            `Failed to create default lists: ${insertError.message}`,
+            { service: 'lists', operation: 'ensureDefaultLists', userId },
+            insertError
+          );
+        }
+
+        console.log(`✅ Successfully created ${listsToCreate.length} default lists for user ${userId}`);
+      } else {
+        console.log(`Default lists already exist for user ${userId}, found types:`, existingTypes);
+      }
+    }, { service: 'lists', operation: 'ensureDefaultLists', userId });
   }
 
   /**

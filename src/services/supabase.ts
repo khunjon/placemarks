@@ -72,8 +72,13 @@ export interface Database {
           user_id: string;
           google_place_id: string;
           photo_url: string;
+          thumbnail_url?: string;
+          display_url?: string;
           caption?: string;
           is_primary: boolean;
+          original_width?: number;
+          original_height?: number;
+          file_size_bytes?: number;
           created_at: string;
           updated_at: string;
         };
@@ -81,13 +86,23 @@ export interface Database {
           user_id: string;
           google_place_id: string;
           photo_url: string;
+          thumbnail_url?: string;
+          display_url?: string;
           caption?: string;
           is_primary?: boolean;
+          original_width?: number;
+          original_height?: number;
+          file_size_bytes?: number;
         };
         Update: {
           photo_url?: string;
+          thumbnail_url?: string;
+          display_url?: string;
           caption?: string;
           is_primary?: boolean;
+          original_width?: number;
+          original_height?: number;
+          file_size_bytes?: number;
         };
       };
     };
@@ -252,7 +267,7 @@ export const authService = {
 
 // Places service functions
 export const placesService = {
-  async getPlaces(userId?: string) {
+  async getPlaces(_userId?: string) {
     let query = supabase.from('places').select('*');
     
     // For now, return all public places

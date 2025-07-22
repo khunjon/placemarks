@@ -443,7 +443,7 @@ export class RecommendationService {
     try {
       // Use the optimized database function
       const { data, error } = await supabase.rpc('get_user_disliked_places', {
-        user_uuid: userId
+        p_user_id: userId
       });
 
       if (error) {

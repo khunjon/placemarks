@@ -4,7 +4,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { authService } from './auth';
 import { AuthProvider as AuthProviderType, UserUpdate as ProfileUpdate, User as AppUser } from '../types';
-import { networkService } from './networkService';
 import { ErrorFactory, ErrorLogger } from '../utils/errorHandling';
 import { authMonitor } from '../utils/authMonitoring';
 
@@ -33,18 +32,6 @@ const withRetry = async <T,>(
 ): Promise<T> => {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      // Check network before attempting operation
-      if (!networkService.isConnected()) {
-        console.log('No network connection, waiting for connection...');
-        const connected = await networkService.waitForConnection(5000);
-        if (!connected) {
-          throw ErrorFactory.network(
-            'No network connection available',
-            { service: 'auth', operation: 'retry' }
-          );
-        }
-      }
-      
       return await operation();
     } catch (error: any) {
       // Check if this is a network error
@@ -223,15 +210,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }, lastValidSessionRef.current);
     });
 
-    // Set up network monitoring
-    const removeNetworkListener = networkService.addListener((isConnected) => {
-      setIsNetworkAvailable(isConnected);
-      if (isConnected && session?.user && !user) {
-        // Try to reload user profile when network comes back
-        loadUserProfile(session.user.id).catch(console.error);
-      }
-    });
-
     // Try to recover session from storage first
     recoverSession().then(({ session: recoveredSession, user: recoveredUser }) => {
       if (recoveredSession && recoveredUser && isMounted) {
@@ -393,7 +371,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         clearTimeout(failsafeTimeoutRef.current);
       }
       subscription.unsubscribe();
-      removeNetworkListener();
     };
   }, []); // Run only once on mount
 
@@ -502,19 +479,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setLoading(true);
     authMonitor.logEvent('sign_in_started', { provider }, session);
     try {
-      // Check network before sign in
-      if (!isNetworkAvailable) {
-        const connected = await networkService.waitForConnection(5000);
-        if (!connected) {
-          return { 
-            error: ErrorFactory.network(
-              'No network connection. Please check your internet and try again.',
-              { service: 'auth', operation: 'signIn' }
-            )
-          };
-        }
-      }
-      
       let result;
       
       switch (provider) {
