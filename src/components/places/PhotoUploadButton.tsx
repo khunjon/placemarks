@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, Fragment } from 'react';
 import { TouchableOpacity, Alert, ActivityIndicator, Text } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera } from '../icons';
 import { DarkTheme } from '../../constants/theme';
 import { photoService } from '../../services/photoService';
 import { useAuth } from '../../services/auth-context';
+import Toast from '../ui/Toast';
 
 interface PhotoUploadButtonProps {
   googlePlaceId: string;
@@ -19,10 +20,23 @@ export default function PhotoUploadButton({
 }: PhotoUploadButtonProps) {
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
+  const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' }>({
+    visible: false,
+    message: '',
+    type: 'success'
+  });
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ visible: true, message, type });
+  };
+
+  const hideToast = () => {
+    setToast(prev => ({ ...prev, visible: false }));
+  };
 
   const handleUploadPhoto = () => {
     if (!user) {
-      Alert.alert('Sign In Required', 'Please sign in to upload photos.');
+      showToast('Please sign in to upload photos.', 'error');
       return;
     }
 
@@ -40,7 +54,7 @@ export default function PhotoUploadButton({
   const openCamera = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Required', 'Camera permission is required to take photos.');
+      showToast('Camera permission is required to take photos.', 'error');
       return;
     }
 
@@ -59,7 +73,7 @@ export default function PhotoUploadButton({
   const openImagePicker = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Required', 'Photo library permission is required to select photos.');
+      showToast('Photo library permission is required to select photos.', 'error');
       return;
     }
 
@@ -89,14 +103,14 @@ export default function PhotoUploadButton({
       );
 
       if (error) {
-        Alert.alert('Upload Failed', 'Failed to upload photo. Please try again.');
+        showToast('Failed to upload photo. Please try again.', 'error');
       } else {
-        Alert.alert('Success', 'Photo uploaded successfully!');
+        showToast('Photo uploaded successfully!', 'success');
         onPhotoUploaded?.();
       }
     } catch (error) {
       console.error('Photo upload error:', error);
-      Alert.alert('Upload Failed', 'An unexpected error occurred.');
+      showToast('An unexpected error occurred.', 'error');
     } finally {
       setUploading(false);
     }
@@ -104,15 +118,60 @@ export default function PhotoUploadButton({
 
   if (compact) {
     return (
+      <>
+        <Toast
+          visible={toast.visible}
+          message={toast.message}
+          type={toast.type}
+          onHide={hideToast}
+        />
+        <TouchableOpacity
+          onPress={handleUploadPhoto}
+          disabled={uploading}
+          style={{
+            padding: DarkTheme.spacing.sm,
+            backgroundColor: DarkTheme.colors.semantic.systemBackground,
+            borderRadius: DarkTheme.borderRadius.md,
+            borderWidth: 1,
+            borderColor: DarkTheme.colors.semantic.separator,
+          }}
+        >
+          {uploading ? (
+            <ActivityIndicator 
+              size="small" 
+              color={DarkTheme.colors.accent.blue} 
+            />
+          ) : (
+            <Camera 
+              size={20} 
+              color={DarkTheme.colors.accent.blue} 
+            />
+          )}
+        </TouchableOpacity>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={hideToast}
+      />
       <TouchableOpacity
         onPress={handleUploadPhoto}
         disabled={uploading}
         style={{
-          padding: DarkTheme.spacing.sm,
+          flexDirection: 'row',
+          alignItems: 'center',
           backgroundColor: DarkTheme.colors.semantic.systemBackground,
           borderRadius: DarkTheme.borderRadius.md,
           borderWidth: 1,
           borderColor: DarkTheme.colors.semantic.separator,
+          paddingVertical: DarkTheme.spacing.md,
+          paddingHorizontal: DarkTheme.spacing.lg,
         }}
       >
         {uploading ? (
@@ -121,51 +180,22 @@ export default function PhotoUploadButton({
             color={DarkTheme.colors.accent.blue} 
           />
         ) : (
-          <Camera 
-            size={20} 
-            color={DarkTheme.colors.accent.blue} 
-          />
+          <>
+            <Camera 
+              size={20} 
+              color={DarkTheme.colors.accent.blue} 
+              style={{ marginRight: DarkTheme.spacing.sm }}
+            />
+            <Text style={{
+              fontSize: 16,
+              fontWeight: '500',
+              color: DarkTheme.colors.accent.blue,
+            }}>
+              Add Photo
+            </Text>
+          </>
         )}
       </TouchableOpacity>
-    );
-  }
-
-  return (
-    <TouchableOpacity
-      onPress={handleUploadPhoto}
-      disabled={uploading}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: DarkTheme.colors.semantic.systemBackground,
-        borderRadius: DarkTheme.borderRadius.md,
-        borderWidth: 1,
-        borderColor: DarkTheme.colors.semantic.separator,
-        paddingVertical: DarkTheme.spacing.md,
-        paddingHorizontal: DarkTheme.spacing.lg,
-      }}
-    >
-      {uploading ? (
-        <ActivityIndicator 
-          size="small" 
-          color={DarkTheme.colors.accent.blue} 
-        />
-      ) : (
-        <>
-          <Camera 
-            size={20} 
-            color={DarkTheme.colors.accent.blue} 
-            style={{ marginRight: DarkTheme.spacing.sm }}
-          />
-          <Text style={{
-            fontSize: 16,
-            fontWeight: '500',
-            color: DarkTheme.colors.accent.blue,
-          }}>
-            Add Photo
-          </Text>
-        </>
-      )}
-    </TouchableOpacity>
+    </>
   );
 }

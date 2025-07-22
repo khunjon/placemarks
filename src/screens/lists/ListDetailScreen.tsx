@@ -51,6 +51,8 @@ import {
 import { userRatingsService, UserRatingType } from '../../services/userRatingsService';
 import { checkInsService } from '../../services/checkInsService';
 import { cacheManager } from '../../services/cacheManager';
+import { photoService } from '../../services/photoService';
+import { UserPlacePhoto } from '../../types';
 import Toast from '../../components/ui/Toast';
 import type { ListsStackScreenProps } from '../../navigation/types';
 
@@ -88,6 +90,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
   const [sortBy, setSortBy] = useState<SortOption>('date_added');
   const [showSortModal, setShowSortModal] = useState(false);
   const [userRatings, setUserRatings] = useState<Record<string, UserRatingType>>({});
+  const [placePhotos, setPlacePhotos] = useState<Map<string, UserPlacePhoto>>(new Map());
   
   // Toast state
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' }>({
@@ -152,6 +155,15 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
           setUserRatings(Object.fromEntries(
             Object.entries(cached.userRatings).map(([placeId, rating]) => [placeId, rating.rating_type])
           ));
+          
+          // Also load photos for cached data
+          const googlePlaceIds = cached.list.places.map(p => p.place_id);
+          photoService.getPrimaryPhotosForPlaces(googlePlaceIds).then(photosResult => {
+            if (photosResult.data) {
+              setPlacePhotos(photosResult.data);
+            }
+          });
+          
           setLoading(false);
           
           // Load fresh data in background without showing loading state
@@ -188,14 +200,22 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       // Extract Google Place IDs for ratings lookup
       const googlePlaceIds = listWithPlaces.places.map(p => p.place_id);
       
-      // Get user ratings for all places
-      const ratingsMap = await userRatingsService.getUserRatingsForPlaces(user!.id, googlePlaceIds);
+      // Get user ratings and photos for all places in parallel
+      const [ratingsMap, photosResult] = await Promise.all([
+        userRatingsService.getUserRatingsForPlaces(user!.id, googlePlaceIds),
+        photoService.getPrimaryPhotosForPlaces(googlePlaceIds)
+      ]);
       
       // Convert ratings to record format
       const userRatingsData: Record<string, UserRatingType> = {};
       ratingsMap.forEach((rating, googlePlaceId) => {
         userRatingsData[googlePlaceId] = rating;
       });
+      
+      // Set photos map
+      if (photosResult.data) {
+        setPlacePhotos(photosResult.data);
+      }
       
       // Update state
       setList(listWithPlaces);
@@ -486,6 +506,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
    * Render individual place item for FlatList
    */
   const renderPlaceItem: ListRenderItem<EnrichedListPlace> = useCallback(({ item: listPlace }) => {
+    const photo = placePhotos.get(listPlace.place_id);
     return (
       <SwipeablePlaceCard
         googlePlaceId={listPlace.place_id}
@@ -497,13 +518,14 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
         onPress={() => handlePlacePress(listPlace.place_id, listPlace.place?.name || 'Unknown Place')}
         showCheckInButton={false}
         notes={listPlace.notes}
+        photoUrl={photo?.thumbnail_url || photo?.photo_url} // Use thumbnail if available, fallback to original
         onDelete={handleRemovePlace}
         onAddToWantToGo={handleAddToWantToGo}
         enableDelete={effectiveIsEditable}
         enableAddToWantToGo={list?.default_list_type !== 'want_to_go'}
       />
     );
-  }, [effectiveIsEditable, list?.default_list_type, handleCheckIn, handlePlacePress, handleRemovePlace, handleAddToWantToGo]);
+  }, [effectiveIsEditable, list?.default_list_type, handleCheckIn, handlePlacePress, handleRemovePlace, handleAddToWantToGo, placePhotos]);
 
   // Only show loading state if we have no data AND we're loading (first time load)
   if (loading && !list) {

@@ -1,5 +1,5 @@
 import React, { memo, useMemo } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { DarkTheme } from '../../constants/theme';
 import { LocationBadge } from '../ui';
@@ -35,6 +35,9 @@ export interface PlaceCardProps {
   
   // Notes
   notes?: string;
+  
+  // User photo URL (for displaying in place of icon)
+  photoUrl?: string;
   
   // Optional styling
   style?: any;
@@ -127,6 +130,7 @@ const PlaceCard = memo(function PlaceCard({
   onPress,
   showCheckInButton = true,
   notes,
+  photoUrl,
   style,
 }: PlaceCardProps) {
   // Memoize the open/closed calculation to avoid recalculating on every render
@@ -214,23 +218,40 @@ const PlaceCard = memo(function PlaceCard({
         alignItems: 'flex-start',
         marginBottom: placeData.description && placeData.description.trim() ? 4 : 2,
       }}>
-        <View 
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: 8,
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginRight: DarkTheme.spacing.sm,
-            backgroundColor: `${typeColor}20`,
-          }}
-        >
-          <MaterialIcons 
-            name={iconProps.name as any}
-            size={24} 
-            color={typeColor}
+        {photoUrl ? (
+          <Image
+            source={{ 
+              uri: photoUrl,
+              cache: 'force-cache' // iOS only, but harmless on Android
+            }}
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 8,
+              marginRight: DarkTheme.spacing.sm,
+              backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+            }}
+            resizeMode="cover"
           />
-        </View>
+        ) : (
+          <View 
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 8,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginRight: DarkTheme.spacing.sm,
+              backgroundColor: `${typeColor}20`,
+            }}
+          >
+            <MaterialIcons 
+              name={iconProps.name as any}
+              size={24} 
+              color={typeColor}
+            />
+          </View>
+        )}
         
         <View style={{ flex: 1 }}>
           {/* Category and Status Row */}
@@ -419,6 +440,7 @@ const PlaceCard = memo(function PlaceCard({
     prevProps.name === nextProps.name &&
     prevProps.address === nextProps.address &&
     prevProps.notes === nextProps.notes &&
+    prevProps.photoUrl === nextProps.photoUrl &&
     prevProps.showCheckInButton === nextProps.showCheckInButton &&
     prevProps.place?.opening_hours === nextProps.place?.opening_hours &&
     prevProps.place?.business_status === nextProps.place?.business_status

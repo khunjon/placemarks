@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { UserPlacePhoto } from '../types';
 import { cacheManager } from './cacheManager';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 export class PhotoService {
   /**
@@ -25,36 +26,77 @@ export class PhotoService {
         await this.unsetPrimaryPhoto(userId, googlePlaceId);
       }
 
-      // Prepare file for upload
-      const fileExt = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
-      const mimeType = fileExt === 'jpg' ? 'image/jpeg' : `image/${fileExt}`;
-      const fileName = `${googlePlaceId}-${Date.now()}.jpeg`;
-      const filePath = `${userId}/places/${fileName}`;
+      // Generate optimized versions of the image
+      const timestamp = Date.now();
+      const baseFileName = `${googlePlaceId}-${timestamp}`;
+      
+      // Get original image info
+      const originalImage = await ImageManipulator.manipulateAsync(
+        imageUri,
+        [],
+        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+      );
 
-      // Create file object for React Native
-      const file = {
-        uri: imageUri,
-        type: mimeType,
-        name: fileName,
-      };
+      // Generate thumbnail (200x200)
+      const thumbnail = await ImageManipulator.manipulateAsync(
+        imageUri,
+        [{ resize: { width: 200, height: 200 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+      );
 
-      // Upload to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('place-photos')
-        .upload(filePath, file as any, {
-          contentType: mimeType,
-          upsert: false,
-        });
+      // Generate display size (800x800)
+      const displaySize = await ImageManipulator.manipulateAsync(
+        imageUri,
+        [{ resize: { width: 800, height: 800 } }],
+        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+      );
 
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        return { data: null, error: uploadError };
+      // Upload all three versions
+      const uploads = await Promise.all([
+        // Original
+        this.uploadImage(
+          originalImage.uri,
+          `${userId}/places/${baseFileName}-original.jpeg`,
+          'image/jpeg'
+        ),
+        // Thumbnail
+        this.uploadImage(
+          thumbnail.uri,
+          `${userId}/places/${baseFileName}-thumb.jpeg`,
+          'image/jpeg'
+        ),
+        // Display
+        this.uploadImage(
+          displaySize.uri,
+          `${userId}/places/${baseFileName}-display.jpeg`,
+          'image/jpeg'
+        ),
+      ]);
+
+      // Check if any uploads failed
+      const failedUpload = uploads.find(result => result.error);
+      if (failedUpload) {
+        // Clean up any successful uploads
+        const successfulPaths = uploads
+          .filter(result => !result.error && result.path)
+          .map(result => result.path!);
+        if (successfulPaths.length > 0) {
+          await supabase.storage.from('place-photos').remove(successfulPaths);
+        }
+        return { data: null, error: failedUpload.error };
       }
 
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('place-photos')
-        .getPublicUrl(filePath);
+      // Get public URLs for all versions
+      const [originalUrl, thumbnailUrl, displayUrl] = uploads.map(upload => {
+        const { data } = supabase.storage
+          .from('place-photos')
+          .getPublicUrl(upload.path!);
+        return data.publicUrl;
+      });
+
+      // Get original image dimensions (from the first manipulated image)
+      const originalWidth = originalImage.width || 0;
+      const originalHeight = originalImage.height || 0;
 
       // Create database record
       const { data: photoRecord, error: dbError } = await supabase
@@ -62,16 +104,21 @@ export class PhotoService {
         .insert({
           user_id: userId,
           google_place_id: googlePlaceId,
-          photo_url: urlData.publicUrl,
+          photo_url: originalUrl,
+          thumbnail_url: thumbnailUrl,
+          display_url: displayUrl,
           caption: caption,
           is_primary: isPrimary,
+          original_width: originalWidth,
+          original_height: originalHeight,
         })
         .select()
         .single();
 
       if (dbError) {
-        // Clean up uploaded file if database insert fails
-        await supabase.storage.from('place-photos').remove([filePath]);
+        // Clean up uploaded files if database insert fails
+        const pathsToRemove = uploads.map(u => u.path!).filter(Boolean);
+        await supabase.storage.from('place-photos').remove(pathsToRemove);
         console.error('Database error:', dbError);
         return { data: null, error: dbError };
       }
@@ -107,6 +154,48 @@ export class PhotoService {
     } catch (error: any) {
       console.error('Failed to fetch place photos:', error);
       return { data: [], error };
+    }
+  }
+
+  /**
+   * Get primary photos for multiple places efficiently
+   * Used for displaying photos in list views
+   */
+  async getPrimaryPhotosForPlaces(googlePlaceIds: string[]): Promise<{ data: Map<string, UserPlacePhoto>; error: any }> {
+    try {
+      if (!googlePlaceIds.length) {
+        return { data: new Map(), error: null };
+      }
+
+      // Fetch only primary photos or the most recent photo per place
+      const { data, error } = await supabase
+        .from('user_place_photos')
+        .select('*')
+        .in('google_place_id', googlePlaceIds)
+        .order('is_primary', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching primary photos:', error);
+        return { data: new Map(), error };
+      }
+
+      // Create a map of place ID to primary photo
+      const photoMap = new Map<string, UserPlacePhoto>();
+      
+      if (data) {
+        // Group by place ID and take the first (best) photo for each
+        data.forEach(photo => {
+          if (!photoMap.has(photo.google_place_id)) {
+            photoMap.set(photo.google_place_id, photo);
+          }
+        });
+      }
+
+      return { data: photoMap, error: null };
+    } catch (error: any) {
+      console.error('Error in getPrimaryPhotosForPlaces:', error);
+      return { data: new Map(), error };
     }
   }
 
@@ -162,24 +251,43 @@ export class PhotoService {
         return { error: dbError };
       }
 
-      // Extract file path from URL and delete from storage
-      try {
-        const url = new URL(photo.photo_url);
-        const pathParts = url.pathname.split('/');
-        const bucketIndex = pathParts.indexOf('place-photos');
-        if (bucketIndex !== -1 && bucketIndex < pathParts.length - 1) {
-          const filePath = pathParts.slice(bucketIndex + 1).join('/');
+      // Extract file paths from URLs and delete all versions from storage
+      const urlsToDelete = [
+        photo.photo_url,
+        photo.thumbnail_url,
+        photo.display_url
+      ].filter(Boolean);
+
+      const pathsToDelete: string[] = [];
+      
+      for (const photoUrl of urlsToDelete) {
+        try {
+          const url = new URL(photoUrl);
+          const pathParts = url.pathname.split('/');
+          const bucketIndex = pathParts.indexOf('place-photos');
+          if (bucketIndex !== -1 && bucketIndex < pathParts.length - 1) {
+            const filePath = pathParts.slice(bucketIndex + 1).join('/');
+            pathsToDelete.push(filePath);
+          }
+        } catch (urlError) {
+          console.error('Failed to parse photo URL for deletion:', photoUrl, urlError);
+        }
+      }
+
+      // Delete all file versions from storage
+      if (pathsToDelete.length > 0) {
+        try {
           const { error: storageError } = await supabase.storage
             .from('place-photos')
-            .remove([filePath]);
+            .remove(pathsToDelete);
 
           if (storageError) {
-            console.error('Failed to delete photo from storage:', storageError);
+            console.error('Failed to delete photos from storage:', storageError);
             // Don't throw - photo record is already deleted
           }
+        } catch (error) {
+          console.error('Failed to delete from storage:', error);
         }
-      } catch (urlError) {
-        console.error('Failed to parse photo URL for deletion:', urlError);
       }
 
       // Invalidate relevant caches
@@ -278,6 +386,39 @@ export class PhotoService {
       .eq('user_id', userId)
       .eq('google_place_id', googlePlaceId)
       .eq('is_primary', true);
+  }
+
+  /**
+   * Helper method to upload a single image file
+   */
+  private async uploadImage(
+    uri: string,
+    path: string,
+    contentType: string
+  ): Promise<{ path?: string; error?: any }> {
+    try {
+      // Create file object for React Native
+      const file = {
+        uri,
+        type: contentType,
+        name: path.split('/').pop() || 'photo.jpg',
+      };
+
+      const { data, error } = await supabase.storage
+        .from('place-photos')
+        .upload(path, file as any, {
+          contentType,
+          upsert: false,
+        });
+
+      if (error) {
+        return { error };
+      }
+
+      return { path };
+    } catch (error) {
+      return { error };
+    }
   }
 }
 

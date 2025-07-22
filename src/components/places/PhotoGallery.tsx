@@ -24,6 +24,8 @@ interface PhotoGalleryProps {
 // Define a type for combined photos
 type CombinedPhoto = {
   url: string;
+  thumbnailUrl?: string;
+  displayUrl?: string;
   caption?: string;
   isUserPhoto: boolean;
   photoId?: string;
@@ -114,6 +116,8 @@ export default function PhotoGallery({ place, onPhotoUpload }: PhotoGalleryProps
   const sortedPhotos: CombinedPhoto[] = userPhotos
     .map(photo => ({
       url: photo.photo_url,
+      thumbnailUrl: photo.thumbnail_url,
+      displayUrl: photo.display_url,
       caption: photo.caption,
       isUserPhoto: true,
       photoId: photo.id,
@@ -189,7 +193,7 @@ export default function PhotoGallery({ place, onPhotoUpload }: PhotoGalleryProps
           >
             <View>
               <Image
-                source={{ uri: photo.url }}
+                source={{ uri: photo.thumbnailUrl || photo.url }}
                 style={{
                   width: PHOTO_SIZE,
                   height: PHOTO_SIZE,
@@ -263,7 +267,7 @@ export default function PhotoGallery({ place, onPhotoUpload }: PhotoGalleryProps
             </TouchableOpacity>
 
             <Image
-              source={{ uri: selectedPhoto.url }}
+              source={{ uri: selectedPhoto.displayUrl || selectedPhoto.url }}
               style={{
                 width: screenWidth,
                 height: screenWidth,
