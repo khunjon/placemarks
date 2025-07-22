@@ -366,6 +366,7 @@ export class CacheManager {
       userRating: any,
       checkIns: any[],
       listsContainingPlace: any[],
+      userPhotos: any[],
       userId: string
     ): Promise<void> => {
       return PlaceDetailsCache.savePlaceDetails(
@@ -374,6 +375,7 @@ export class CacheManager {
         userRating,
         checkIns,
         listsContainingPlace,
+        userPhotos,
         userId
       );
     },
@@ -409,6 +411,17 @@ export class CacheManager {
       userId: string
     ): Promise<void> => {
       return PlaceDetailsCache.updateListsInCache(googlePlaceId, listsContainingPlace, userId);
+    },
+
+    /**
+     * Update user photos in cache (optimistic update)
+     */
+    updateUserPhotos: async (
+      googlePlaceId: string,
+      userPhotos: any[],
+      userId: string
+    ): Promise<void> => {
+      return PlaceDetailsCache.updateUserPhotosInCache(googlePlaceId, userPhotos, userId);
     },
 
     /**

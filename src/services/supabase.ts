@@ -66,6 +66,30 @@ export interface Database {
           user_feedback?: string;
         };
       };
+      user_place_photos: {
+        Row: {
+          id: string;
+          user_id: string;
+          google_place_id: string;
+          photo_url: string;
+          caption?: string;
+          is_primary: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          google_place_id: string;
+          photo_url: string;
+          caption?: string;
+          is_primary?: boolean;
+        };
+        Update: {
+          photo_url?: string;
+          caption?: string;
+          is_primary?: boolean;
+        };
+      };
     };
   };
 }

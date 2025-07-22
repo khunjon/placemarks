@@ -231,6 +231,15 @@ export interface UserPlaceRating extends BaseEntity {
   notes?: string;
 }
 
+// User place photo entity - matches user_place_photos table
+export interface UserPlacePhoto extends BaseEntity {
+  user_id: string;
+  google_place_id: string; // References google_places_cache.google_place_id
+  photo_url: string;
+  caption?: string;
+  is_primary: boolean;
+}
+
 // Recommendation request entity - matches recommendation_requests table
 export interface RecommendationRequest extends BaseEntity {
   user_id?: string;

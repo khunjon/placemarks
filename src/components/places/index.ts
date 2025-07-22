@@ -9,5 +9,9 @@ export { default as PlaceAutocomplete } from './PlaceAutocomplete';
 
 export { default as PlaceSelector } from './PlaceSelector';
 
+export { default as PhotoUploadButton } from './PhotoUploadButton';
+
+export { default as PhotoGallery } from './PhotoGallery';
+
 // Navigation utilities
 export { PlaceNavigationHelper, usePlaceNavigation } from './PlaceNavigationHelper';

@@ -34,12 +34,14 @@ import {
   LoadingState
 } from '../../components/common';
 import Toast from '../../components/ui/Toast';
+import { PhotoGallery, PhotoUploadButton } from '../../components/places';
 
-import { EnrichedPlace } from '../../types';
+import { EnrichedPlace, UserPlacePhoto } from '../../types';
 import { placesService } from '../../services/places';
 import { checkInsService, CheckIn } from '../../services/checkInsService';
 import { userRatingsService, UserRatingType } from '../../services/userRatingsService';
 import { listsService, EnrichedListPlace } from '../../services/listsService';
+import { photoService } from '../../services/photoService';
 import { useAuth } from '../../services/auth-context';
 import { cacheManager } from '../../services/cacheManager';
 import { RootStackParamList } from '../../types/navigation';
@@ -85,6 +87,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   const [userRating, setUserRating] = useState<UserRatingType | null>(null);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [listsContainingPlace, setListsContainingPlace] = useState<(EnrichedListPlace & { list_name: string })[]>([]);
+  const [userPhotos, setUserPhotos] = useState<UserPlacePhoto[]>([]);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   
   // Single note state for the context list
@@ -181,6 +184,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
           setUserRating(cached.userRating);
           setCheckIns(cached.checkIns);
           setListsContainingPlace(cached.listsContainingPlace);
+          setUserPhotos(cached.userPhotos || []);
           
           // Initialize note for the specific context list (if user came from a list)
           if (contextListId) {
@@ -216,7 +220,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   const loadFreshPlaceDetails = async (): Promise<void> => {
     try {
       // Load all data in parallel - much simpler with Google Place IDs
-      const [placeDetails, userRatingData, checkInsData, listsData] = await Promise.all([
+      const [placeDetails, userRatingData, checkInsData, listsData, photosData] = await Promise.all([
         // Get full place details from Google Places API cache
         placesService.getPlaceDetails(googlePlaceId),
         
@@ -227,7 +231,10 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
         checkInsService.getPlaceCheckIns(googlePlaceId, 10),
         
         // Get lists containing this place
-        getListsContainingPlace(user!.id, googlePlaceId)
+        getListsContainingPlace(user!.id, googlePlaceId),
+        
+        // Get user photos for this place
+        photoService.getPlacePhotos(googlePlaceId)
       ]);
       
       if (!placeDetails) {
@@ -236,12 +243,14 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       
       const userRating = userRatingData?.rating_type || null;
       const filteredCheckIns = checkInsData.filter(checkIn => checkIn.user_id === user!.id);
+      const userPhotos = photosData.data || [];
       
       // Update state
       setPlace(placeDetails as any);
       setUserRating(userRating);
       setCheckIns(filteredCheckIns);
       setListsContainingPlace(listsData);
+      setUserPhotos(userPhotos);
       
       // Initialize note for the specific context list (if user came from a list)
       if (contextListId) {
@@ -259,6 +268,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
         userRating,
         filteredCheckIns,
         listsData,
+        userPhotos,
         user!.id
       );
     } catch (error) {
@@ -577,63 +587,11 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
             paddingBottom: keyboardHeight > 0 ? keyboardHeight + 20 : 20,
           }}
         >
-          {/* Place Photos - prioritize editorial/featured images */}
-          {(place.primary_image_url || place.featured_image_url) && (
-            <Image
-              source={{ uri: place.primary_image_url || place.featured_image_url }}
-              style={{
-                width: screenWidth,
-                height: 240,
-                backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground
-              }}
-              resizeMode="cover"
-            />
-          )}
-          
-          {/* Google Photos - lazy loaded */}
-          {!(place.primary_image_url || place.featured_image_url) && place.photo_urls && place.photo_urls.length > 0 && (
-            <View>
-              {showPhotos ? (
-                <Image
-                  source={{ uri: place.photo_urls[0] }}
-                  style={{
-                    width: screenWidth,
-                    height: 240,
-                    backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground
-                  }}
-                  resizeMode="cover"
-                />
-              ) : (
-                <TouchableOpacity
-                  onPress={() => setShowPhotos(true)}
-                  style={{
-                    width: screenWidth,
-                    height: 240,
-                    backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    borderBottomWidth: 1,
-                    borderBottomColor: DarkTheme.colors.semantic.separator
-                  }}
-                >
-                  <MaterialIcons 
-                    name="camera-alt"
-                    size={32} 
-                    color={DarkTheme.colors.semantic.tertiaryLabel} 
-                  />
-                  <Text style={[
-                    DarkTheme.typography.body,
-                    { 
-                      color: DarkTheme.colors.semantic.secondaryLabel,
-                      marginTop: Spacing.sm
-                    }
-                  ]}>
-                    Tap to view photo
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
+          {/* Photo Gallery */}
+          <PhotoGallery 
+            place={place} 
+            onPhotoUpload={() => loadPlaceDetails()}
+          />
 
           <View style={{ padding: Spacing.lg }}>
             {/* Place Header */}
@@ -1078,11 +1036,21 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
 
             {/* Action Buttons */}
             <View style={{ gap: Spacing.md, marginBottom: Spacing.xl }}>
-              <PrimaryButton
-                title="Check In"
-                icon={Camera}
-                onPress={handleCheckIn}
-              />
+              <View style={{ flexDirection: 'row', gap: Spacing.md }}>
+                <View style={{ flex: 1 }}>
+                  <PrimaryButton
+                    title="Check In"
+                    icon={Camera}
+                    onPress={handleCheckIn}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <PhotoUploadButton
+                    googlePlaceId={googlePlaceId}
+                    onPhotoUploaded={() => loadPlaceDetails()}
+                  />
+                </View>
+              </View>
             </View>
           </View>
         </ScrollView>

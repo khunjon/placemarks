@@ -1,4 +1,4 @@
-import { EnrichedPlace } from '../types';
+import { EnrichedPlace, UserPlacePhoto } from '../types';
 import { CheckIn } from './checkInsService';
 import { UserRatingType } from './userRatingsService';
 import { EnrichedListPlace } from './listsService';
@@ -11,6 +11,7 @@ interface PlaceDetailsData {
   userRating: UserRatingType | null;
   checkIns: CheckIn[];
   listsContainingPlace: (EnrichedListPlace & { list_name: string })[];
+  userPhotos: UserPlacePhoto[];
   googlePlaceId: string;
 }
 
@@ -43,6 +44,7 @@ class PlaceDetailsCacheService extends BaseAsyncStorageCache<PlaceDetailsData> {
     userRating: UserRatingType | null,
     checkIns: CheckIn[],
     listsContainingPlace: (EnrichedListPlace & { list_name: string })[],
+    userPhotos: UserPlacePhoto[],
     userId: string
   ): Promise<void> {
     const placeDetailsData: PlaceDetailsData = {
@@ -50,6 +52,7 @@ class PlaceDetailsCacheService extends BaseAsyncStorageCache<PlaceDetailsData> {
       userRating,
       checkIns,
       listsContainingPlace,
+      userPhotos,
       googlePlaceId,
     };
     
@@ -70,6 +73,7 @@ class PlaceDetailsCacheService extends BaseAsyncStorageCache<PlaceDetailsData> {
     userRating: UserRatingType | null;
     checkIns: CheckIn[];
     listsContainingPlace: (EnrichedListPlace & { list_name: string })[];
+    userPhotos: UserPlacePhoto[];
     isStale?: boolean;
   } | null> {
     const cacheKey = this.generateCacheKey(googlePlaceId);
@@ -91,6 +95,7 @@ class PlaceDetailsCacheService extends BaseAsyncStorageCache<PlaceDetailsData> {
       userRating: cached.data.userRating,
       checkIns: cached.data.checkIns,
       listsContainingPlace: cached.data.listsContainingPlace,
+      userPhotos: cached.data.userPhotos || [],
       isStale: cached.isStale,
     };
   }
@@ -203,6 +208,23 @@ class PlaceDetailsCacheService extends BaseAsyncStorageCache<PlaceDetailsData> {
     await this.updateCache(
       cacheKey,
       (data) => ({ ...data, listsContainingPlace }),
+      userId,
+      true
+    );
+  }
+
+  /**
+   * Update user photos in cache (for optimistic updates)
+   */
+  async updateUserPhotosInCache(
+    googlePlaceId: string,
+    userPhotos: UserPlacePhoto[],
+    userId: string
+  ): Promise<void> {
+    const cacheKey = this.generateCacheKey(googlePlaceId);
+    await this.updateCache(
+      cacheKey,
+      (data) => ({ ...data, userPhotos }),
       userId,
       true
     );
