@@ -211,7 +211,6 @@ export interface ListPlace {
   list_id: string;
   place_id?: string; // References google_places_cache.google_place_id
   added_at?: string;
-  notes?: string;
   personal_rating?: number; // 1-5 rating
   visit_count?: number;
   sort_order?: number;
@@ -220,6 +219,7 @@ export interface ListPlace {
 // Enriched list place - ListPlace + Place data
 export interface EnrichedListPlace extends ListPlace {
   place?: EnrichedPlace;
+  userNote?: UserPlaceNote; // User's note for this place (from user_place_notes table)
 }
 
 // User place rating entity - matches user_place_ratings table
@@ -229,6 +229,15 @@ export interface UserPlaceRating extends BaseEntity {
   rating_type: UserRatingType;
   rating_value?: number; // 1-5 scale
   notes?: string;
+}
+
+// User place notes entity - matches user_place_notes table
+export interface UserPlaceNote {
+  user_id: string;
+  place_id: string; // Google Place ID
+  notes: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 // User place photo entity - matches user_place_photos table

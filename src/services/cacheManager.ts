@@ -285,6 +285,7 @@ export class CacheManager {
 
     /**
      * Update place notes in cache (optimistic update)
+     * Note: listId is no longer used since notes are user-specific
      */
     updateNotes: async (
       listId: string,
@@ -292,7 +293,9 @@ export class CacheManager {
       notes: string,
       userId: string
     ): Promise<void> => {
-      return ListDetailsCache.updatePlaceNotesInCache(listId, placeId, notes, userId);
+      // Notes are now user-specific, not list-specific
+      // This method is kept for backward compatibility but doesn't update list-specific notes
+      console.log('[CacheManager] updateNotes called with legacy signature, notes are now user-specific');
     },
 
     /**
@@ -426,6 +429,7 @@ export class CacheManager {
 
     /**
      * Update place notes in cache (optimistic update)
+     * Note: listId is no longer used since notes are user-specific
      */
     updateNotes: async (
       googlePlaceId: string,
@@ -433,7 +437,9 @@ export class CacheManager {
       notes: string,
       userId: string
     ): Promise<void> => {
-      return PlaceDetailsCache.updatePlaceNotesInCache(googlePlaceId, listId, notes, userId);
+      // Notes are now user-specific, not list-specific
+      // We need to update the user note in all cached lists containing this place
+      return PlaceDetailsCache.updateUserNoteInCache(googlePlaceId, notes, userId);
     },
 
     /**

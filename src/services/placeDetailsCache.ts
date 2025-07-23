@@ -232,6 +232,7 @@ class PlaceDetailsCacheService extends BaseAsyncStorageCache<PlaceDetailsData> {
 
   /**
    * Update place notes in a specific list (optimistic update)
+   * @deprecated Notes are now user-specific, not list-specific
    */
   async updatePlaceNotesInCache(
     googlePlaceId: string,
@@ -249,6 +250,36 @@ class PlaceDetailsCacheService extends BaseAsyncStorageCache<PlaceDetailsData> {
             ? { ...listPlace, notes }
             : listPlace
         )
+      }),
+      userId,
+      true
+    );
+  }
+
+  /**
+   * Update user note for a place (applies to all lists)
+   */
+  async updateUserNoteInCache(
+    googlePlaceId: string,
+    notes: string,
+    userId: string
+  ): Promise<void> {
+    const cacheKey = this.generateCacheKey(googlePlaceId);
+    const userNote = notes ? {
+      user_id: userId,
+      place_id: googlePlaceId,
+      notes: notes,
+      updated_at: new Date().toISOString()
+    } : undefined;
+
+    await this.updateCache(
+      cacheKey,
+      (data) => ({
+        ...data,
+        listsContainingPlace: data.listsContainingPlace.map(listPlace => ({
+          ...listPlace,
+          userNote: userNote
+        }))
       }),
       userId,
       true

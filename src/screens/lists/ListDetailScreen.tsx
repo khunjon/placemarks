@@ -531,7 +531,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
         onCheckIn={handleCheckIn}
         onPress={() => handlePlacePress(listPlace.place_id, listPlace.place?.name || 'Unknown Place')}
         showCheckInButton={false}
-        notes={listPlace.notes}
+        notes={listPlace.userNote?.notes}
         photoUrl={photo?.thumbnail_url || photo?.photo_url} // Use thumbnail if available, fallback to original
         onDelete={handleRemovePlace}
         onAddToWantToGo={handleAddToWantToGo}

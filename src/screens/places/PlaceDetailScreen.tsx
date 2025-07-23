@@ -41,6 +41,7 @@ import { placesService } from '../../services/places';
 import { checkInsService, CheckIn } from '../../services/checkInsService';
 import { userRatingsService, UserRatingType } from '../../services/userRatingsService';
 import { listsService, EnrichedListPlace } from '../../services/listsService';
+import { userPlaceNotesService } from '../../services/userPlaceNotesService';
 import { photoService } from '../../services/photoService';
 import { useAuth } from '../../services/auth-context';
 import { cacheManager } from '../../services/cacheManager';
@@ -186,17 +187,24 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
           setListsContainingPlace(cached.listsContainingPlace);
           setUserPhotos(cached.userPhotos || []);
           
-          // Initialize note for the specific context list (if user came from a list)
-          if (contextListId) {
-            const contextList = cached.listsContainingPlace.find(listPlace => listPlace.list_id === contextListId);
-            if (contextList) {
-              setContextListPlace(contextList);
-              setNoteText(contextList.notes || '');
+          // Initialize note from cached data
+          // All lists should have the same userNote since it's user-specific
+          const cachedUserNote = cached.listsContainingPlace.find(lp => lp.userNote)?.userNote;
+          if (cachedUserNote) {
+            setNoteText(cachedUserNote.notes || '');
+          }
+          
+          // Set context list place if coming from a specific list
+          if (cached.listsContainingPlace.length > 0) {
+            if (contextListId) {
+              const contextList = cached.listsContainingPlace.find(listPlace => listPlace.list_id === contextListId);
+              if (contextList) {
+                setContextListPlace(contextList);
+              }
+            } else {
+              // If no context, use the first list
+              setContextListPlace(cached.listsContainingPlace[0]);
             }
-          } else if (cached.listsContainingPlace.length > 0) {
-            // If no context but place is in lists, use the first list
-            setContextListPlace(cached.listsContainingPlace[0]);
-            setNoteText(cached.listsContainingPlace[0].notes || '');
           }
           
           setLoading(false);
@@ -224,7 +232,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   const loadFreshPlaceDetails = async (): Promise<void> => {
     try {
       // Load all data in parallel - much simpler with Google Place IDs
-      const [placeDetails, userRatingData, checkInsData, listsData, photosData] = await Promise.all([
+      const [placeDetails, userRatingData, checkInsData, listsData, photosData, userNote] = await Promise.all([
         // Get full place details from Google Places API cache
         placesService.getPlaceDetails(googlePlaceId),
         
@@ -238,7 +246,10 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
         getListsContainingPlace(user!.id, googlePlaceId),
         
         // Get user photos for this place
-        photoService.getPlacePhotos(googlePlaceId)
+        photoService.getPlacePhotos(googlePlaceId),
+        
+        // Get user's note for this place
+        userPlaceNotesService.getNote(user!.id, googlePlaceId)
       ]);
       
       if (!placeDetails) {
@@ -256,17 +267,22 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       setListsContainingPlace(listsData);
       setUserPhotos(userPhotos);
       
-      // Initialize note for the specific context list (if user came from a list)
-      if (contextListId) {
-        const contextList = listsData.find(listPlace => listPlace.list_id === contextListId);
-        if (contextList) {
-          setContextListPlace(contextList);
-          setNoteText(contextList.notes || '');
+      // Initialize note text from user note
+      if (userNote) {
+        setNoteText(userNote.notes || '');
+      }
+      
+      // Set context list place if coming from a specific list
+      if (listsData.length > 0) {
+        if (contextListId) {
+          const contextList = listsData.find(listPlace => listPlace.list_id === contextListId);
+          if (contextList) {
+            setContextListPlace(contextList);
+          }
+        } else {
+          // If no context, use the first list
+          setContextListPlace(listsData[0]);
         }
-      } else if (listsData.length > 0) {
-        // If no context but place is in lists, use the first list
-        setContextListPlace(listsData[0]);
-        setNoteText(listsData[0].notes || '');
       }
       
       // Cache the loaded data
@@ -305,12 +321,16 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       const userLists = await listsService.getUserListsWithPlaces(userId);
       const containingLists: (EnrichedListPlace & { list_name: string })[] = [];
       
+      // Get the user's note for this place
+      const userNote = await userPlaceNotesService.getNote(userId, googlePlaceId);
+      
       userLists.forEach(list => {
         const placeInList = list.places.find(p => p.place_id === googlePlaceId);
         if (placeInList) {
           containingLists.push({
             ...placeInList,
-            list_name: list.name
+            list_name: list.name,
+            userNote: userNote || undefined
           });
         }
       });
@@ -425,43 +445,39 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   const handleSaveNote = async () => {
     if (!user?.id) return;
     
-    // If no contextListPlace, use the first available list
-    const targetListPlace = contextListPlace || listsContainingPlace[0];
-    if (!targetListPlace) {
-      showToast('No list found to save note', 'error');
-      return;
-    }
-    
     try {
-      const trimmedNote = noteText.trim() || undefined;
+      const trimmedNote = noteText.trim();
       
       // Optimistic updates - update UI immediately
       setIsEditingNote(false);
-      setContextListPlace(prev => prev ? { ...prev, notes: trimmedNote } : targetListPlace);
+      
+      // Update all list places with the new note
+      const updatedNote = trimmedNote ? {
+        user_id: user.id,
+        place_id: googlePlaceId,
+        notes: trimmedNote,
+        updated_at: new Date().toISOString()
+      } : undefined;
+      
       setListsContainingPlace(prev => 
-        prev.map(listPlace => 
-          listPlace.list_id === targetListPlace.list_id 
-            ? { ...listPlace, notes: trimmedNote }
-            : listPlace
-        )
+        prev.map(listPlace => ({
+          ...listPlace,
+          userNote: updatedNote
+        }))
       );
+      
+      // Make actual API call to save user-specific note
+      await userPlaceNotesService.saveNote(user.id, googlePlaceId, trimmedNote);
       
       // Update cache immediately for instant feedback on future loads
       await cacheManager.placeDetails.updateNotes(
         googlePlaceId,
-        targetListPlace.list_id,
-        trimmedNote || '',
+        '', // No specific list ID needed anymore
+        trimmedNote,
         user.id
       );
       
-      // Make actual API call
-      await listsService.updatePlaceInList(
-        targetListPlace.list_id,
-        googlePlaceId,
-        { notes: trimmedNote }
-      );
-      
-      showToast('Note saved');
+      showToast(trimmedNote ? 'Note saved' : 'Note removed');
     } catch (error) {
       console.error('Error saving note:', error);
       showToast('Failed to save note', 'error');
@@ -472,9 +488,9 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   };
 
   const handleCancelNote = () => {
-    // Reset to original note
-    const targetListPlace = contextListPlace || listsContainingPlace[0];
-    const originalNote = targetListPlace?.notes || '';
+    // Reset to original note (now from userNote)
+    const listWithNote = listsContainingPlace.find(lp => lp.userNote);
+    const originalNote = listWithNote?.userNote?.notes || '';
     setNoteText(originalNote);
     setIsEditingNote(false);
   };

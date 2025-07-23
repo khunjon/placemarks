@@ -170,6 +170,7 @@ class ListDetailsCacheService extends BaseAsyncStorageCache<ListDetailsData> {
 
   /**
    * Update place notes in cache (for optimistic updates)
+   * @deprecated Notes are now user-specific, not list-specific
    */
   async updatePlaceNotesInCache(
     listId: string,
@@ -177,23 +178,9 @@ class ListDetailsCacheService extends BaseAsyncStorageCache<ListDetailsData> {
     notes: string,
     userId: string
   ): Promise<void> {
-    const cacheKey = this.generateCacheKey(listId);
-    await this.updateCache(
-      cacheKey,
-      (data) => ({
-        ...data,
-        list: {
-          ...data.list,
-          places: data.list.places.map(listPlace => 
-            listPlace.place.id === placeId 
-              ? { ...listPlace, notes }
-              : listPlace
-          )
-        }
-      }),
-      userId,
-      true
-    );
+    // This method is deprecated since notes are now user-specific
+    // Keep it for backward compatibility but log a warning
+    console.log('[ListDetailsCache] updatePlaceNotesInCache is deprecated - notes are now user-specific');
   }
 
   /**

@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { placesService } from './places';
-import { EnrichedPlace, List, User, CheckIn, PlaceSuggestion, PlaceDetails, Location } from '../types';
+import { userPlaceNotesService } from './userPlaceNotesService';
+import { EnrichedPlace, List, User, CheckIn, PlaceSuggestion, PlaceDetails, Location, UserPlaceNote } from '../types';
 import { AppError, ErrorType, ErrorSeverity, ErrorFactory, ErrorLogger, safeAsync, ErrorContext } from '../utils/errorHandling';
 
 // Enhanced type definitions for the new schema
@@ -18,7 +19,6 @@ export interface ListPlace {
   list_id: string;
   place_id: string; // Google Place ID
   added_at: string;
-  notes?: string;
   personal_rating?: number;
   visit_count?: number;
   sort_order?: number;
@@ -26,6 +26,7 @@ export interface ListPlace {
 
 export interface EnrichedListPlace extends ListPlace {
   place: EnrichedPlace;
+  userNote?: UserPlaceNote; // User's note for this place (from user_place_notes table)
 }
 
 export interface ListWithPlaces extends EnhancedList {
@@ -200,6 +201,14 @@ export class ListsService {
         return [];
       }
 
+      // Get all unique place IDs across all lists
+      const allPlaceIds = [...new Set(result.flatMap((list: any) => 
+        list.places.map((p: any) => p.place_id)
+      ).filter(Boolean))];
+      
+      // Fetch user notes for all places at once
+      const userNotes = await userPlaceNotesService.getNotesByPlaceIds(userId, allPlaceIds);
+
       // Transform the JSON result into our TypeScript types
       const lists: ListWithPlaces[] = result.map((listData: any) => ({
         id: listData.id,
@@ -225,11 +234,11 @@ export class ListsService {
           list_id: p.list_id,
           place_id: p.place_id,
           added_at: p.added_at,
-          notes: p.notes,
           personal_rating: p.personal_rating,
           visit_count: p.visit_count,
           sort_order: p.sort_order,
-          place: p.place as EnrichedPlace
+          place: p.place as EnrichedPlace,
+          userNote: userNotes[p.place_id] // Add user note from new table
         })),
         place_count: listData.place_count
       }));
@@ -303,6 +312,12 @@ export class ListsService {
         return null;
       }
 
+      // Get all place IDs to fetch user notes
+      const placeIds = result.places.map((p: any) => p.place_id).filter(Boolean);
+      
+      // Fetch user notes for all places in the list
+      const userNotes = await userPlaceNotesService.getNotesByPlaceIds(userId, placeIds);
+
       // Transform the JSON result into our TypeScript types
       const listData: ListWithPlaces = {
         id: result.id,
@@ -328,11 +343,11 @@ export class ListsService {
           list_id: p.list_id,
           place_id: p.place_id,
           added_at: p.added_at,
-          notes: p.notes,
           personal_rating: p.personal_rating,
           visit_count: p.visit_count,
           sort_order: p.sort_order,
-          place: p.place as EnrichedPlace
+          place: p.place as EnrichedPlace,
+          userNote: userNotes[p.place_id] // Add user note from new table
         })),
         place_count: result.place_count
       };
@@ -578,7 +593,6 @@ export class ListsService {
     listId: string,
     googlePlaceId: string,
     options?: {
-      notes?: string;
       personal_rating?: number;
       sort_order?: number;
     }
@@ -629,7 +643,6 @@ export class ListsService {
         const { error: updateError } = await supabase
           .from('list_places')
           .update({
-            notes: options?.notes,
             personal_rating: options?.personal_rating,
             sort_order: options?.sort_order
           })
@@ -650,7 +663,6 @@ export class ListsService {
           .insert({
             list_id: listId,
             place_id: googlePlaceId,
-            notes: options?.notes,
             personal_rating: options?.personal_rating,
             sort_order: options?.sort_order || 0
           });
@@ -691,7 +703,6 @@ export class ListsService {
     listId: string,
     googlePlaceId: string,
     updates: {
-      notes?: string;
       personal_rating?: number;
       sort_order?: number;
       visit_count?: number;
@@ -743,7 +754,6 @@ export class ListsService {
           list_id,
           place_id,
           added_at,
-          notes,
           personal_rating,
           visit_count,
           sort_order,
@@ -784,7 +794,6 @@ export class ListsService {
               list_id: listPlace.list_id,
               place_id: listPlace.place_id,
               added_at: listPlace.added_at,
-              notes: listPlace.notes,
               personal_rating: listPlace.personal_rating,
               visit_count: listPlace.visit_count,
               sort_order: listPlace.sort_order,
@@ -1191,6 +1200,7 @@ export class ListsService {
         return null;
       }
 
+      // Note: For curated lists, we don't fetch user notes since these are public lists
       // Transform the JSON result into our TypeScript types
       const listData: ListWithPlaces = {
         id: result.id,
@@ -1216,11 +1226,11 @@ export class ListsService {
           list_id: p.list_id,
           place_id: p.place_id,
           added_at: p.added_at,
-          notes: p.notes,
           personal_rating: p.personal_rating,
           visit_count: p.visit_count,
           sort_order: p.sort_order,
           place: p.place as EnrichedPlace
+          // No userNote for curated lists
         })),
         place_count: result.place_count
       };
@@ -1265,7 +1275,6 @@ export class ListsService {
             list_id,
             place_id,
             added_at,
-            notes,
             personal_rating,
             visit_count,
             sort_order,
@@ -1309,7 +1318,6 @@ export class ListsService {
                     list_id: listPlace.list_id,
                     place_id: listPlace.place_id,
                     added_at: listPlace.added_at,
-                    notes: listPlace.notes,
                     personal_rating: listPlace.personal_rating,
                     visit_count: listPlace.visit_count,
                     sort_order: listPlace.sort_order,
@@ -1398,7 +1406,6 @@ export class ListsService {
             list_id,
             place_id,
             added_at,
-            notes,
             personal_rating,
             visit_count,
             sort_order,
@@ -1447,7 +1454,6 @@ export class ListsService {
                 list_id: listPlace.list_id,
                 place_id: listPlace.place_id,
                 added_at: listPlace.added_at,
-                notes: listPlace.notes,
                 personal_rating: listPlace.personal_rating,
                 visit_count: listPlace.visit_count,
                 sort_order: listPlace.sort_order,

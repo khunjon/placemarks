@@ -16,6 +16,7 @@ export {
   ListPlace,
   UserPlaceRating,
   UserPlacePhoto,
+  UserPlaceNote,
   RecommendationRequest,
   UserRecommendationPreferences,
   
