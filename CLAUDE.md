@@ -235,6 +235,45 @@ All caches are coordinated through the `cacheManager` service and configured via
 - Centralized cache configuration in `src/config/cacheConfig.ts`
 - Unified cache invalidation through `cacheManager`
 
+### Animation & Gesture Performance Guidelines
+
+When implementing swipeable components or animations in React Native, follow these best practices for optimal performance:
+
+1. **Always use react-native-gesture-handler over PanResponder**
+   - Gestures run on the UI thread (60fps) instead of JS thread
+   - Requires wrapping app with `GestureHandlerRootView` at root level
+   - Example: SwipeablePlaceCard uses `PanGestureHandler` for smooth swipes
+
+2. **Use Native Driver for all animations**
+   - Always set `useNativeDriver: true` in Animated configurations
+   - Animations run on native thread without JS bridge overhead
+   - Use `Animated.event` to bind gestures directly to animated values
+
+3. **Pre-calculate animation interpolations**
+   - Use `Animated.interpolate` to derive values from a single animated value
+   - Avoids per-frame calculations during animations
+   - Example: Opacity and scale derived from translateX in swipe gestures
+
+4. **Avoid state updates during gestures**
+   - Never call `setState` during active gestures (causes re-renders)
+   - Use Animated values or refs instead of React state
+   - State updates should only happen on gesture completion
+
+5. **Optimize animation physics**
+   - Spring animations: tension=40, friction=7 for snappy response
+   - Use `Animated.sequence` for multi-step animations
+   - Consider velocity in gesture endings for natural feel
+
+6. **Proper gesture configuration**
+   - Set `activeOffsetX` to prevent accidental activation
+   - Use `failOffsetY` to cancel on vertical movement
+   - Enable `shouldCancelWhenOutside` for better scroll integration
+
+7. **Component memoization**
+   - Use `React.memo` with custom comparison functions
+   - Only re-render when essential props change
+   - Avoid passing new function instances as props
+
 ## Common Issues & Troubleshooting
 
 ### Environment Variables Not Working in Production

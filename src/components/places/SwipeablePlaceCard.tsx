@@ -1,5 +1,11 @@
-import React, { useRef, useState, useLayoutEffect, memo } from 'react';
-import { View, Text, Alert, Animated, PanResponder, LayoutChangeEvent } from 'react-native';
+import React, { useRef, memo } from 'react';
+import { View, Text, Alert, Animated } from 'react-native';
+import {
+  PanGestureHandler,
+  PanGestureHandlerGestureEvent,
+  PanGestureHandlerStateChangeEvent,
+  State,
+} from 'react-native-gesture-handler';
 import { Trash2, Plus } from '../icons';
 import { DarkTheme } from '../../constants/theme';
 import PlaceCard, { PlaceCardProps } from './PlaceCard';
@@ -12,8 +18,8 @@ export interface SwipeablePlaceCardProps extends PlaceCardProps {
   enableAddToWantToGo?: boolean; // True for all lists
 }
 
-const SWIPE_THRESHOLD = 80; // Reduced threshold for easier triggering
-const MAX_SWIPE = 120; // Reduced max swipe distance
+const SWIPE_THRESHOLD = 80; // Threshold for triggering actions
+const MAX_SWIPE = 120; // Maximum swipe distance
 const ACTIVATION_THRESHOLD = 20; // Minimum distance to show action
 
 const SwipeablePlaceCard = memo(function SwipeablePlaceCard({
@@ -23,12 +29,34 @@ const SwipeablePlaceCard = memo(function SwipeablePlaceCard({
   enableAddToWantToGo = true,
   ...placeCardProps
 }: SwipeablePlaceCardProps) {
+  // Use a single animated value for translation
   const translateX = useRef(new Animated.Value(0)).current;
-  const leftActionOpacity = useRef(new Animated.Value(0)).current;
-  const rightActionOpacity = useRef(new Animated.Value(0)).current;
   
-  const [cardHeight, setCardHeight] = useState<number>(0);
-  const [isSwipeInProgress, setIsSwipeInProgress] = useState(false);
+  // Pre-calculate interpolated opacity values based on translateX
+  const leftActionOpacity = enableDelete ? translateX.interpolate({
+    inputRange: [-MAX_SWIPE, -ACTIVATION_THRESHOLD, 0, MAX_SWIPE],
+    outputRange: [1, 0, 0, 0],
+    extrapolate: 'clamp',
+  }) : new Animated.Value(0);
+  
+  const rightActionOpacity = enableAddToWantToGo ? translateX.interpolate({
+    inputRange: [-MAX_SWIPE, 0, ACTIVATION_THRESHOLD, MAX_SWIPE],
+    outputRange: [0, 0, 0, 1],
+    extrapolate: 'clamp',
+  }) : new Animated.Value(0);
+
+  // Scale animations for visual feedback
+  const leftActionScale = translateX.interpolate({
+    inputRange: [-MAX_SWIPE, -SWIPE_THRESHOLD, 0],
+    outputRange: [1.2, 1, 0.8],
+    extrapolate: 'clamp',
+  });
+  
+  const rightActionScale = translateX.interpolate({
+    inputRange: [0, SWIPE_THRESHOLD, MAX_SWIPE],
+    outputRange: [0.8, 1, 1.2],
+    extrapolate: 'clamp',
+  });
 
   // Get place data for callbacks
   const placeData = placeCardProps.place ? {
@@ -37,12 +65,6 @@ const SwipeablePlaceCard = memo(function SwipeablePlaceCard({
   } : {
     googlePlaceId: placeCardProps.googlePlaceId,
     name: placeCardProps.name,
-  };
-
-  // Handle card layout to get exact height
-  const handleCardLayout = (event: LayoutChangeEvent) => {
-    const { height } = event.nativeEvent.layout;
-    setCardHeight(height);
   };
 
   // Action handlers
@@ -68,92 +90,62 @@ const SwipeablePlaceCard = memo(function SwipeablePlaceCard({
     onAddToWantToGo(placeData.googlePlaceId, placeData.name || 'Unknown Place');
   };
 
-  // Update action animations based on swipe progress
-  const updateActionAnimations = (dx: number) => {
-    if (dx < 0 && enableDelete) {
-      // Left swipe - delete action
-      leftActionOpacity.setValue(Math.max(0, (Math.abs(dx) - ACTIVATION_THRESHOLD) / (SWIPE_THRESHOLD - ACTIVATION_THRESHOLD)));
-      rightActionOpacity.setValue(0);
-    } else if (dx > 0 && enableAddToWantToGo) {
-      // Right swipe - add to Want to Go action
-      rightActionOpacity.setValue(Math.max(0, (Math.abs(dx) - ACTIVATION_THRESHOLD) / (SWIPE_THRESHOLD - ACTIVATION_THRESHOLD)));
-      leftActionOpacity.setValue(0);
-    } else {
-      // No valid swipe direction
-      leftActionOpacity.setValue(0);
-      rightActionOpacity.setValue(0);
-    }
-  };
+  // Handle gesture event - runs on UI thread with native driver
+  const onGestureEvent = Animated.event(
+    [{ nativeEvent: { translationX: translateX } }],
+    { useNativeDriver: true }
+  );
 
-  // Pan responder for gesture handling
-  const panResponder = PanResponder.create({
-    onMoveShouldSetPanResponder: (evt, gestureState) => {
-      // Only respond to horizontal swipes with sufficient movement
-      return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 5;
-    },
-    onPanResponderGrant: () => {
-      setIsSwipeInProgress(true);
-      translateX.setOffset(0);
-      translateX.setValue(0);
-    },
-    onPanResponderMove: (evt, gestureState) => {
-      const { dx } = gestureState;
-      
-      // Constrain swipe based on enabled directions
-      let constrainedDx = dx;
-      if (dx < 0 && !enableDelete) {
-        constrainedDx = 0;
-      } else if (dx > 0 && !enableAddToWantToGo) {
-        constrainedDx = 0;
-      }
-      
-      // Apply easing for smoother feel - reduce resistance as you approach max
-      const easedDx = constrainedDx > 0 
-        ? Math.min(constrainedDx, MAX_SWIPE * (1 - Math.exp(-constrainedDx / 60)))
-        : Math.max(constrainedDx, -MAX_SWIPE * (1 - Math.exp(constrainedDx / 60)));
-      
-      translateX.setValue(easedDx);
-      updateActionAnimations(easedDx);
-    },
-    onPanResponderRelease: (evt, gestureState) => {
-      const { dx, vx } = gestureState;
-      setIsSwipeInProgress(false);
+  // Handle gesture state changes
+  const onHandlerStateChange = (event: PanGestureHandlerStateChangeEvent) => {
+    if (event.nativeEvent.state === State.END) {
+      const { translationX, velocityX } = event.nativeEvent;
       
       // Consider velocity for more responsive feel
-      const effectiveDx = dx + (vx * 50); // Velocity multiplier
+      const effectiveDx = translationX + (velocityX * 0.2);
       
       // Check if threshold was reached
       if (effectiveDx < -SWIPE_THRESHOLD && enableDelete) {
-        // Left swipe - delete action
-        handleDelete();
+        // Snap to delete position briefly before springing back
+        Animated.sequence([
+          Animated.timing(translateX, {
+            toValue: -MAX_SWIPE,
+            duration: 100,
+            useNativeDriver: true,
+          }),
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 40,
+            friction: 7,
+          }),
+        ]).start(() => handleDelete());
       } else if (effectiveDx > SWIPE_THRESHOLD && enableAddToWantToGo) {
-        // Right swipe - add to Want to Go
-        handleAddToWantToGo();
-      }
-      
-      // Spring back to center with improved animation
-      Animated.parallel([
+        // Snap to add position briefly before springing back
+        Animated.sequence([
+          Animated.timing(translateX, {
+            toValue: MAX_SWIPE,
+            duration: 100,
+            useNativeDriver: true,
+          }),
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 40,
+            friction: 7,
+          }),
+        ]).start(() => handleAddToWantToGo());
+      } else {
+        // Spring back to center
         Animated.spring(translateX, {
           toValue: 0,
           useNativeDriver: true,
-          tension: 200,
-          friction: 10,
-        }),
-        Animated.spring(leftActionOpacity, {
-          toValue: 0,
-          useNativeDriver: true,
-          tension: 200,
-          friction: 10,
-        }),
-        Animated.spring(rightActionOpacity, {
-          toValue: 0,
-          useNativeDriver: true,
-          tension: 200,
-          friction: 10,
-        }),
-      ]).start();
-    },
-  });
+          tension: 40,
+          friction: 7,
+        }).start();
+      }
+    }
+  };
 
   return (
     <View style={{ position: 'relative', overflow: 'hidden' }}>
@@ -164,14 +156,14 @@ const SwipeablePlaceCard = memo(function SwipeablePlaceCard({
             position: 'absolute',
             right: 0,
             top: 0,
-            bottom: 8, // Account for PlaceCard's marginBottom (8px)
+            bottom: 8, // Account for PlaceCard's marginBottom
             width: MAX_SWIPE,
             backgroundColor: DarkTheme.colors.status.error,
             borderRadius: DarkTheme.borderRadius.md,
             justifyContent: 'center',
             alignItems: 'center',
-            zIndex: 1,
             opacity: leftActionOpacity,
+            transform: [{ scale: leftActionScale }],
           }}
         >
           <Trash2 
@@ -202,14 +194,14 @@ const SwipeablePlaceCard = memo(function SwipeablePlaceCard({
             position: 'absolute',
             left: 0,
             top: 0,
-            bottom: 8, // Account for PlaceCard's marginBottom (8px)
+            bottom: 8, // Account for PlaceCard's marginBottom
             width: MAX_SWIPE,
             backgroundColor: DarkTheme.colors.status.success,
             borderRadius: DarkTheme.borderRadius.md,
             justifyContent: 'center',
             alignItems: 'center',
-            zIndex: 1,
             opacity: rightActionOpacity,
+            transform: [{ scale: rightActionScale }],
           }}
         >
           <Plus 
@@ -234,16 +226,29 @@ const SwipeablePlaceCard = memo(function SwipeablePlaceCard({
       )}
 
       {/* Swipeable Card */}
-      <Animated.View
-        style={{
-          transform: [{ translateX }],
-          zIndex: 2,
-        }}
-        {...panResponder.panHandlers}
-        onLayout={handleCardLayout}
+      <PanGestureHandler
+        onGestureEvent={onGestureEvent}
+        onHandlerStateChange={onHandlerStateChange}
+        activeOffsetX={[-10, 10]} // Require 10px movement to activate
+        failOffsetY={[-5, 5]} // Cancel if vertical movement exceeds 5px
+        shouldCancelWhenOutside={true}
+        enabled={enableDelete || enableAddToWantToGo}
       >
-        <PlaceCard {...placeCardProps} />
-      </Animated.View>
+        <Animated.View
+          style={{
+            transform: [{ 
+              translateX: translateX.interpolate({
+                inputRange: [-MAX_SWIPE, MAX_SWIPE],
+                outputRange: [-MAX_SWIPE, MAX_SWIPE],
+                extrapolate: 'clamp',
+              })
+            }],
+            zIndex: 2,
+          }}
+        >
+          <PlaceCard {...placeCardProps} />
+        </Animated.View>
+      </PanGestureHandler>
     </View>
   );
 });

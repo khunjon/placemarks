@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { AppState, AppStateStatus } from 'react-native';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider, useAuth } from './src/services/auth-context';
 import { Colors } from './src/constants/Colors';
 import BottomTabNavigator from './src/navigation/BottomTabNavigator';
@@ -238,9 +239,11 @@ function AppNavigator() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppNavigator />
-      <StatusBar style="light" backgroundColor={Colors.semantic.backgroundPrimary} />
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <AppNavigator />
+        <StatusBar style="light" backgroundColor={Colors.semantic.backgroundPrimary} />
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
