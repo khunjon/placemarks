@@ -155,6 +155,15 @@ There is a separate web admin UI project that connects to the same Supabase back
 - All database operations should handle errors and provide user feedback
 - Use Supabase MCP tools for database administration and migrations
 
+### Screen Analytics Integration
+- **All new screens MUST be added to the analytics screen mapping** in `src/constants/ScreenNames.ts`
+- When creating a new screen, add it to three locations in ScreenNames.ts:
+  1. Add a constant in the `SCREEN_NAMES` object using the pattern `STACK_SCREENNAME: 'Stack_ScreenName'`
+  2. Add the route mapping in the appropriate stack within `STACK_SCREEN_MAPPING`
+  3. Add a user-friendly title in the `getScreenTitle()` function
+- Follow the existing naming convention: `Stack_ScreenName` (e.g., `Profile_RecommendationSettings`)
+- This ensures proper analytics tracking and prevents console warnings about missing screen mappings
+
 ## Current App State
 
 ### Fully Working Features ✅

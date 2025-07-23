@@ -38,6 +38,7 @@ export const SCREEN_NAMES = {
   PROFILE_EDIT: 'Profile_Edit',
   PROFILE_PREFERENCES: 'Profile_Preferences',
   PROFILE_ACHIEVEMENT_DETAIL: 'Profile_AchievementDetail',
+  PROFILE_RECOMMENDATION_SETTINGS: 'Profile_RecommendationSettings',
 
   // Common/Shared Screens
   PLACE_SEARCH: 'PlaceSearch',
@@ -98,6 +99,7 @@ export const STACK_SCREEN_MAPPING = {
     EditProfile: SCREEN_NAMES.PROFILE_EDIT,
     Preferences: SCREEN_NAMES.PROFILE_PREFERENCES,
     AchievementDetail: SCREEN_NAMES.PROFILE_ACHIEVEMENT_DETAIL,
+    RecommendationSettings: SCREEN_NAMES.PROFILE_RECOMMENDATION_SETTINGS,
   },
   // Auth Stack
   Login: SCREEN_NAMES.LOGIN,
@@ -157,6 +159,7 @@ export function getScreenTitle(screenName: ScreenName): string {
     [SCREEN_NAMES.PROFILE_EDIT]: 'Edit Profile',
     [SCREEN_NAMES.PROFILE_PREFERENCES]: 'Preferences',
     [SCREEN_NAMES.PROFILE_ACHIEVEMENT_DETAIL]: 'Achievement Detail',
+    [SCREEN_NAMES.PROFILE_RECOMMENDATION_SETTINGS]: 'Recommendation Settings',
     [SCREEN_NAMES.PLACE_SEARCH]: 'Place Search',
     [SCREEN_NAMES.PLACE_DETAIL]: 'Place Detail',
   };
