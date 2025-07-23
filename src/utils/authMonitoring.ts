@@ -48,8 +48,16 @@ class AuthMonitor {
       console.warn('Failed to persist auth logs:', error);
     }
     
-    // Also log to console in development
-    if (__DEV__) {
+    // Only log critical auth events to console in development to reduce verbosity
+    const criticalEvents = [
+      'auth_error',
+      'sign_in_success', 
+      'sign_out_success',
+      'token_refresh_failed',
+      'session_expired'
+    ];
+    
+    if (__DEV__ && criticalEvents.includes(event)) {
       console.log(`🔐 AUTH: ${event}`, {
         ...details,
         sessionState: entry.sessionState

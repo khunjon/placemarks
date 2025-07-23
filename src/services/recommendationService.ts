@@ -110,7 +110,9 @@ export class RecommendationService {
       const userPreferences = await this.getUserPreferences(userId);
       const radiusKm = userPreferences.search_radius_km;
       
-      console.log(`[Recommendations] Using radius: ${radiusKm}km for user ${userId}`);
+      if (__DEV__) {
+        console.log(`[Recommendations] Using radius: ${radiusKm}km for user ${userId}`);
+      }
 
       // Check if there are enough places in the area for recommendations
       const availabilityResult = await this.placeAvailabilityService.checkPlaceAvailability(
@@ -140,7 +142,9 @@ export class RecommendationService {
       // Only exclude disliked places (not checked-in places)
       const excludedPlaces = [...userDislikedPlaces];
       
-      console.log(`[Recommendations] Excluding ${excludedPlaces.length} disliked places`);
+      if (__DEV__) {
+        console.log(`[Recommendations] Excluding ${excludedPlaces.length} disliked places`);
+      }
 
       // Get user's saved places from lists for boosting
       const userSavedPlaces = await listsService.getAllPlacesFromUserLists(userId);
@@ -343,8 +347,10 @@ export class RecommendationService {
       const within15km = placesWithinRadius.filter(p => p.distance_km <= 15).length;
       const within20km = placesWithinRadius.filter(p => p.distance_km <= 20).length;
       
-      console.log(`[Recommendations] Distance distribution: ${within5km} within 5km, ${within10km} within 10km, ${within15km} within 15km, ${within20km} within 20km`);
-      console.log(`[Recommendations] Filtered ${placesWithDistance.length} saved places to ${placesWithinRadius.length} within ${radiusKm}km`);
+      if (__DEV__) {
+        console.log(`[Recommendations] Distance distribution: ${within5km} within 5km, ${within10km} within 10km, ${within15km} within 15km, ${within20km} within 20km`);
+        console.log(`[Recommendations] Filtered ${placesWithDistance.length} saved places to ${placesWithinRadius.length} within ${radiusKm}km`);
+      }
       
       // Return only saved places within radius
       return placesWithinRadius;
@@ -455,7 +461,9 @@ export class RecommendationService {
       const placeIds = data?.map((item: any) => item.google_place_id).filter(Boolean) || [];
       
       if (placeIds.length > 0) {
-        console.log(`[Recommendations] Found ${placeIds.length} disliked places to exclude`);
+        if (__DEV__) {
+          console.log(`[Recommendations] Found ${placeIds.length} disliked places to exclude`);
+        }
       }
 
       return placeIds;
@@ -735,15 +743,19 @@ export class RecommendationService {
     });
     
     // Log the top few places to verify sorting
-    console.log('[Recommendations] Top 3 places after sorting:');
-    sortedPlaces.slice(0, 3).forEach((place, index) => {
-      console.log(`  ${index + 1}. ${place.name} (saved: ${place.isInUserLists}, score: ${place.recommendation_score})`);
-    });
+    if (__DEV__) {
+      console.log('[Recommendations] Top 3 places after sorting:');
+      sortedPlaces.slice(0, 3).forEach((place, index) => {
+        console.log(`  ${index + 1}. ${place.name} (saved: ${place.isInUserLists}, score: ${place.recommendation_score})`);
+      });
+    }
     
     // Skip deduplication for saved-places-only mode
     if (isSavedPlacesOnly) {
       const savedPlacesInResults = sortedPlaces.filter(p => p.isInUserLists).length;
-      console.log(`[Recommendations] ${savedPlacesInResults} saved places in final results`);
+      if (__DEV__) {
+        console.log(`[Recommendations] ${savedPlacesInResults} saved places in final results`);
+      }
       return sortedPlaces;
     }
     
@@ -783,7 +795,9 @@ export class RecommendationService {
     
     // Log how many saved places made it through
     const savedPlacesInResults = deduplicatedPlaces.filter(p => p.isInUserLists).length;
-    console.log(`[Recommendations] ${savedPlacesInResults} saved places in final results`);
+    if (__DEV__) {
+      console.log(`[Recommendations] ${savedPlacesInResults} saved places in final results`);
+    }
     
     return deduplicatedPlaces;
   }
@@ -1129,7 +1143,9 @@ export class RecommendationService {
       if (error) {
         // Check if it's a unique constraint violation (duplicate feedback)
         if (error.code === '23505') {
-          console.log('Feedback already recorded for this instance');
+          if (__DEV__) {
+            console.log('Feedback already recorded for this instance');
+          }
           return true; // Consider it successful since feedback exists
         }
         console.error('Error recording recommendation feedback:', error);

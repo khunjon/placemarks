@@ -142,7 +142,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       // Prevent concurrent recovery attempts
       if (isRecoveringSession) {
-        console.log('Session recovery already in progress, skipping');
+        if (__DEV__) {
+          console.log('Session recovery already in progress, skipping');
+        }
         return { session: lastValidSessionRef.current, user: lastValidUserRef.current };
       }
       setIsRecoveringSession(true);
@@ -173,14 +175,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             expiresIn: expiresAt > now ? `${Math.floor((expiresAt - now) / 60)} minutes` : 'expired',
             lastPersisted: lastPersistTime ? new Date(parseInt(lastPersistTime)).toISOString() : 'unknown'
           };
-          console.log('Session recovered from storage', logDetails);
+          if (__DEV__) {
+            console.log('Session recovered from storage', logDetails);
+          }
           authMonitor.logEvent('session_recovered', logDetails, session);
           
           return { session, user };
         } else {
-          console.log('Session too old to recover', {
-            expiredHoursAgo: Math.floor((now - expiresAt) / 3600)
-          });
+          if (__DEV__) {
+            console.log('Session too old to recover', {
+              expiredHoursAgo: Math.floor((now - expiresAt) / 3600)
+            });
+          }
         }
       }
     } catch (error) {
@@ -197,7 +203,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     // Prevent re-initialization
     if (hasInitializedRef.current) {
-      console.log('Auth context already initialized, skipping');
+      if (__DEV__) {
+        console.log('Auth context already initialized, skipping');
+      }
       return;
     }
     hasInitializedRef.current = true;
@@ -215,14 +223,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (recoveredSession && recoveredUser && isMounted) {
         setSession(recoveredSession);
         setUser(recoveredUser);
-        console.log('Recovered session from storage');
+        if (__DEV__) {
+          console.log('Recovered session from storage');
+        }
         authMonitor.logEvent('session_initial_recovery', { source: 'startup' }, recoveredSession);
         
         // If we recovered an expired session, immediately try to refresh it
         const expiresAt = recoveredSession.expires_at || 0;
         const now = Math.floor(Date.now() / 1000);
         if (expiresAt <= now) {
-          console.log('Recovered session is expired, attempting refresh');
+          if (__DEV__) {
+            console.log('Recovered session is expired, attempting refresh');
+          }
           authMonitor.logEvent('session_expired_on_recovery', { expiresAt }, recoveredSession);
           refreshSession().catch(console.error);
         }
@@ -283,12 +295,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           if (recoveredSession && recoveredUser) {
             setSession(recoveredSession);
             setUser(recoveredUser);
-            console.log('Using recovered session after network error');
+            if (__DEV__) {
+              console.log('Using recovered session after network error');
+            }
           } else if (lastValidSessionRef.current && lastValidUserRef.current) {
             // Use last valid session if recovery fails
             setSession(lastValidSessionRef.current);
             setUser(lastValidUserRef.current);
-            console.log('Using last valid session after network error');
+            if (__DEV__) {
+              console.log('Using last valid session after network error');
+            }
           }
           // Never clear auth on network errors
         } else {
@@ -298,15 +314,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           if (recoveredSession && recoveredUser) {
             setSession(recoveredSession);
             setUser(recoveredUser);
-            console.log('Recovered session after auth error');
+            if (__DEV__) {
+              console.log('Recovered session after auth error');
+            }
           } else if (lastValidSessionRef.current && lastValidUserRef.current) {
             // Try last valid session before giving up
             setSession(lastValidSessionRef.current);
             setUser(lastValidUserRef.current);
-            console.log('Using last valid session after auth error');
+            if (__DEV__) {
+              console.log('Using last valid session after auth error');
+            }
           } else {
             // Only clear if all recovery attempts failed AND it's not a network error
-            console.log('All recovery attempts failed, clearing session');
+            if (__DEV__) {
+              console.log('All recovery attempts failed, clearing session');
+            }
             setSession(null);
             setUser(null);
           }
@@ -323,7 +345,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
       
-      console.log('Auth state change event:', event);
+      if (__DEV__ && event !== 'INITIAL_SESSION') {
+        console.log('Auth state change event:', event);
+      }
       authMonitor.logEvent('auth_state_change', { event }, session);
       
       // Update session state

@@ -247,7 +247,9 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
    * Load list with places using the optimized service
    */
   const loadListWithPlaces = async (): Promise<ListWithPlaces | null> => {
-    console.log('[ListDetailScreen] Loading list with optimized method');
+    if (__DEV__) {
+      console.log('[ListDetailScreen] Loading list with optimized method');
+    }
     const startTime = Date.now();
     
     let result: ListWithPlaces | null = null;
@@ -261,7 +263,9 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
     }
     
     const elapsed = Date.now() - startTime;
-    console.log(`[ListDetailScreen] List loaded in ${elapsed}ms`);
+    if (__DEV__) {
+      console.log(`[ListDetailScreen] List loaded in ${elapsed}ms`);
+    }
     
     return result;
   };

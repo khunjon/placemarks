@@ -121,7 +121,9 @@ export class CheckInsService {
 
       if (!existingPlace) {
         // Attempt to get place details and cache it
-        console.log('Place not found in cache, attempting to fetch and cache:', googlePlaceId);
+        if (__DEV__) {
+          console.log('Place not found in cache, attempting to fetch and cache:', googlePlaceId);
+        }
         try {
           const placeDetails = await placesService.getPlaceDetails(googlePlaceId);
           if (!placeDetails) {
@@ -129,7 +131,9 @@ export class CheckInsService {
             throw new CheckInError('Place not found in Google Places API', 'PLACE_NOT_FOUND');
           }
           // Cache the place (getPlaceDetails already caches it internally)
-          console.log('Successfully cached place for check-in:', googlePlaceId);
+          if (__DEV__) {
+            console.log('Successfully cached place for check-in:', googlePlaceId);
+          }
         } catch (error) {
           console.error('Failed to fetch and cache place for check-in:', error);
           if (error instanceof CheckInError) {

@@ -87,13 +87,14 @@ export class PlacesService {
       // First check for cached places in the area
       const cachedPlaces = await this.getCachedNearbyPlaces(location, radius, type);
       if (cachedPlaces.length > 0) {
-        console.log('🗄️ CACHE HIT: Retrieved nearby places from cache', {
-          location: `${location.latitude},${location.longitude}`,
-          radius: radius,
-          type: type || 'all',
-          resultCount: cachedPlaces.length,
-          cost: '$0.000 - FREE!'
-        });
+        if (__DEV__) {
+          console.log('🗄️ CACHE HIT: Retrieved nearby places from cache', {
+            location: `${location.latitude},${location.longitude}`,
+            radius: radius,
+            type: type || 'all',
+            resultCount: cachedPlaces.length
+          });
+        }
         return cachedPlaces;
       }
 

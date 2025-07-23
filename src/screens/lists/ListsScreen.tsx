@@ -122,7 +122,9 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     if (!user?.id) return;
     
     try {
-      console.log('[ListsScreen] Starting to load user lists...');
+      if (__DEV__) {
+        console.log('[ListsScreen] Starting to load user lists...');
+      }
       const startTime = Date.now();
       
       // Load both default and custom lists in a single call
@@ -130,7 +132,9 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
         await listsService.getDefaultAndCustomLists(user.id);
       
       const loadTime = Date.now() - startTime;
-      console.log(`[ListsScreen] Loaded ${defaultListsData.length + customListsData.length} lists in ${loadTime}ms`);
+      if (__DEV__) {
+        console.log(`[ListsScreen] Loaded ${defaultListsData.length + customListsData.length} lists in ${loadTime}ms`);
+      }
       
       // Sort default lists to ensure Favorites comes before Want to Go
       const sortedDefaultLists = defaultListsData.sort((a, b) => {
@@ -155,7 +159,9 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
     if (!user?.id) return;
     
     try {
-      console.log('[ListsScreen] Starting background refresh...');
+      if (__DEV__) {
+        console.log('[ListsScreen] Starting background refresh...');
+      }
       const startTime = Date.now();
       
       // Load both default and custom lists in a single call
@@ -163,7 +169,9 @@ export default function ListsScreen({ navigation }: ListsScreenProps) {
         await listsService.getDefaultAndCustomLists(user.id);
       
       const loadTime = Date.now() - startTime;
-      console.log(`[ListsScreen] Background refresh completed in ${loadTime}ms`);
+      if (__DEV__) {
+        console.log(`[ListsScreen] Background refresh completed in ${loadTime}ms`);
+      }
       
       // Sort default lists to ensure Favorites comes before Want to Go
       const sortedDefaultLists = defaultListsData.sort((a, b) => {

@@ -339,7 +339,9 @@ export function useLocation(options: UseLocationOptions = {}) {
   const startBackgroundUpdates = useCallback(() => {
     // Disable background updates in session mode
     if (!enableBackgroundUpdates || sessionMode) {
-      console.log('📍 Background updates disabled (session mode or disabled option)');
+      if (__DEV__) {
+        console.log('📍 Background updates disabled (session mode or disabled option)');
+      }
       return;
     }
 
@@ -489,7 +491,9 @@ export function useLocation(options: UseLocationOptions = {}) {
     locationServiceUnsubscribeRef.current = locationService.subscribe((location, source) => {
       // Only update if this is a background update that got a real location
       if (source === 'location' && state.source === 'fallback') {
-        console.log('🔄 useLocation: Global service got real location, updating from fallback');
+        if (__DEV__) {
+          console.log('🔄 useLocation: Global service got real location, updating from fallback');
+        }
         setState(prev => ({
           ...prev,
           location,
@@ -565,7 +569,9 @@ export function useLocation(options: UseLocationOptions = {}) {
   const resetSession = useCallback(() => {
     sessionStartTimeRef.current = Date.now();
     sessionLocationLoadedRef.current = false;
-    console.log('📍 Session reset - will allow location update on next request');
+    if (__DEV__) {
+      console.log('📍 Session reset - will allow location update on next request');
+    }
   }, []);
 
   return {

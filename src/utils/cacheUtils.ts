@@ -112,12 +112,18 @@ export function generateLocationCacheKey(
 
 /**
  * Log cache operation with consistent formatting
+ * Only logs in development mode to reduce production verbosity
  */
 export function logCacheOperation(
   operation: 'hit' | 'miss' | 'save' | 'clear' | 'stale',
   cacheName: string,
   details?: Record<string, any>
 ): void {
+  // Only log in development mode
+  if (!__DEV__) {
+    return;
+  }
+  
   const emoji = {
     hit: '✅',
     miss: '❌',

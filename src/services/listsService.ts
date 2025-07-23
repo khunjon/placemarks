@@ -119,7 +119,9 @@ export class ListsService {
    */
   async getUserListSummaries(userId: string): Promise<ListWithPlaces[]> {
     return safeAsync(async () => {
-      console.log('[ListsService] Fetching list summaries for user:', userId);
+      if (__DEV__) {
+        console.log('[ListsService] Fetching list summaries for user:', userId);
+      }
       const startTime = Date.now();
       
       // Ensure default lists exist before fetching
@@ -161,7 +163,9 @@ export class ListsService {
       }));
 
       const elapsed = Date.now() - startTime;
-      console.log(`[ListsService] Fetched ${result.length} list summaries in ${elapsed}ms`);
+      if (__DEV__) {
+        console.log(`[ListsService] Fetched ${result.length} list summaries in ${elapsed}ms`);
+      }
       
       return result;
     }, { service: 'lists', operation: 'getUserListSummaries', userId }, []) as Promise<ListWithPlaces[]>;
@@ -173,7 +177,9 @@ export class ListsService {
    */
   async getUserListsWithPlaces(userId: string): Promise<ListWithPlaces[]> {
     return safeAsync(async () => {
-      console.log('[ListsService] Fetching all user lists with places (optimized)');
+      if (__DEV__) {
+        console.log('[ListsService] Fetching all user lists with places (optimized)');
+      }
       const startTime = Date.now();
       
       // Ensure default lists exist before fetching
@@ -229,7 +235,9 @@ export class ListsService {
       }));
 
       const elapsed = Date.now() - startTime;
-      console.log(`[ListsService] Fetched ${lists.length} lists with places in ${elapsed}ms`);
+      if (__DEV__) {
+        console.log(`[ListsService] Fetched ${lists.length} lists with places in ${elapsed}ms`);
+      }
       
       return lists;
     }, { service: 'lists', operation: 'getUserListsWithPlaces', userId }, []) as Promise<ListWithPlaces[]>;
@@ -272,7 +280,9 @@ export class ListsService {
    */
   async getListDetailsOptimized(listId: string, userId: string): Promise<ListWithPlaces | null> {
     return safeAsync(async () => {
-      console.log('[ListsService] Fetching optimized list details for:', listId);
+      if (__DEV__) {
+        console.log('[ListsService] Fetching optimized list details for:', listId);
+      }
       const startTime = Date.now();
       
       const { data: result, error } = await supabase
@@ -328,7 +338,9 @@ export class ListsService {
       };
 
       const elapsed = Date.now() - startTime;
-      console.log(`[ListsService] Fetched list with ${listData.places.length} places in ${elapsed}ms`);
+      if (__DEV__) {
+        console.log(`[ListsService] Fetched list with ${listData.places.length} places in ${elapsed}ms`);
+      }
       
       return listData;
     }, { service: 'lists', operation: 'getListDetailsOptimized', metadata: { listId }, userId }, null) as Promise<ListWithPlaces | null>;
@@ -1153,7 +1165,9 @@ export class ListsService {
    */
   async getCuratedListDetailsOptimized(listId: string): Promise<ListWithPlaces | null> {
     return safeAsync(async () => {
-      console.log('[ListsService] Fetching optimized curated list details for:', listId);
+      if (__DEV__) {
+        console.log('[ListsService] Fetching optimized curated list details for:', listId);
+      }
       const startTime = Date.now();
       
       // For curated lists, we pass a dummy user ID since they're public
@@ -1212,7 +1226,9 @@ export class ListsService {
       };
 
       const elapsed = Date.now() - startTime;
-      console.log(`[ListsService] Fetched curated list with ${listData.places.length} places in ${elapsed}ms`);
+      if (__DEV__) {
+        console.log(`[ListsService] Fetched curated list with ${listData.places.length} places in ${elapsed}ms`);
+      }
       
       return listData;
     }, { service: 'lists', operation: 'getCuratedListDetailsOptimized', metadata: { listId } }, null) as Promise<ListWithPlaces | null>;

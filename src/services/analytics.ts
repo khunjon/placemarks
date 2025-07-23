@@ -477,7 +477,7 @@ class AnalyticsService implements IAnalyticsService {
           // Skip these to reduce noise but keep them tracked
           return;
         } else {
-          // Show other events with context
+          // Show all other events with context for debugging
           const eventContext = this.getEventContext(data);
           console.log(`📊 ${eventName}${eventContext}`);
         }
