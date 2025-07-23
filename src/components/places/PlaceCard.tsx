@@ -85,7 +85,7 @@ const getTypeColor = (type: PlaceType) => {
   }
 };
 
-// Helper function to shorten addresses
+// Helper function to shorten addresses to show only city name
 const shortenAddress = (address: string): string => {
   if (!address) return '';
   
@@ -94,8 +94,28 @@ const shortenAddress = (address: string): string => {
   
   if (parts.length <= 2) return address; // Already short enough
   
-  // Remove the first part (usually street number/name) and keep the rest
-  // This typically gives us: District, City, Country
+  // For addresses like "123 Street, District, Bangkok 10110, Thailand"
+  // We want to extract just the city name (typically second to last part)
+  if (parts.length >= 3) {
+    let cityPart = parts[parts.length - 2];
+    
+    // Remove zip codes that are attached to city names (e.g., "Bangkok 10110" -> "Bangkok")
+    // Handle various zip code formats: 5 digits, 5+4, postal codes with spaces
+    cityPart = cityPart.replace(/\s+\d{4,6}(-\d{4})?$/, ''); // Remove trailing digits
+    cityPart = cityPart.replace(/\s+[A-Z0-9]{3,8}$/, ''); // Remove postal codes
+    
+    return cityPart.trim();
+  }
+  
+  // If we have 2 parts, return the first (likely the city) with zip code removed
+  if (parts.length === 2) {
+    let cityPart = parts[0];
+    cityPart = cityPart.replace(/\s+\d{4,6}(-\d{4})?$/, '');
+    cityPart = cityPart.replace(/\s+[A-Z0-9]{3,8}$/, '');
+    return cityPart.trim();
+  }
+  
+  // Fallback to existing logic if structure is unexpected
   return parts.slice(1).join(', ');
 };
 
@@ -198,20 +218,6 @@ const PlaceCard = memo(function PlaceCard({
         style
       ]}
     >
-      {/* Title Row */}
-      <Text 
-        style={[
-          DarkTheme.typography.headline,
-          { 
-            color: DarkTheme.colors.semantic.label,
-            marginBottom: 4
-          }
-        ]}
-        numberOfLines={1}
-      >
-        {shortenPlaceName(placeData.name || 'Unknown Place')}
-      </Text>
-
       {/* Image and Details Row */}
       <View style={{
         flexDirection: 'row',
@@ -225,8 +231,8 @@ const PlaceCard = memo(function PlaceCard({
               cache: 'force-cache' // iOS only, but harmless on Android
             }}
             style={{
-              width: 56,
-              height: 56,
+              width: 70,
+              height: 70,
               borderRadius: 8,
               marginRight: DarkTheme.spacing.sm,
               backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
@@ -236,8 +242,8 @@ const PlaceCard = memo(function PlaceCard({
         ) : (
           <View 
             style={{
-              width: 56,
-              height: 56,
+              width: 70,
+              height: 70,
               borderRadius: 8,
               alignItems: 'center',
               justifyContent: 'center',
@@ -247,13 +253,27 @@ const PlaceCard = memo(function PlaceCard({
           >
             <MaterialIcons 
               name={iconProps.name as any}
-              size={24} 
+              size={32} 
               color={typeColor}
             />
           </View>
         )}
         
         <View style={{ flex: 1 }}>
+          {/* Title Row */}
+          <Text 
+            style={[
+              DarkTheme.typography.headline,
+              { 
+                color: DarkTheme.colors.semantic.label,
+                marginBottom: 4
+              }
+            ]}
+            numberOfLines={1}
+          >
+            {shortenPlaceName(placeData.name || 'Unknown Place')}
+          </Text>
+          
           {/* Category and Status Row */}
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
             <Text 
@@ -300,28 +320,6 @@ const PlaceCard = memo(function PlaceCard({
             )}
           </View>
           
-          {/* Rating Row */}
-          {placeData.rating && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-              <MaterialIcons 
-                name="star"
-                size={12} 
-                color={DarkTheme.colors.accent.yellow}
-              />
-              <Text 
-                style={[
-                  DarkTheme.typography.caption1,
-                  { 
-                    color: DarkTheme.colors.semantic.label,
-                    marginLeft: 4,
-                    fontWeight: '600'
-                  }
-                ]}
-              >
-                {placeData.rating.toFixed(1)}
-              </Text>
-            </View>
-          )}
           
           {/* Address Row */}
           <Text 

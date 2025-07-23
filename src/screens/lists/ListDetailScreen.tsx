@@ -660,7 +660,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       {sortedPlaces.length === 0 ? (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: Spacing.lg }}
+          contentContainerStyle={{ paddingHorizontal: Spacing.md }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -684,7 +684,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
           keyExtractor={(item, index) => `${item.place_id}-${index}`}
           renderItem={renderPlaceItem}
           contentContainerStyle={{ 
-            paddingHorizontal: Spacing.lg,
+            paddingHorizontal: Spacing.md,
             paddingVertical: Spacing.md
           }}
           ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
