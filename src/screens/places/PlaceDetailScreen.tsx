@@ -14,8 +14,7 @@ import {
   KeyboardAvoidingView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { Camera, Pin } from '../../components/icons';
+import { Camera, Pin, Star, ArrowLeft, Trophy, Eye, Heart, Clock, Phone, Globe, ExternalLink, CheckSquare } from '../../components/icons';
 import { DarkTheme } from '../../constants/theme';
 import { Spacing } from '../../constants/Spacing';
 import { 
@@ -516,9 +515,8 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
     
     for (let i = 0; i < 5; i++) {
       stars.push(
-        <MaterialIcons
+        <Star
           key={i}
-          name="star"
           size={size}
           color={i < fullStars || (i === fullStars && hasHalfStar) ? DarkTheme.colors.bangkok.gold : DarkTheme.colors.semantic.tertiaryLabel}
         />
@@ -589,7 +587,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
           onPress={() => navigation.goBack()}
           style={{ padding: Spacing.xs }}
         >
-          <MaterialIcons name="arrow-back" size={24} color={DarkTheme.colors.semantic.label} />
+          <ArrowLeft size={24} color={DarkTheme.colors.semantic.label} />
         </TouchableOpacity>
         
         <View style={{ flex: 1, alignItems: 'center' }}>
@@ -645,7 +643,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                   flexDirection: 'row',
                   alignItems: 'center',
                 }}>
-                  <MaterialIcons name="emoji-events" size={12} color={DarkTheme.colors.bangkok.gold} />
+                  <Trophy size={12} color={DarkTheme.colors.bangkok.gold} />
                   <SecondaryText style={{ 
                     color: DarkTheme.colors.bangkok.gold, 
                     fontSize: 10, 
@@ -667,7 +665,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                   flexDirection: 'row',
                   alignItems: 'center',
                 }}>
-                  <MaterialIcons name="visibility" size={12} color={DarkTheme.colors.accent.purple} />
+                  <Eye size={12} color={DarkTheme.colors.accent.purple} />
                   <SecondaryText style={{ 
                     color: DarkTheme.colors.accent.purple, 
                     fontSize: 10, 
@@ -782,7 +780,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                 <Title3>Note</Title3>
                 {contextListPlace && (
                   <View style={{ marginLeft: Spacing.sm, flexDirection: 'row', alignItems: 'center' }}>
-                    <MaterialIcons name="favorite" size={12} color={DarkTheme.colors.accent.red} />
+                    <Heart size={12} color={DarkTheme.colors.accent.red} />
                     <SecondaryText style={{ marginLeft: Spacing.xs, fontSize: 12 }}>
                       in {contextListPlace.list_name}
                     </SecondaryText>
@@ -920,7 +918,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
               {/* Hours */}
               {place.opening_hours && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}>
-                  <MaterialIcons name="access-time" size={18} color={DarkTheme.colors.semantic.secondaryLabel} />
+                  <Clock size={18} color={DarkTheme.colors.semantic.secondaryLabel} />
                   <Body style={{ marginLeft: Spacing.sm }}>{formatHours(place.opening_hours)}</Body>
                 </View>
               )}
@@ -931,7 +929,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                   onPress={() => Linking.openURL(`tel:${place.formatted_phone_number}`)}
                   style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}
                 >
-                  <MaterialIcons name="phone" size={18} color={DarkTheme.colors.semantic.secondaryLabel} />
+                  <Phone size={18} color={DarkTheme.colors.semantic.secondaryLabel} />
                   <Body style={{ marginLeft: Spacing.sm, color: DarkTheme.colors.accent.blue }}>
                     {place.formatted_phone_number}
                   </Body>
@@ -944,11 +942,11 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                   onPress={() => Linking.openURL(place.website!)}
                   style={{ flexDirection: 'row', alignItems: 'center' }}
                 >
-                  <MaterialIcons name="public" size={18} color={DarkTheme.colors.semantic.secondaryLabel} />
+                  <Globe size={18} color={DarkTheme.colors.semantic.secondaryLabel} />
                   <Body style={{ marginLeft: Spacing.sm, color: DarkTheme.colors.accent.blue }}>
                     {extractDomain(place.website)}
                   </Body>
-                  <MaterialIcons name="open-in-new" size={14} color={DarkTheme.colors.accent.blue} style={{ marginLeft: Spacing.xs }} />
+                  <ExternalLink size={14} color={DarkTheme.colors.accent.blue} style={{ marginLeft: Spacing.xs }} />
                 </TouchableOpacity>
               )}
             </ElevatedCard>
@@ -1002,7 +1000,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                       borderBottomColor: DarkTheme.colors.semantic.separator,
                     }}
                   >
-                    <MaterialIcons name="check-box" size={18} color={DarkTheme.colors.accent.green} />
+                    <CheckSquare size={18} color={DarkTheme.colors.accent.green} />
                     <View style={{ marginLeft: Spacing.sm, flex: 1 }}>
                       <Body>{checkIn.created_at ? new Date(checkIn.created_at).toLocaleDateString() : 'Unknown date'}</Body>
                       {checkIn.comment && (
@@ -1036,7 +1034,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                       borderBottomColor: DarkTheme.colors.semantic.separator,
                     }}
                   >
-                    <MaterialIcons name="favorite" size={16} color={DarkTheme.colors.accent.red} />
+                    <Heart size={16} color={DarkTheme.colors.accent.red} />
                     <View style={{ marginLeft: Spacing.sm, flex: 1 }}>
                       <Body>{listPlace.list_name}</Body>
                     </View>

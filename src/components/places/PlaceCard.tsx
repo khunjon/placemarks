@@ -1,11 +1,11 @@
 import React, { memo, useMemo } from 'react';
 import { View, Text, TouchableOpacity, Image } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
 import { DarkTheme } from '../../constants/theme';
 import { LocationBadge } from '../ui';
 import { EnrichedPlace } from '../../types';
 import { PlaceType, inferPlaceTypeFromGoogleTypes } from '../../utils/placeTypeMapping';
 import { isPlaceCurrentlyOpen } from '../../utils/operatingHours';
+import { Utensils, Coffee, ShoppingCart, Building, Trees, Home, Star, MapPin, Camera } from '../icons';
 
 // Enhanced props interface that can accept either individual props or an EnrichedPlace object
 export interface PlaceCardProps {
@@ -43,24 +43,24 @@ export interface PlaceCardProps {
   style?: any;
 }
 
-const getTypeIconProps = (type: PlaceType) => {
+const getTypeIcon = (type: PlaceType) => {
   switch (type) {
     case 'restaurant':
-      return { family: 'MaterialIcons', name: 'restaurant' };
+      return Utensils;
     case 'cafe':
-      return { family: 'MaterialIcons', name: 'local-cafe' };
+      return Coffee;
     case 'shopping':
-      return { family: 'MaterialIcons', name: 'shopping-cart' };
+      return ShoppingCart;
     case 'temple':
-      return { family: 'MaterialIcons', name: 'account-balance' };
+      return Building;
     case 'park':
-      return { family: 'MaterialIcons', name: 'park' };
+      return Trees;
     case 'hotel':
-      return { family: 'MaterialIcons', name: 'hotel' };
+      return Home;
     case 'attraction':
-      return { family: 'MaterialIcons', name: 'star' };
+      return Star;
     default:
-      return { family: 'MaterialIcons', name: 'place' };
+      return MapPin;
   }
 };
 
@@ -194,7 +194,7 @@ const PlaceCard = memo(function PlaceCard({
     btsStation
   };
 
-  const iconProps = getTypeIconProps(placeData.type);
+  const TypeIcon = getTypeIcon(placeData.type);
   const typeColor = getTypeColor(placeData.type);
 
   const handleCheckIn = () => {
@@ -251,8 +251,7 @@ const PlaceCard = memo(function PlaceCard({
               backgroundColor: `${typeColor}20`,
             }}
           >
-            <MaterialIcons 
-              name={iconProps.name as any}
+            <TypeIcon 
               size={32} 
               color={typeColor}
             />
@@ -407,8 +406,7 @@ const PlaceCard = memo(function PlaceCard({
               }}
               activeOpacity={0.8}
             >
-              <MaterialIcons 
-                name="camera-alt"
+              <Camera 
                 size={16} 
                 color={DarkTheme.colors.system.black}
               />

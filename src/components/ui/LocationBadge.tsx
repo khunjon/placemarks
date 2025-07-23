@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
 import { DarkTheme } from '../../constants/theme';
+import { Train, DollarSign, MapPin, Tag, Star, Info } from '../icons';
 
 export interface LocationBadgeProps {
   type: 'bts' | 'price' | 'distance' | 'category' | 'rating' | 'status';
@@ -19,7 +19,7 @@ const getBadgeConfig = (type: LocationBadgeProps['type'], value: string | number
   switch (type) {
     case 'bts':
       return {
-        icon: 'train',
+        icon: Train,
         color: DarkTheme.colors.bangkok.sapphire,
         backgroundColor: `${DarkTheme.colors.bangkok.sapphire}20`,
         label: typeof value === 'string' ? value : `${value}m`,
@@ -28,7 +28,7 @@ const getBadgeConfig = (type: LocationBadgeProps['type'], value: string | number
     case 'price':
       const priceLevel = typeof value === 'number' ? value : parseInt(value.toString());
       return {
-        icon: 'attach-money',
+        icon: DollarSign,
         color: DarkTheme.colors.bangkok.gold,
         backgroundColor: `${DarkTheme.colors.bangkok.gold}20`,
         label: '฿'.repeat(Math.min(Math.max(priceLevel, 1), 4)),
@@ -36,7 +36,7 @@ const getBadgeConfig = (type: LocationBadgeProps['type'], value: string | number
       };
     case 'distance':
       return {
-        icon: 'location-on',
+        icon: MapPin,
         color: DarkTheme.colors.accent.blue,
         backgroundColor: `${DarkTheme.colors.accent.blue}20`,
         label: typeof value === 'string' ? value : `${value}km`,
@@ -44,7 +44,7 @@ const getBadgeConfig = (type: LocationBadgeProps['type'], value: string | number
       };
     case 'category':
       return {
-        icon: 'category',
+        icon: Tag,
         color: DarkTheme.colors.accent.purple,
         backgroundColor: `${DarkTheme.colors.accent.purple}20`,
         label: value.toString(),
@@ -52,7 +52,7 @@ const getBadgeConfig = (type: LocationBadgeProps['type'], value: string | number
       };
     case 'rating':
       return {
-        icon: 'star',
+        icon: Star,
         color: DarkTheme.colors.accent.yellow,
         backgroundColor: `${DarkTheme.colors.accent.yellow}20`,
         label: typeof value === 'number' ? value.toFixed(1) : value.toString(),
@@ -60,7 +60,7 @@ const getBadgeConfig = (type: LocationBadgeProps['type'], value: string | number
       };
     case 'status':
       return {
-        icon: 'info',
+        icon: Info,
         color: DarkTheme.colors.status.info,
         backgroundColor: `${DarkTheme.colors.status.info}20`,
         label: value.toString(),
@@ -68,7 +68,7 @@ const getBadgeConfig = (type: LocationBadgeProps['type'], value: string | number
       };
     default:
       return {
-        icon: 'info',
+        icon: Info,
         color: DarkTheme.colors.semantic.secondaryLabel,
         backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
         label: value.toString(),
@@ -196,7 +196,7 @@ export default function LocationBadge({
   const sizeConfig = getSizeConfig(size);
   const variantStyles = getVariantStyles(variant, colorConfig);
   
-  const displayIcon = icon || badgeConfig.icon;
+  const IconComponent = badgeConfig.icon;
   const displayLabel = label || badgeConfig.label;
   const isCompact = variant === 'compact';
   const isFilled = variant === 'filled';
@@ -218,9 +218,8 @@ export default function LocationBadge({
         style,
       ]}
     >
-      {displayIcon && (
-        <Icon 
-          name={displayIcon} 
+      {IconComponent && (
+        <IconComponent 
           size={sizeConfig.iconSize} 
           color={textColor}
           style={{ 

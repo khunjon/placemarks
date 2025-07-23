@@ -12,9 +12,9 @@ import {
 } from 'react-native';
 import { Button, Input } from 'react-native-elements';
 import { useNavigation } from '@react-navigation/native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useAuth } from '../../services/auth-context';
 import { DarkTheme } from '../../constants/theme';
+import { MapPin, Mail, Lock, Eye, EyeOff } from '../../components/icons';
 
 export default function LoginScreen() {
   const navigation = useNavigation();
@@ -65,8 +65,7 @@ export default function LoginScreen() {
             {/* Header Section */}
             <View style={styles.headerSection}>
               <View style={styles.iconContainer}>
-                <Icon 
-                  name="location-on" 
+                <MapPin 
                   size={40} 
                   color={DarkTheme.colors.system.black} 
                 />
@@ -106,8 +105,7 @@ export default function LoginScreen() {
                 textContentType="emailAddress"
                 importantForAutofill="yes"
                 leftIcon={
-                  <Icon 
-                    name="email" 
+                  <Mail 
                     size={20} 
                     color={DarkTheme.colors.semantic.placeholderText} 
                   />
@@ -132,19 +130,25 @@ export default function LoginScreen() {
                 textContentType="password"
                 importantForAutofill="yes"
                 leftIcon={
-                  <Icon 
-                    name="lock" 
+                  <Lock 
                     size={20} 
                     color={DarkTheme.colors.semantic.placeholderText} 
                   />
                 }
                 rightIcon={
-                  <Icon 
-                    name={showPassword ? "visibility-off" : "visibility"} 
-                    size={20} 
-                    color={DarkTheme.colors.semantic.placeholderText}
-                    onPress={() => setShowPassword(!showPassword)}
-                  />
+                  <TouchableWithoutFeedback onPress={() => setShowPassword(!showPassword)}>
+                    {showPassword ? (
+                      <EyeOff 
+                        size={20} 
+                        color={DarkTheme.colors.semantic.placeholderText}
+                      />
+                    ) : (
+                      <Eye 
+                        size={20} 
+                        color={DarkTheme.colors.semantic.placeholderText}
+                      />
+                    )}
+                  </TouchableWithoutFeedback>
                 }
                 inputStyle={[
                   DarkTheme.componentStyles.Input.inputStyle,

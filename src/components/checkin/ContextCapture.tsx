@@ -1,6 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { CheckInContext, WeatherContext, CompanionType, MealType, TransportationMethod } from '../../types';
+import { 
+  Building, Trees, Store, Building2, Route, Waves, PersonStanding, Train, Bus, Car,
+  Volume, Volume1, Volume2, Utensils, Wine, Zzz, Smile, CloudRain, CloudSun, Flame,
+  Thermometer, Wifi, ParkingCircle, Sunrise, Cookie, Sunset, Moon, ThumbsUp, ThumbsDown,
+  Briefcase, Users, Heart, Phone, Bike, Ship
+} from '../icons';
 
 interface ContextCaptureProps {
   context: CheckInContext;
@@ -38,7 +44,7 @@ export default function ContextCapture({
   
   const renderOptionButtons = <T extends string>(
     title: string,
-    options: { value: T; label: string; icon?: string }[],
+    options: { value: T; label: string; icon?: React.ComponentType<any> }[],
     selectedValue: T | undefined,
     onSelect: (value: T) => void,
     allowMultiple: boolean = false
@@ -55,7 +61,7 @@ export default function ContextCapture({
             ]}
             onPress={() => onSelect(option.value)}
           >
-            {option.icon && <Text style={styles.optionIcon}>{option.icon}</Text>}
+            {option.icon && <option.icon size={16} color="#666" style={styles.optionIconComponent} />}
             <Text style={[
               styles.optionText,
               selectedValue === option.value && styles.selectedOptionText,
@@ -70,7 +76,7 @@ export default function ContextCapture({
 
   const renderToggleButtons = (
     title: string,
-    options: { key: keyof CheckInContext; label: string; icon?: string }[]
+    options: { key: keyof CheckInContext; label: string; icon?: React.ComponentType<any> }[]
   ) => (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -87,7 +93,7 @@ export default function ContextCapture({
               [option.key]: !context[option.key],
             })}
           >
-            {option.icon && <Text style={styles.optionIcon}>{option.icon}</Text>}
+            {option.icon && <option.icon size={16} color="#666" style={styles.optionIconComponent} />}
             <Text style={[
               styles.optionText,
               context[option.key] && styles.selectedOptionText,
@@ -101,31 +107,31 @@ export default function ContextCapture({
   );
 
   const environmentOptions = [
-    { value: 'indoor' as const, label: 'Indoor', icon: '🏢' },
-    { value: 'outdoor' as const, label: 'Outdoor', icon: '🌳' },
-    { value: 'mixed' as const, label: 'Mixed', icon: '🏪' },
+    { value: 'indoor' as const, label: 'Indoor', icon: Building },
+    { value: 'outdoor' as const, label: 'Outdoor', icon: Trees },
+    { value: 'mixed' as const, label: 'Mixed', icon: Store },
   ];
 
   const locationTypeOptions = [
-    { value: 'mall' as const, label: 'Mall', icon: '🏬' },
-    { value: 'street' as const, label: 'Street', icon: '🛣️' },
-    { value: 'building' as const, label: 'Building', icon: '🏢' },
-    { value: 'market' as const, label: 'Market', icon: '🏪' },
-    { value: 'rooftop' as const, label: 'Rooftop', icon: '🏙️' },
-    { value: 'riverside' as const, label: 'Riverside', icon: '🌊' },
+    { value: 'mall' as const, label: 'Mall', icon: Building2 },
+    { value: 'street' as const, label: 'Street', icon: Route },
+    { value: 'building' as const, label: 'Building', icon: Building },
+    { value: 'market' as const, label: 'Market', icon: Store },
+    { value: 'rooftop' as const, label: 'Rooftop', icon: Building2 },
+    { value: 'riverside' as const, label: 'Riverside', icon: Waves },
   ];
 
   const btsProximityOptions = [
-    { value: 'walking' as const, label: 'Walking Distance', icon: '🚶' },
-    { value: 'near' as const, label: 'Near BTS', icon: '🚇' },
-    { value: 'far' as const, label: 'Far from BTS', icon: '🚌' },
-    { value: 'none' as const, label: 'No BTS Access', icon: '🚗' },
+    { value: 'walking' as const, label: 'Walking Distance', icon: PersonStanding },
+    { value: 'near' as const, label: 'Near BTS', icon: Train },
+    { value: 'far' as const, label: 'Far from BTS', icon: Bus },
+    { value: 'none' as const, label: 'No BTS Access', icon: Car },
   ];
 
   const noiseLevelOptions = [
-    { value: 'quiet' as const, label: 'Quiet', icon: '🤫' },
-    { value: 'moderate' as const, label: 'Moderate', icon: '🗣️' },
-    { value: 'loud' as const, label: 'Loud', icon: '📢' },
+    { value: 'quiet' as const, label: 'Quiet', icon: Volume },
+    { value: 'moderate' as const, label: 'Moderate', icon: Volume1 },
+    { value: 'loud' as const, label: 'Loud', icon: Volume2 },
   ];
 
   const priceTierOptions = [
@@ -137,26 +143,26 @@ export default function ContextCapture({
   ];
 
   const crowdLevelOptions = [
-    { value: 'empty' as const, label: 'Empty', icon: '😴' },
-    { value: 'few' as const, label: 'Few People', icon: '😌' },
-    { value: 'moderate' as const, label: 'Moderate', icon: '😊' },
-    { value: 'busy' as const, label: 'Busy', icon: '😅' },
-    { value: 'packed' as const, label: 'Packed', icon: '😰' },
+    { value: 'empty' as const, label: 'Empty', icon: Zzz },
+    { value: 'few' as const, label: 'Few People', icon: Smile },
+    { value: 'moderate' as const, label: 'Moderate', icon: Smile },
+    { value: 'busy' as const, label: 'Busy', icon: Users },
+    { value: 'packed' as const, label: 'Packed', icon: Users },
   ];
 
   const weatherConditionOptions = [
-    { value: 'sunny' as const, label: 'Sunny', icon: '☀️' },
-    { value: 'cloudy' as const, label: 'Cloudy', icon: '☁️' },
-    { value: 'rainy' as const, label: 'Rainy', icon: '🌧️' },
-    { value: 'stormy' as const, label: 'Stormy', icon: '⛈️' },
+    { value: 'sunny' as const, label: 'Sunny', icon: CloudSun },
+    { value: 'cloudy' as const, label: 'Cloudy', icon: CloudSun },
+    { value: 'rainy' as const, label: 'Rainy', icon: CloudRain },
+    { value: 'stormy' as const, label: 'Stormy', icon: CloudRain },
   ];
 
   const temperatureOptions = [
-    { value: 'cool' as const, label: 'Cool', icon: '❄️' },
-    { value: 'comfortable' as const, label: 'Comfortable', icon: '😊' },
-    { value: 'warm' as const, label: 'Warm', icon: '🌤️' },
-    { value: 'hot' as const, label: 'Hot', icon: '🔥' },
-    { value: 'sweltering' as const, label: 'Sweltering', icon: '🥵' },
+    { value: 'cool' as const, label: 'Cool', icon: CloudSun },
+    { value: 'comfortable' as const, label: 'Comfortable', icon: Smile },
+    { value: 'warm' as const, label: 'Warm', icon: CloudSun },
+    { value: 'hot' as const, label: 'Hot', icon: Flame },
+    { value: 'sweltering' as const, label: 'Sweltering', icon: Thermometer },
   ];
 
   const companionOptions = [
@@ -179,15 +185,15 @@ export default function ContextCapture({
   ];
 
   const transportOptions = [
-    { value: 'walking' as const, label: 'Walking', icon: '🚶' },
-    { value: 'bts' as const, label: 'BTS', icon: '🚇' },
-    { value: 'mrt' as const, label: 'MRT', icon: '🚊' },
-    { value: 'bus' as const, label: 'Bus', icon: '🚌' },
-    { value: 'taxi' as const, label: 'Taxi', icon: '🚕' },
-    { value: 'grab' as const, label: 'Grab', icon: '📱' },
-    { value: 'motorcycle' as const, label: 'Motorcycle', icon: '🏍️' },
-    { value: 'car' as const, label: 'Car', icon: '🚗' },
-    { value: 'boat' as const, label: 'Boat', icon: '🛥️' },
+    { value: 'walking' as const, label: 'Walking', icon: PersonStanding },
+    { value: 'bts' as const, label: 'BTS', icon: Train },
+    { value: 'mrt' as const, label: 'MRT', icon: Train },
+    { value: 'bus' as const, label: 'Bus', icon: Bus },
+    { value: 'taxi' as const, label: 'Taxi', icon: Car },
+    { value: 'grab' as const, label: 'Grab', icon: Phone },
+    { value: 'motorcycle' as const, label: 'Motorcycle', icon: Bike },
+    { value: 'car' as const, label: 'Car', icon: Car },
+    { value: 'boat' as const, label: 'Boat', icon: Ship },
   ];
 
   return (
@@ -213,9 +219,9 @@ export default function ContextCapture({
 
       {/* Amenities */}
       {renderToggleButtons('Amenities', [
-        { key: 'air_conditioning', label: 'Air Conditioning', icon: '❄️' },
-        { key: 'wifi_available', label: 'WiFi Available', icon: '📶' },
-        { key: 'parking_available', label: 'Parking Available', icon: '🅿️' },
+        { key: 'air_conditioning', label: 'Air Conditioning', icon: CloudSun },
+        { key: 'wifi_available', label: 'WiFi Available', icon: Wifi },
+        { key: 'parking_available', label: 'Parking Available', icon: ParkingCircle },
       ])}
 
       {/* Weather Context */}
@@ -240,7 +246,7 @@ export default function ContextCapture({
             style={[styles.optionButton, wouldReturn && styles.selectedOption]}
             onPress={() => onWouldReturnChange(true)}
           >
-            <Text style={styles.optionIcon}>👍</Text>
+            <ThumbsUp size={16} color="#666" style={styles.optionIconComponent} />
             <Text style={[styles.optionText, wouldReturn && styles.selectedOptionText]}>
               Yes, I'd return
             </Text>
@@ -249,7 +255,7 @@ export default function ContextCapture({
             style={[styles.optionButton, !wouldReturn && styles.selectedOption]}
             onPress={() => onWouldReturnChange(false)}
           >
-            <Text style={styles.optionIcon}>👎</Text>
+            <ThumbsDown size={16} color="#666" style={styles.optionIconComponent} />
             <Text style={[styles.optionText, !wouldReturn && styles.selectedOptionText]}>
               No, probably not
             </Text>
@@ -308,6 +314,9 @@ const styles = StyleSheet.create({
   },
   optionIcon: {
     fontSize: 16,
+    marginRight: 6,
+  },
+  optionIconComponent: {
     marginRight: 6,
   },
   optionText: {

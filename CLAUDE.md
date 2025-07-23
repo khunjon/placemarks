@@ -164,6 +164,15 @@ There is a separate web admin UI project that connects to the same Supabase back
 - Follow the existing naming convention: `Stack_ScreenName` (e.g., `Profile_RecommendationSettings`)
 - This ensures proper analytics tracking and prevents console warnings about missing screen mappings
 
+### Icon Usage
+- **Always use Lucide icons from the centralized icon system** (`src/components/icons/index.tsx`)
+- Import icons like: `import { MapPin, Star, Heart } from '../components/icons';`
+- Never use MaterialIcons, @expo/vector-icons, or react-native-vector-icons directly
+- The centralized system provides consistent sizing, styling, and type safety
+- All icons support props: `size`, `color`, `strokeWidth`, `style`
+- For new icons not in the system, add them to the centralized file first
+- **Emoji preservation guideline**: Keep culturally meaningful emojis (price tiers, social contexts, meal types) but replace technical/UI emojis with Lucide icons
+
 ## Current App State
 
 ### Fully Working Features ✅
