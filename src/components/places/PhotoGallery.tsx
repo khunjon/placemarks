@@ -4,13 +4,14 @@ import {
   Text, 
   ScrollView, 
   TouchableOpacity, 
-  Image, 
   Modal,
   ActivityIndicator,
   Alert,
   Dimensions
 } from 'react-native';
+import { Image } from 'expo-image';
 import { X, Trash2, Star, Camera } from '../icons';
+import PhotoUploadButton from './PhotoUploadButton';
 import { DarkTheme } from '../../constants/theme';
 import { photoService } from '../../services/photoService';
 import { useAuth } from '../../services/auth-context';
@@ -145,34 +146,23 @@ export default function PhotoGallery({ place, onPhotoUpload }: PhotoGalleryProps
         padding: DarkTheme.spacing.xl,
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: 200,
+        minHeight: 180,
       }}>
-        <View style={{
-          width: 80,
-          height: 80,
-          borderRadius: 40,
-          backgroundColor: DarkTheme.colors.semantic.quaternarySystemFill,
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginBottom: DarkTheme.spacing.md,
-        }}>
-          <Camera size={32} color={DarkTheme.colors.semantic.tertiaryLabel} />
-        </View>
         <Text style={{
           fontSize: 16,
           color: DarkTheme.colors.semantic.secondaryLabel,
           textAlign: 'center',
-          marginBottom: DarkTheme.spacing.xs,
-        }}>
-          No photos yet
-        </Text>
-        <Text style={{
-          fontSize: 14,
-          color: DarkTheme.colors.semantic.tertiaryLabel,
-          textAlign: 'center',
+          marginBottom: DarkTheme.spacing.lg,
         }}>
           Be the first to add a photo!
         </Text>
+        <PhotoUploadButton
+          googlePlaceId={place.google_place_id}
+          onPhotoUploaded={() => {
+            loadUserPhotos();
+            onPhotoUpload?.();
+          }}
+        />
       </View>
     );
   }
@@ -200,6 +190,11 @@ export default function PhotoGallery({ place, onPhotoUpload }: PhotoGalleryProps
                   borderRadius: DarkTheme.borderRadius.md,
                   backgroundColor: DarkTheme.colors.semantic.quaternarySystemFill,
                 }}
+                contentFit="cover"
+                transition={200}
+                cachePolicy="memory-disk"
+                recyclingKey={photo.photoId || photo.url}
+                priority="high"
               />
               {photo.isPrimary && (
                 <View style={{
@@ -271,8 +266,11 @@ export default function PhotoGallery({ place, onPhotoUpload }: PhotoGalleryProps
               style={{
                 width: screenWidth,
                 height: screenWidth,
-                resizeMode: 'contain',
               }}
+              contentFit="contain"
+              transition={300}
+              cachePolicy="memory-disk"
+              priority="high"
             />
 
             {selectedPhoto.caption && (

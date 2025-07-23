@@ -139,13 +139,6 @@ export default function PlaceAutocomplete({
             <Text style={styles.mainText} numberOfLines={1}>
               {item.main_text}
             </Text>
-            {displayType && (
-              <View style={styles.typeBadge}>
-                <Text style={styles.typeBadgeText}>
-                  {displayType}
-                </Text>
-              </View>
-            )}
           </View>
           {showFullAddress && (
             <Text style={styles.secondaryText} numberOfLines={1}>
@@ -291,17 +284,6 @@ const styles = StyleSheet.create({
   secondaryText: {
     fontSize: 14,
     color: DarkTheme.colors.semantic.secondaryLabel,
-  },
-  typeBadge: {
-    backgroundColor: DarkTheme.colors.bangkok.gold + '20',
-    paddingHorizontal: DarkTheme.spacing.xs,
-    paddingVertical: 2,
-    borderRadius: DarkTheme.borderRadius.xs,
-  },
-  typeBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: DarkTheme.colors.bangkok.gold,
   },
   noResultsContainer: {
     padding: DarkTheme.spacing.lg,

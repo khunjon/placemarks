@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Camera } from '../../components/icons';
+import { Camera, Pin } from '../../components/icons';
 import { DarkTheme } from '../../constants/theme';
 import { Spacing } from '../../constants/Spacing';
 import { 
@@ -193,6 +193,10 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
               setContextListPlace(contextList);
               setNoteText(contextList.notes || '');
             }
+          } else if (cached.listsContainingPlace.length > 0) {
+            // If no context but place is in lists, use the first list
+            setContextListPlace(cached.listsContainingPlace[0]);
+            setNoteText(cached.listsContainingPlace[0].notes || '');
           }
           
           setLoading(false);
@@ -259,6 +263,10 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
           setContextListPlace(contextList);
           setNoteText(contextList.notes || '');
         }
+      } else if (listsData.length > 0) {
+        // If no context but place is in lists, use the first list
+        setContextListPlace(listsData[0]);
+        setNoteText(listsData[0].notes || '');
       }
       
       // Cache the loaded data
@@ -415,17 +423,24 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   };
 
   const handleSaveNote = async () => {
-    if (!user?.id || !contextListPlace) return;
+    if (!user?.id) return;
+    
+    // If no contextListPlace, use the first available list
+    const targetListPlace = contextListPlace || listsContainingPlace[0];
+    if (!targetListPlace) {
+      showToast('No list found to save note', 'error');
+      return;
+    }
     
     try {
       const trimmedNote = noteText.trim() || undefined;
       
       // Optimistic updates - update UI immediately
       setIsEditingNote(false);
-      setContextListPlace(prev => prev ? { ...prev, notes: trimmedNote } : null);
+      setContextListPlace(prev => prev ? { ...prev, notes: trimmedNote } : targetListPlace);
       setListsContainingPlace(prev => 
         prev.map(listPlace => 
-          listPlace.list_id === contextListPlace.list_id 
+          listPlace.list_id === targetListPlace.list_id 
             ? { ...listPlace, notes: trimmedNote }
             : listPlace
         )
@@ -434,14 +449,14 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
       // Update cache immediately for instant feedback on future loads
       await cacheManager.placeDetails.updateNotes(
         googlePlaceId,
-        contextListPlace.list_id,
+        targetListPlace.list_id,
         trimmedNote || '',
         user.id
       );
       
       // Make actual API call
       await listsService.updatePlaceInList(
-        contextListPlace.list_id,
+        targetListPlace.list_id,
         googlePlaceId,
         { notes: trimmedNote }
       );
@@ -458,7 +473,8 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
 
   const handleCancelNote = () => {
     // Reset to original note
-    const originalNote = contextListPlace?.notes || '';
+    const targetListPlace = contextListPlace || listsContainingPlace[0];
+    const originalNote = targetListPlace?.notes || '';
     setNoteText(originalNote);
     setIsEditingNote(false);
   };
@@ -564,12 +580,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
           <Headline style={{ textAlign: 'center' }}>Place Details</Headline>
         </View>
         
-        <TouchableOpacity
-          onPress={handleShare}
-          style={{ padding: Spacing.xs }}
-        >
-          <MaterialIcons name="share" size={20} color={DarkTheme.colors.semantic.secondaryLabel} />
-        </TouchableOpacity>
+        <View style={{ width: 44 }} />
       </View>
 
       <KeyboardAvoidingView 
@@ -587,6 +598,73 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
             paddingBottom: keyboardHeight > 0 ? keyboardHeight + 20 : 20,
           }}
         >
+          {/* Place Title - just the title at the top */}
+          <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: Spacing.md }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Title2 style={{ flex: 1 }}>{place.name}</Title2>
+              
+              {/* Price level */}
+              {place.price_level && (
+                <View style={{
+                  backgroundColor: DarkTheme.colors.accent.green + '20',
+                  paddingHorizontal: Spacing.sm,
+                  paddingVertical: Spacing.xs,
+                  borderRadius: DarkTheme.borderRadius.sm,
+                  marginLeft: Spacing.sm,
+                }}>
+                  <Body style={{ color: DarkTheme.colors.accent.green, fontWeight: '600' }}>
+                    {getPriceLevel(place.price_level)}
+                  </Body>
+                </View>
+              )}
+              
+              {/* Editorial badges */}
+              {place.is_featured && (
+                <View style={{
+                  backgroundColor: DarkTheme.colors.bangkok.gold + '20',
+                  paddingHorizontal: Spacing.sm,
+                  paddingVertical: Spacing.xs,
+                  borderRadius: DarkTheme.borderRadius.sm,
+                  marginLeft: Spacing.sm,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                }}>
+                  <MaterialIcons name="emoji-events" size={12} color={DarkTheme.colors.bangkok.gold} />
+                  <SecondaryText style={{ 
+                    color: DarkTheme.colors.bangkok.gold, 
+                    fontSize: 10, 
+                    fontWeight: '600',
+                    marginLeft: 4
+                  }}>
+                    FEATURED
+                  </SecondaryText>
+                </View>
+              )}
+              
+              {place.has_editorial_content && (
+                <View style={{
+                  backgroundColor: DarkTheme.colors.accent.purple + '20',
+                  paddingHorizontal: Spacing.sm,
+                  paddingVertical: Spacing.xs,
+                  borderRadius: DarkTheme.borderRadius.sm,
+                  marginLeft: Spacing.sm,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                }}>
+                  <MaterialIcons name="visibility" size={12} color={DarkTheme.colors.accent.purple} />
+                  <SecondaryText style={{ 
+                    color: DarkTheme.colors.accent.purple, 
+                    fontSize: 10, 
+                    fontWeight: '600',
+                    marginLeft: 4
+                  }}>
+                    EDITORIAL
+                  </SecondaryText>
+                </View>
+              )}
+            </View>
+          </View>
+
           {/* Photo Gallery */}
           <PhotoGallery 
             place={place} 
@@ -594,190 +672,10 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
           />
 
           <View style={{ padding: Spacing.lg }}>
-            {/* Place Header */}
-            <View style={{ marginBottom: Spacing.lg }}>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.xs }}>
-                    <Title1 style={{ flex: 1 }}>{place.name}</Title1>
-                    
-                    {/* Editorial badges */}
-                    {place.is_featured && (
-                      <View style={{
-                        backgroundColor: DarkTheme.colors.bangkok.gold + '20',
-                        paddingHorizontal: Spacing.sm,
-                        paddingVertical: Spacing.xs,
-                        borderRadius: DarkTheme.borderRadius.sm,
-                        marginLeft: Spacing.sm,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                      }}>
-                        <MaterialIcons name="emoji-events" size={12} color={DarkTheme.colors.bangkok.gold} />
-                        <SecondaryText style={{ 
-                          color: DarkTheme.colors.bangkok.gold, 
-                          fontSize: 10, 
-                          fontWeight: '600',
-                          marginLeft: 4
-                        }}>
-                          FEATURED
-                        </SecondaryText>
-                      </View>
-                    )}
-                    
-                    {place.has_editorial_content && (
-                      <View style={{
-                        backgroundColor: DarkTheme.colors.accent.purple + '20',
-                        paddingHorizontal: Spacing.sm,
-                        paddingVertical: Spacing.xs,
-                        borderRadius: DarkTheme.borderRadius.sm,
-                        marginLeft: Spacing.sm,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                      }}>
-                        <MaterialIcons name="visibility" size={12} color={DarkTheme.colors.accent.purple} />
-                        <SecondaryText style={{ 
-                          color: DarkTheme.colors.accent.purple, 
-                          fontSize: 10, 
-                          fontWeight: '600',
-                          marginLeft: 4
-                        }}>
-                          EDITORIAL
-                        </SecondaryText>
-                      </View>
-                    )}
-                  </View>
-                  
-                  <TouchableOpacity 
-                    style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}
-                    onPress={() => {
-                      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name || 'Unknown Place')}&query_place_id=${googlePlaceId}`;
-                      Linking.openURL(url).catch((error) => {
-                        console.error('Failed to open maps:', error);
-                        showToast('Unable to open maps', 'error');
-                      });
-                    }}
-                  >
-                    <MaterialIcons name="place" size={14} color={DarkTheme.colors.semantic.tertiaryLabel} />
-                    <SecondaryText style={{ marginLeft: Spacing.xs, flex: 1, fontSize: 13 }}>
-                      {place.formatted_address}
-                    </SecondaryText>
-                  </TouchableOpacity>
-                </View>
-                
-                {place.price_level && (
-                  <View style={{
-                    backgroundColor: DarkTheme.colors.accent.green + '20',
-                    paddingHorizontal: Spacing.sm,
-                    paddingVertical: Spacing.xs,
-                    borderRadius: DarkTheme.borderRadius.sm,
-                    marginLeft: Spacing.sm,
-                  }}>
-                    <Body style={{ color: DarkTheme.colors.accent.green, fontWeight: '600' }}>
-                      {getPriceLevel(place.price_level)}
-                    </Body>
-                  </View>
-                )}
-              </View>
-
-              {/* Editorial description takes precedence */}
-              {place.display_description && (
-                <View style={{
-                  backgroundColor: place.has_editorial_content 
-                    ? DarkTheme.colors.accent.purple + '10' 
-                    : DarkTheme.colors.semantic.secondarySystemBackground,
-                  padding: Spacing.md,
-                  borderRadius: DarkTheme.borderRadius.md,
-                  marginTop: Spacing.sm,
-                  borderLeftWidth: place.has_editorial_content ? 3 : 0,
-                  borderLeftColor: DarkTheme.colors.accent.purple,
-                }}>
-                  <Body style={{ lineHeight: 20 }}>{place.display_description}</Body>
-                  {place.has_editorial_content && (
-                    <SecondaryText style={{ 
-                      fontSize: 10, 
-                      marginTop: Spacing.xs,
-                      fontStyle: 'italic',
-                      color: DarkTheme.colors.accent.purple
-                    }}>
-                      Editorial description
-                    </SecondaryText>
-                  )}
-                </View>
-              )}
-            </View>
-
-            {/* Quick Info */}
-            <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
-              
-              {/* Hours */}
-              {place.opening_hours && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}>
-                  <MaterialIcons name="access-time" size={18} color={DarkTheme.colors.semantic.secondaryLabel} />
-                  <Body style={{ marginLeft: Spacing.sm }}>{formatHours(place.opening_hours)}</Body>
-                </View>
-              )}
-
-              {/* Phone */}
-              {place.formatted_phone_number && (
-                <TouchableOpacity
-                  onPress={() => Linking.openURL(`tel:${place.formatted_phone_number}`)}
-                  style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}
-                >
-                  <MaterialIcons name="phone" size={18} color={DarkTheme.colors.semantic.secondaryLabel} />
-                  <Body style={{ marginLeft: Spacing.sm, color: DarkTheme.colors.accent.blue }}>
-                    {place.formatted_phone_number}
-                  </Body>
-                </TouchableOpacity>
-              )}
-
-              {/* Website */}
-              {place.website && (
-                <TouchableOpacity
-                  onPress={() => Linking.openURL(place.website!)}
-                  style={{ flexDirection: 'row', alignItems: 'center' }}
-                >
-                  <MaterialIcons name="public" size={18} color={DarkTheme.colors.semantic.secondaryLabel} />
-                  <Body style={{ marginLeft: Spacing.sm, color: DarkTheme.colors.accent.blue }}>
-                    {extractDomain(place.website)}
-                  </Body>
-                  <MaterialIcons name="open-in-new" size={14} color={DarkTheme.colors.accent.blue} style={{ marginLeft: Spacing.xs }} />
-                </TouchableOpacity>
-              )}
-            </ElevatedCard>
-
-            {/* Ratings */}
+            {/* Ratings - moved directly below photo gallery */}
             {(place.rating || userRating) && (
               <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
-                <Title3 style={{ marginBottom: Spacing.md }}>Ratings</Title3>
-                
                 <View style={{ gap: Spacing.md }}>
-                  {/* Google Rating */}
-                  {place.rating && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <View style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 16,
-                          backgroundColor: DarkTheme.colors.accent.blue + '20',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginRight: Spacing.sm,
-                        }}>
-                          <Body style={{ color: DarkTheme.colors.accent.blue, fontWeight: '600', fontSize: 12 }}>G</Body>
-                        </View>
-                        <View>
-                          <Body>Google Rating</Body>
-                          <SecondaryText style={{ fontSize: 12 }}>Based on user reviews</SecondaryText>
-                        </View>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        {renderStars(place.rating, 18)}
-                        <Body style={{ marginLeft: Spacing.sm, fontWeight: '600' }}>{place.rating}</Body>
-                      </View>
-                    </View>
-                  )}
-
                   {/* User Rating Selection */}
                   <View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}>
@@ -846,118 +744,215 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                       </TouchableOpacity>
                     </View>
                   </View>
+
+                  {/* Google Rating */}
+                  {place.rating && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View>
+                        <Body>Google Rating</Body>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        {renderStars(place.rating, 18)}
+                        <Body style={{ marginLeft: Spacing.sm, fontWeight: '600' }}>{place.rating}</Body>
+                      </View>
+                    </View>
+                  )}
                 </View>
               </ElevatedCard>
             )}
-
-            {/* Notes Section - Single note for the context list */}
-            {contextListPlace && (
-              <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md }}>
-                  <Title3>Note</Title3>
+            {/* Description/Notes Section - Always displayed since access is only from lists */}
+            <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md }}>
+                <Title3>Note</Title3>
+                {contextListPlace && (
                   <View style={{ marginLeft: Spacing.sm, flexDirection: 'row', alignItems: 'center' }}>
                     <MaterialIcons name="favorite" size={12} color={DarkTheme.colors.accent.red} />
                     <SecondaryText style={{ marginLeft: Spacing.xs, fontSize: 12 }}>
                       in {contextListPlace.list_name}
                     </SecondaryText>
                   </View>
-                </View>
-                
-                {/* Note Content */}
-                {isEditingNote ? (
-                  <View>
-                    <TextInput
-                      ref={noteInputRef}
-                      style={[
-                        {
-                          backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
-                          borderColor: DarkTheme.colors.semantic.separator,
-                          borderWidth: 1,
-                          borderRadius: DarkTheme.borderRadius.sm,
-                          padding: Spacing.sm,
-                          color: DarkTheme.colors.semantic.label,
-                          fontSize: 16,
-                          minHeight: 80,
-                          textAlignVertical: 'top',
-                        }
-                      ]}
-                      placeholder="Add your note about this place..."
-                      placeholderTextColor={DarkTheme.colors.semantic.tertiaryLabel}
-                      multiline
-                      value={noteText}
-                      onChangeText={setNoteText}
-                    />
-                    
-                    {/* Edit Actions */}
-                    <View style={{ 
-                      flexDirection: 'row', 
-                      gap: Spacing.sm, 
-                      marginTop: Spacing.sm 
-                    }}>
-                      <TouchableOpacity
-                        onPress={handleSaveNote}
-                        style={{
-                          flex: 1,
-                          backgroundColor: DarkTheme.colors.accent.blue,
-                          paddingVertical: Spacing.sm,
-                          paddingHorizontal: Spacing.md,
-                          borderRadius: DarkTheme.borderRadius.sm,
-                          alignItems: 'center',
-                        }}
-                      >
-                        <Body style={{ color: DarkTheme.colors.system.white, fontWeight: '600' }}>
-                          Save
-                        </Body>
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity
-                        onPress={handleCancelNote}
-                        style={{
-                          flex: 1,
-                          backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
-                          paddingVertical: Spacing.sm,
-                          paddingHorizontal: Spacing.md,
-                          borderRadius: DarkTheme.borderRadius.sm,
-                          alignItems: 'center',
-                        }}
-                      >
-                        <Body style={{ color: DarkTheme.colors.semantic.label, fontWeight: '500' }}>
-                          Cancel
-                        </Body>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    onPress={handleEditNote}
-                    style={{
-                      backgroundColor: noteText 
-                        ? DarkTheme.colors.semantic.secondarySystemBackground 
-                        : DarkTheme.colors.semantic.tertiarySystemBackground,
-                      borderColor: DarkTheme.colors.semantic.separator,
-                      borderWidth: 1,
-                      borderRadius: DarkTheme.borderRadius.sm,
-                      padding: Spacing.sm,
-                      minHeight: 60,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {noteText ? (
-                      <Body style={{ 
-                        color: DarkTheme.colors.semantic.label,
-                        lineHeight: 20 
-                      }}>
-                        {noteText}
-                      </Body>
-                    ) : (
-                      <SecondaryText style={{ fontStyle: 'italic' }}>
-                        Tap to add a note about this place in your {contextListPlace.list_name} list...
-                      </SecondaryText>
-                    )}
-                  </TouchableOpacity>
                 )}
-              </ElevatedCard>
+              </View>
+              
+              {/* Note Content */}
+              {isEditingNote ? (
+                <View>
+                  <TextInput
+                    ref={noteInputRef}
+                    style={[
+                      {
+                        backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+                        borderColor: DarkTheme.colors.semantic.separator,
+                        borderWidth: 1,
+                        borderRadius: DarkTheme.borderRadius.sm,
+                        padding: Spacing.sm,
+                        color: DarkTheme.colors.semantic.label,
+                        fontSize: 16,
+                        minHeight: 80,
+                        textAlignVertical: 'top',
+                      }
+                    ]}
+                    placeholder="Add your note about this place..."
+                    placeholderTextColor={DarkTheme.colors.semantic.tertiaryLabel}
+                    multiline
+                    value={noteText}
+                    onChangeText={setNoteText}
+                  />
+                  
+                  {/* Edit Actions */}
+                  <View style={{ 
+                    flexDirection: 'row', 
+                    gap: Spacing.sm, 
+                    marginTop: Spacing.sm 
+                  }}>
+                    <TouchableOpacity
+                      onPress={handleSaveNote}
+                      style={{
+                        flex: 1,
+                        backgroundColor: DarkTheme.colors.accent.blue,
+                        paddingVertical: Spacing.sm,
+                        paddingHorizontal: Spacing.md,
+                        borderRadius: DarkTheme.borderRadius.sm,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Body style={{ color: DarkTheme.colors.system.white, fontWeight: '600' }}>
+                        Save
+                      </Body>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      onPress={handleCancelNote}
+                      style={{
+                        flex: 1,
+                        backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+                        paddingVertical: Spacing.sm,
+                        paddingHorizontal: Spacing.md,
+                        borderRadius: DarkTheme.borderRadius.sm,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Body style={{ color: DarkTheme.colors.semantic.label, fontWeight: '500' }}>
+                        Cancel
+                      </Body>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={handleEditNote}
+                  style={{
+                    backgroundColor: noteText 
+                      ? DarkTheme.colors.semantic.secondarySystemBackground 
+                      : DarkTheme.colors.semantic.tertiarySystemBackground,
+                    borderColor: DarkTheme.colors.semantic.separator,
+                    borderWidth: 1,
+                    borderRadius: DarkTheme.borderRadius.sm,
+                    padding: Spacing.sm,
+                    minHeight: 60,
+                    justifyContent: 'center',
+                  }}
+                >
+                  {noteText ? (
+                    <Body style={{ 
+                      color: DarkTheme.colors.semantic.label,
+                      lineHeight: 20 
+                    }}>
+                      {noteText}
+                    </Body>
+                  ) : (
+                    <SecondaryText style={{ fontStyle: 'italic' }}>
+                      {contextListPlace 
+                        ? `Tap to add a note about this place in your ${contextListPlace.list_name} list...`
+                        : 'Tap to add a note about this place...'
+                      }
+                    </SecondaryText>
+                  )}
+                </TouchableOpacity>
+              )}
+            </ElevatedCard>
+
+            {/* Editorial description */}
+            {place.display_description && (
+              <View style={{
+                backgroundColor: place.has_editorial_content 
+                  ? DarkTheme.colors.accent.purple + '10' 
+                  : DarkTheme.colors.semantic.secondarySystemBackground,
+                padding: Spacing.md,
+                borderRadius: DarkTheme.borderRadius.md,
+                marginBottom: Spacing.lg,
+                borderLeftWidth: place.has_editorial_content ? 3 : 0,
+                borderLeftColor: DarkTheme.colors.accent.purple,
+              }}>
+                <Body style={{ lineHeight: 20 }}>{place.display_description}</Body>
+                {place.has_editorial_content && (
+                  <SecondaryText style={{ 
+                    fontSize: 10, 
+                    marginTop: Spacing.xs,
+                    fontStyle: 'italic',
+                    color: DarkTheme.colors.accent.purple
+                  }}>
+                    Editorial description
+                  </SecondaryText>
+                )}
+              </View>
             )}
+
+            {/* Quick Info */}
+            <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
+              
+              {/* Hours */}
+              {place.opening_hours && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}>
+                  <MaterialIcons name="access-time" size={18} color={DarkTheme.colors.semantic.secondaryLabel} />
+                  <Body style={{ marginLeft: Spacing.sm }}>{formatHours(place.opening_hours)}</Body>
+                </View>
+              )}
+
+              {/* Phone */}
+              {place.formatted_phone_number && (
+                <TouchableOpacity
+                  onPress={() => Linking.openURL(`tel:${place.formatted_phone_number}`)}
+                  style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}
+                >
+                  <MaterialIcons name="phone" size={18} color={DarkTheme.colors.semantic.secondaryLabel} />
+                  <Body style={{ marginLeft: Spacing.sm, color: DarkTheme.colors.accent.blue }}>
+                    {place.formatted_phone_number}
+                  </Body>
+                </TouchableOpacity>
+              )}
+
+              {/* Website */}
+              {place.website && (
+                <TouchableOpacity
+                  onPress={() => Linking.openURL(place.website!)}
+                  style={{ flexDirection: 'row', alignItems: 'center' }}
+                >
+                  <MaterialIcons name="public" size={18} color={DarkTheme.colors.semantic.secondaryLabel} />
+                  <Body style={{ marginLeft: Spacing.sm, color: DarkTheme.colors.accent.blue }}>
+                    {extractDomain(place.website)}
+                  </Body>
+                  <MaterialIcons name="open-in-new" size={14} color={DarkTheme.colors.accent.blue} style={{ marginLeft: Spacing.xs }} />
+                </TouchableOpacity>
+              )}
+            </ElevatedCard>
+
+            {/* Address Box */}
+            <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
+              <TouchableOpacity 
+                onPress={() => {
+                  const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name || 'Unknown Place')}&query_place_id=${googlePlaceId}`;
+                  Linking.openURL(url).catch((error) => {
+                    console.error('Failed to open maps:', error);
+                    showToast('Unable to open maps', 'error');
+                  });
+                }}
+              >
+                <Body>
+                  {place.formatted_address}
+                </Body>
+              </TouchableOpacity>
+            </ElevatedCard>
 
             {/* Check-in History */}
             {checkIns.length > 0 && (
@@ -1040,7 +1035,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                 <View style={{ flex: 1 }}>
                   <PrimaryButton
                     title="Check In"
-                    icon={Camera}
+                    icon={Pin}
                     onPress={handleCheckIn}
                   />
                 </View>

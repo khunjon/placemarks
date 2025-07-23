@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ArrowLeft,
+  X,
   Search,
   MapPin,
   Plus,
@@ -266,13 +267,12 @@ export default function AddPlaceToListScreen({
   const renderSearchResult = (result: SearchResult) => {
     const isAdded = addedPlaces.has(result.googlePlaceId) || result.isAdded;
     const isAdding = result.isAdding;
-    const usefulTypes = getUsefulPlaceTypes(result.types);
 
     return (
       <Card
         key={result.googlePlaceId}
         padding="md"
-        style={{ marginBottom: Spacing.sm }}
+        style={{ marginBottom: Spacing.xl }}
       >
         <View>
           {/* Place Name */}
@@ -281,20 +281,10 @@ export default function AddPlaceToListScreen({
           </Body>
           
           {/* Address without pin icon */}
-          <SecondaryText style={{ marginBottom: Spacing.xs, lineHeight: 18 }}>
+          <SecondaryText style={{ marginBottom: Spacing.xs, lineHeight: 18, color: DarkTheme.colors.semantic.tertiaryLabel }}>
             {result.address}
           </SecondaryText>
 
-          {/* Place Types - only show useful ones */}
-          {usefulTypes.length > 0 && (
-            <SecondaryText style={{ 
-              fontSize: 12, 
-              color: DarkTheme.colors.semantic.tertiaryLabel,
-              marginBottom: Spacing.sm
-            }}>
-              {usefulTypes.join(' • ')}
-            </SecondaryText>
-          )}
 
           {/* Add Button - now full width */}
           <TouchableOpacity
@@ -365,7 +355,7 @@ export default function AddPlaceToListScreen({
             onPress={() => navigation.goBack()}
             style={{ padding: Spacing.xs, marginRight: Spacing.sm }}
           >
-            <ArrowLeft size={24} color={DarkTheme.colors.semantic.label} strokeWidth={2} />
+            <X size={24} color={DarkTheme.colors.semantic.label} strokeWidth={2} />
           </TouchableOpacity>
           
           <View style={{ flex: 1 }}>
@@ -388,7 +378,7 @@ export default function AddPlaceToListScreen({
               });
             }}
             location={userLocation}
-            placeholder="Search for places in Bangkok..."
+            placeholder="Search for places..."
             clearOnSelect={false}
           />
         </View>
@@ -424,8 +414,8 @@ export default function AddPlaceToListScreen({
 
           {!isSearching && !hasSearched && recentPlaces.length === 0 && (
             <EmptyState
-              title="Search for Places"
-              message="Start typing to search for places to add to your list. You can search by name, type, or location."
+              title=""
+              message="Start typing to find places"
             />
           )}
 
