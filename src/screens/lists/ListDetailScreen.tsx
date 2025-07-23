@@ -67,10 +67,9 @@ interface SortConfig {
 }
 
 const sortOptions: SortConfig[] = [
-  { key: 'date_added', label: 'Date Added', icon: Calendar },
-  { key: 'rating', label: 'Your Rating', icon: Star },
-  { key: 'visit_count', label: 'Visit Count', icon: TrendingUp },
   { key: 'name', label: 'Name', icon: SortAsc },
+  { key: 'date_added', label: 'Date Added', icon: Calendar },
+  { key: 'visit_count', label: 'Visit Count', icon: TrendingUp },
 ];
 
 export default function ListDetailScreen({ navigation, route }: ListDetailScreenProps) {
@@ -87,7 +86,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
   const [list, setList] = useState<ListWithPlaces | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [sortBy, setSortBy] = useState<SortOption>('date_added');
+  const [sortBy, setSortBy] = useState<SortOption>('name');
   const [showSortModal, setShowSortModal] = useState(false);
   const [userRatings, setUserRatings] = useState<Record<string, UserRatingType>>({});
   const [placePhotos, setPlacePhotos] = useState<Map<string, UserPlacePhoto>>(new Map());
@@ -327,26 +326,34 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
    * Handle removing place from list
    */
   const handleRemovePlace = async (googlePlaceId: string, placeName: string) => {
+    // Store original list for rollback
+    const originalList = list;
+    
+    // Optimistic update - remove immediately
+    if (list) {
+      const updatedList = {
+        ...list,
+        places: list.places.filter(p => p.place_id !== googlePlaceId),
+        place_count: list.place_count - 1
+      };
+      setList(updatedList);
+      showToast('Removing place...');
+    }
+    
     try {
       await listsService.removePlaceFromList(listId, googlePlaceId);
       showToast('Place removed from list');
       
-      // Update local state immediately
-      if (list) {
-        const updatedList = {
-          ...list,
-          places: list.places.filter(p => p.place_id !== googlePlaceId),
-          place_count: list.place_count - 1
-        };
-        setList(updatedList);
-        
-        // Update cache with optimistic update
-        if (user?.id) {
-          await cacheManager.listDetails.removePlace(listId, googlePlaceId, user.id);
-        }
+      // Update cache with optimistic update
+      if (user?.id) {
+        await cacheManager.listDetails.removePlace(listId, googlePlaceId, user.id);
       }
     } catch (error) {
       console.error('Error removing place:', error);
+      // Rollback on error
+      if (originalList) {
+        setList(originalList);
+      }
       showToast('Failed to remove place', 'error');
     }
   };
@@ -359,6 +366,9 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
       showToast('Please sign in to add places to Want to Go', 'error');
       return;
     }
+
+    // Show immediate feedback
+    showToast('Adding to Want to Go...');
 
     try {
       // Get user's Want to Go list
@@ -398,7 +408,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
         { }
       );
 
-      showToast(`"${placeName}" added to Want to Go list`);
+      showToast(`"${placeName}" added to Want to Go list`, 'success');
     } catch (error) {
       console.error('Error adding place to Want to Go:', error);
       showToast('Failed to add place to Want to Go list', 'error');
@@ -579,74 +589,58 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
               alignItems: 'center',
               justifyContent: 'space-between',
             }}>
-              <View style={{ flex: 1 }}>
-                <View style={{
+              <TouchableOpacity
+                onPress={() => setShowSortModal(true)}
+                style={{ 
                   flexDirection: 'row',
                   alignItems: 'center',
-                  marginBottom: 4,
-                }}>
-                  <Body style={{ fontWeight: '600', fontSize: 15 }}>Places Visited</Body>
-                  <View style={{
-                    backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
-                    paddingHorizontal: 6,
-                    paddingVertical: 2,
-                    borderRadius: 10,
-                    marginLeft: Spacing.sm,
-                  }}>
-                    <SecondaryText style={{ fontSize: 11, fontWeight: '600' }}>
-                      {userRatings && Object.keys(userRatings).length > 0 ? Object.keys(userRatings).length : 0} / {list.places.length}
-                    </SecondaryText>
-                  </View>
-                </View>
-                
-                {/* Progress Bar */}
-                <View style={{
-                  height: 4,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
                   backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
-                  borderRadius: 2,
-                  overflow: 'hidden',
-                }}>
-                  <View style={{
-                    height: '100%',
-                    backgroundColor: DarkTheme.colors.bangkok.gold,
-                    width: `${list.places.length > 0 ? (Object.keys(userRatings).length / list.places.length) * 100 : 0}%`,
-                    borderRadius: 2,
-                  }} />
-                </View>
-              </View>
+                  borderRadius: DarkTheme.borderRadius.sm,
+                  gap: 6
+                }}
+              >
+                <SortAsc size={16} color={DarkTheme.colors.semantic.label} strokeWidth={2} />
+                <Body style={{ fontSize: 14, fontWeight: '500' }}>
+                  {sortOptions.find(opt => opt.key === sortBy)?.label || 'Date Added'}
+                </Body>
+              </TouchableOpacity>
               
-              <View style={{ flexDirection: 'row', gap: Spacing.xs, marginLeft: Spacing.sm }}>
-                <TouchableOpacity
-                  onPress={() => setShowSortModal(true)}
-                  style={{ padding: 4 }}
-                >
-                  <SortAsc size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
-                </TouchableOpacity>
-                
+              <View style={{ flexDirection: 'row', gap: Spacing.xs }}>
                 {effectiveIsEditable && (
                   <TouchableOpacity
                     onPress={handleAddPlace}
-                    style={{ padding: 4 }}
+                    style={{ 
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+                      borderRadius: DarkTheme.borderRadius.sm,
+                      gap: 6
+                    }}
                   >
-                    <Plus size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                    <Plus size={16} color={DarkTheme.colors.semantic.label} strokeWidth={2} />
+                    <Body style={{ fontSize: 14, fontWeight: '500' }}>Add</Body>
                   </TouchableOpacity>
                 )}
                 
                 {effectiveIsEditable && (
                   <TouchableOpacity
                     onPress={handleEditList}
-                    style={{ padding: 4 }}
+                    style={{ 
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+                      borderRadius: DarkTheme.borderRadius.sm,
+                      gap: 6
+                    }}
                   >
-                    <Edit3 size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
-                  </TouchableOpacity>
-                )}
-                
-                {effectiveIsEditable && (
-                  <TouchableOpacity
-                    onPress={handleShareList}
-                    style={{ padding: 4 }}
-                  >
-                    <Share size={18} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                    <Edit3 size={16} color={DarkTheme.colors.semantic.label} strokeWidth={2} />
+                    <Body style={{ fontSize: 14, fontWeight: '500' }}>Edit</Body>
                   </TouchableOpacity>
                 )}
               </View>

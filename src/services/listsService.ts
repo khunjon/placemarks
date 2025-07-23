@@ -213,7 +213,7 @@ export class ListsService {
         color: listData.color,
         type: listData.type,
         is_default: listData.is_default,
-        default_list_type: listData.default_list_type,
+        default_list_type: listData.list_type, // Use list_type as default_list_type since RPC doesn't return it
         is_curated: listData.is_curated,
         publisher_name: listData.publisher_name,
         publisher_logo_url: listData.publisher_logo_url,
@@ -359,7 +359,7 @@ export class ListsService {
    */
   async getWantToGoList(userId: string): Promise<ListWithPlaces | null> {
     const allLists = await this.getUserListsWithPlaces(userId);
-    return allLists.find(list => list.is_default && list.default_list_type === 'want_to_go') || null;
+    return allLists.find(list => list.is_default && list.list_type === 'want_to_go') || null;
   }
 
   /**

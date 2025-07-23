@@ -1,5 +1,5 @@
-import React, { useRef, memo } from 'react';
-import { View, Text, Alert, Animated } from 'react-native';
+import React, { useRef, memo, useState } from 'react';
+import { View, Text, Alert, Animated, ActivityIndicator } from 'react-native';
 import {
   PanGestureHandler,
   PanGestureHandlerGestureEvent,
@@ -12,10 +12,11 @@ import PlaceCard, { PlaceCardProps } from './PlaceCard';
 
 // Extended props interface for swipeable functionality
 export interface SwipeablePlaceCardProps extends PlaceCardProps {
-  onDelete?: (googlePlaceId: string, placeName: string) => void;
-  onAddToWantToGo?: (googlePlaceId: string, placeName: string) => void;
+  onDelete?: (googlePlaceId: string, placeName: string) => Promise<void>;
+  onAddToWantToGo?: (googlePlaceId: string, placeName: string) => Promise<void>;
   enableDelete?: boolean; // Only true for user lists
   enableAddToWantToGo?: boolean; // True for all lists
+  isProcessing?: boolean; // External processing state
 }
 
 const SWIPE_THRESHOLD = 80; // Threshold for triggering actions
@@ -27,10 +28,17 @@ const SwipeablePlaceCard = memo(function SwipeablePlaceCard({
   onAddToWantToGo,
   enableDelete = false,
   enableAddToWantToGo = true,
+  isProcessing: externalProcessing = false,
   ...placeCardProps
 }: SwipeablePlaceCardProps) {
+  // Local processing state
+  const [isProcessing, setIsProcessing] = useState(false);
+  
   // Use a single animated value for translation
   const translateX = useRef(new Animated.Value(0)).current;
+  
+  // Animated value for processing overlay
+  const processingOpacity = useRef(new Animated.Value(0)).current;
   
   // Pre-calculate interpolated opacity values based on translateX
   const leftActionOpacity = enableDelete ? translateX.interpolate({
@@ -68,26 +76,60 @@ const SwipeablePlaceCard = memo(function SwipeablePlaceCard({
   };
 
   // Action handlers
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!enableDelete || !onDelete) return;
     
     Alert.alert(
-      'Remove Place',
-      `Are you sure you want to remove "${placeData.name}" from this list?`,
+      'Confirm Remove',
+      `Are you sure you want to remove ${placeData.name}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Remove', 
           style: 'destructive',
-          onPress: () => onDelete(placeData.googlePlaceId, placeData.name || 'Unknown Place')
+          onPress: async () => {
+            setIsProcessing(true);
+            // Animate processing overlay in
+            Animated.timing(processingOpacity, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: true,
+            }).start();
+            
+            try {
+              await onDelete(placeData.googlePlaceId, placeData.name || 'Unknown Place');
+            } finally {
+              setIsProcessing(false);
+              processingOpacity.setValue(0);
+            }
+          }
         }
       ]
     );
   };
 
-  const handleAddToWantToGo = () => {
+  const handleAddToWantToGo = async () => {
     if (!enableAddToWantToGo || !onAddToWantToGo) return;
-    onAddToWantToGo(placeData.googlePlaceId, placeData.name || 'Unknown Place');
+    
+    setIsProcessing(true);
+    // Animate processing overlay in
+    Animated.timing(processingOpacity, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+    
+    try {
+      await onAddToWantToGo(placeData.googlePlaceId, placeData.name || 'Unknown Place');
+    } finally {
+      setIsProcessing(false);
+      // Animate processing overlay out
+      Animated.timing(processingOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }
   };
 
   // Handle gesture event - runs on UI thread with native driver
@@ -106,35 +148,39 @@ const SwipeablePlaceCard = memo(function SwipeablePlaceCard({
       
       // Check if threshold was reached
       if (effectiveDx < -SWIPE_THRESHOLD && enableDelete) {
-        // Snap to delete position briefly before springing back
+        // Snap to delete position with visual feedback
         Animated.sequence([
           Animated.timing(translateX, {
             toValue: -MAX_SWIPE,
             duration: 100,
             useNativeDriver: true,
           }),
-          Animated.spring(translateX, {
+          Animated.timing(translateX, {
             toValue: 0,
+            duration: 300,
             useNativeDriver: true,
-            tension: 40,
-            friction: 7,
           }),
-        ]).start(() => handleDelete());
+        ]).start();
+        
+        // Trigger delete after a short delay for visual feedback
+        setTimeout(() => handleDelete(), 150);
       } else if (effectiveDx > SWIPE_THRESHOLD && enableAddToWantToGo) {
-        // Snap to add position briefly before springing back
+        // Snap to add position with visual feedback
         Animated.sequence([
           Animated.timing(translateX, {
             toValue: MAX_SWIPE,
             duration: 100,
             useNativeDriver: true,
           }),
-          Animated.spring(translateX, {
+          Animated.timing(translateX, {
             toValue: 0,
+            duration: 300,
             useNativeDriver: true,
-            tension: 40,
-            friction: 7,
           }),
-        ]).start(() => handleAddToWantToGo());
+        ]).start();
+        
+        // Trigger add after a short delay for visual feedback
+        setTimeout(() => handleAddToWantToGo(), 150);
       } else {
         // Spring back to center
         Animated.spring(translateX, {
@@ -232,7 +278,7 @@ const SwipeablePlaceCard = memo(function SwipeablePlaceCard({
         activeOffsetX={[-10, 10]} // Require 10px movement to activate
         failOffsetY={[-5, 5]} // Cancel if vertical movement exceeds 5px
         shouldCancelWhenOutside={true}
-        enabled={enableDelete || enableAddToWantToGo}
+        enabled={(enableDelete || enableAddToWantToGo) && !isProcessing && !externalProcessing}
       >
         <Animated.View
           style={{
@@ -247,6 +293,53 @@ const SwipeablePlaceCard = memo(function SwipeablePlaceCard({
           }}
         >
           <PlaceCard {...placeCardProps} />
+          
+          {/* Processing Overlay */}
+          {(isProcessing || externalProcessing) && (
+            <Animated.View
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                borderRadius: DarkTheme.borderRadius.md,
+                justifyContent: 'center',
+                alignItems: 'center',
+                opacity: processingOpacity,
+              }}
+            >
+              <View
+                style={{
+                  backgroundColor: DarkTheme.colors.semantic.secondarySystemBackground,
+                  padding: DarkTheme.spacing.lg,
+                  borderRadius: DarkTheme.borderRadius.md,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 4,
+                  elevation: 5,
+                }}
+              >
+                <ActivityIndicator 
+                  size="small" 
+                  color={DarkTheme.colors.bangkok.gold} 
+                  style={{ marginRight: DarkTheme.spacing.sm }}
+                />
+                <Text
+                  style={[
+                    DarkTheme.typography.callout,
+                    { color: DarkTheme.colors.semantic.label }
+                  ]}
+                >
+                  Processing...
+                </Text>
+              </View>
+            </Animated.View>
+          )}
         </Animated.View>
       </PanGestureHandler>
     </View>
