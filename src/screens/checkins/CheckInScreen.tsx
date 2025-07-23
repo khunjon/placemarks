@@ -16,6 +16,7 @@ import {
 } from '../../components/common';
 import { useAuth } from '../../services/auth-context';
 import { checkInsService, CheckInsByDate, checkInUtils, ThumbsRating } from '../../services/checkInsService';
+import { ThumbsUp, ThumbsDown, CheckCircle } from '../../components/icons';
 import type { CheckInStackScreenProps } from '../../navigation/types';
 
 type CheckInScreenProps = CheckInStackScreenProps<'CheckIn'>;
@@ -138,6 +139,27 @@ export default function CheckInScreen({ navigation }: CheckInScreenProps) {
     });
   };
 
+  // Render rating icon
+  const renderRatingIcon = (rating: ThumbsRating | null | undefined) => {
+    if (!rating) return null;
+    
+    const iconProps = {
+      size: 18,
+      strokeWidth: 2,
+    };
+    
+    switch (rating) {
+      case 'thumbs_up':
+        return <ThumbsUp {...iconProps} color={checkInUtils.getRatingColor(rating)} />;
+      case 'thumbs_down':
+        return <ThumbsDown {...iconProps} color={checkInUtils.getRatingColor(rating)} />;
+      case 'neutral':
+        return <CheckCircle {...iconProps} color={checkInUtils.getRatingColor(rating)} />;
+      default:
+        return null;
+    }
+  };
+
   // Render check-in item
   const renderCheckInItem = (checkIn: any) => (
     <TouchableOpacity
@@ -151,20 +173,21 @@ export default function CheckInScreen({ navigation }: CheckInScreenProps) {
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-        {/* Category Icon */}
+        {/* Check-in Time */}
         <View style={{
-          width: 36,
-          height: 36,
-          borderRadius: 18,
-          backgroundColor: Colors.semantic.backgroundTertiary,
           alignItems: 'center',
           justifyContent: 'center',
           marginRight: Spacing.md,
           marginTop: 2, // Slight offset to align with text
+          minWidth: 60, // Ensure consistent width
         }}>
-          <Typography variant="body" style={{ fontSize: 16 }}>
-            {checkInUtils.getCategoryIcon(checkIn.place.place_type, undefined, checkIn.place.name)}
-          </Typography>
+          <SecondaryText style={{ 
+            fontSize: 12, 
+            fontWeight: '600',
+            textAlign: 'center',
+          }}>
+            {formatTime(checkIn.timestamp)}
+          </SecondaryText>
         </View>
 
         <View style={{ flex: 1 }}>
@@ -173,26 +196,13 @@ export default function CheckInScreen({ navigation }: CheckInScreenProps) {
               {checkIn.place.name}
             </Body>
             <View style={{ marginLeft: Spacing.sm }}>
-              <Typography 
-                variant="body" 
-                style={{ fontSize: 18 }}
-              >
-                {checkInUtils.formatRating(checkIn.rating)}
-              </Typography>
+              {renderRatingIcon(checkIn.rating)}
             </View>
           </View>
           
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <SecondaryText style={{ fontSize: 14 }}>
-              {checkIn.place.district ? `${checkIn.place.district}, Bangkok` : 'Bangkok'}
-            </SecondaryText>
-            <SecondaryText style={{ fontSize: 14, marginHorizontal: Spacing.xs }}>
-              •
-            </SecondaryText>
-            <SecondaryText style={{ fontSize: 14 }}>
-              {formatTime(checkIn.timestamp)}
-            </SecondaryText>
-          </View>
+          <SecondaryText style={{ fontSize: 14 }}>
+            {checkIn.place.district ? `${checkIn.place.district}, Bangkok` : 'Bangkok'}
+          </SecondaryText>
           
           {checkIn.comment && (
             <Body 

@@ -940,8 +940,8 @@ export const checkInUtils = {
       }
     }
 
-    // Default icon
-    return '📍';
+    // Default icon - no specific icon for unknown place types
+    return '';
   },
 
   /**

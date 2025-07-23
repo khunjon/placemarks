@@ -14,7 +14,7 @@ import {
   KeyboardAvoidingView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Camera, Pin, Star, ArrowLeft, Trophy, Eye, Heart, Clock, Phone, Globe, ExternalLink, CheckSquare } from '../../components/icons';
+import { Camera, Pin, Star, ArrowLeft, Trophy, Eye, Heart, Clock, Phone, Globe, ExternalLink, CheckSquare, ThumbsUp, ThumbsDown, CheckCircle, X } from '../../components/icons';
 import { DarkTheme } from '../../constants/theme';
 import { Spacing } from '../../constants/Spacing';
 import { 
@@ -372,6 +372,32 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
   };
 
   /**
+   * Handle clearing user rating
+   */
+  const handleClearRating = async () => {
+    if (!user?.id) return;
+    
+    try {
+      // Optimistic update - clear UI immediately
+      setUserRating(null);
+      
+      // Update cache immediately for instant feedback on future loads
+      await cacheManager.placeDetails.updateRating(googlePlaceId, null, user.id);
+      
+      // Make actual API call to remove rating
+      await userRatingsService.removeUserRating(user.id, googlePlaceId);
+      
+      showToast('Rating cleared');
+    } catch (error) {
+      console.error('Error clearing rating:', error);
+      showToast('Failed to clear rating', 'error');
+      
+      // Revert optimistic update on error
+      await loadPlaceDetailsInBackground();
+    }
+  };
+
+  /**
    * Handle check-in creation with optimistic cache updates
    */
   const handleCheckIn = async () => {
@@ -587,7 +613,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
           onPress={() => navigation.goBack()}
           style={{ padding: Spacing.xs }}
         >
-          <ArrowLeft size={24} color={DarkTheme.colors.semantic.label} />
+          <X size={20} color={DarkTheme.colors.semantic.label} />
         </TouchableOpacity>
         
         <View style={{ flex: 1, alignItems: 'center' }}>
@@ -692,9 +718,24 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                 <View style={{ gap: Spacing.md }}>
                   {/* User Rating Selection */}
                   <View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.sm }}>
                       <Body>Your Rating</Body>
-                      <SecondaryText style={{ marginLeft: Spacing.sm, fontSize: 12 }}>Personal preference</SecondaryText>
+                      {userRating && (
+                        <TouchableOpacity
+                          onPress={handleClearRating}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingHorizontal: Spacing.sm,
+                            paddingVertical: Spacing.xs,
+                            borderRadius: DarkTheme.borderRadius.sm,
+                            backgroundColor: DarkTheme.colors.semantic.tertiarySystemBackground,
+                          }}
+                        >
+                          <X size={14} color={DarkTheme.colors.semantic.secondaryLabel} strokeWidth={2} />
+                          <SecondaryText style={{ marginLeft: Spacing.xs, fontSize: 12 }}>Clear</SecondaryText>
+                        </TouchableOpacity>
+                      )}
                     </View>
                     <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
                       {/* Thumbs Up */}
@@ -714,7 +755,14 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                           borderColor: userRating === 'thumbs_up' ? DarkTheme.colors.accent.green : 'transparent',
                         }}
                       >
-                        <Body style={{ fontSize: 20 }}>👍</Body>
+                        <ThumbsUp 
+                          size={24} 
+                          color={userRating === 'thumbs_up' 
+                            ? DarkTheme.colors.accent.green 
+                            : DarkTheme.colors.semantic.secondaryLabel
+                          } 
+                          strokeWidth={2}
+                        />
                       </TouchableOpacity>
 
                       {/* Neutral */}
@@ -734,7 +782,14 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                           borderColor: userRating === 'neutral' ? DarkTheme.colors.semantic.secondaryLabel : 'transparent',
                         }}
                       >
-                        <Body style={{ fontSize: 20 }}>👌</Body>
+                        <CheckCircle 
+                          size={24} 
+                          color={userRating === 'neutral' 
+                            ? DarkTheme.colors.semantic.secondaryLabel 
+                            : DarkTheme.colors.semantic.tertiaryLabel
+                          } 
+                          strokeWidth={2}
+                        />
                       </TouchableOpacity>
 
                       {/* Thumbs Down */}
@@ -754,7 +809,14 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                           borderColor: userRating === 'thumbs_down' ? DarkTheme.colors.accent.red : 'transparent',
                         }}
                       >
-                        <Body style={{ fontSize: 20 }}>👎</Body>
+                        <ThumbsDown 
+                          size={24} 
+                          color={userRating === 'thumbs_down' 
+                            ? DarkTheme.colors.accent.red 
+                            : DarkTheme.colors.semantic.secondaryLabel
+                          } 
+                          strokeWidth={2}
+                        />
                       </TouchableOpacity>
                     </View>
                   </View>

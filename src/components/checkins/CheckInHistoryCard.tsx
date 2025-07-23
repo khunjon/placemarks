@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { MapPin, Clock, Star, MessageCircle, Camera } from '../icons';
+import { MapPin, Clock, Star, MessageCircle, Camera, ThumbsUp, ThumbsDown, CheckCircle } from '../icons';
 import { DarkTheme } from '../../constants/theme';
 import { LocationBadge } from '../ui';
 import { checkInUtils, ThumbsRating } from '../../services/checkInsService';
@@ -39,6 +39,25 @@ const getTypeColor = (type: CheckInHistoryCardProps['placeType']) => {
 };
 
 const renderThumbsRating = (rating: ThumbsRating) => {
+  const getRatingIcon = () => {
+    const iconProps = {
+      size: 14,
+      color: checkInUtils.getRatingColor(rating),
+      strokeWidth: 2,
+    };
+    
+    switch (rating) {
+      case 'thumbs_up':
+        return <ThumbsUp {...iconProps} />;
+      case 'thumbs_down':
+        return <ThumbsDown {...iconProps} />;
+      case 'neutral':
+        return <CheckCircle {...iconProps} />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <View style={{ 
       flexDirection: 'row', 
@@ -50,9 +69,9 @@ const renderThumbsRating = (rating: ThumbsRating) => {
       borderWidth: 1,
       borderColor: checkInUtils.getRatingColor(rating),
     }}>
-      <Text style={{ fontSize: 14, marginRight: 4 }}>
-        {checkInUtils.formatRating(rating)}
-      </Text>
+      <View style={{ marginRight: 4 }}>
+        {getRatingIcon()}
+      </View>
       <Text style={{
         fontSize: 12,
         color: checkInUtils.getRatingColor(rating),

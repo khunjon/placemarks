@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, Clock, Coffee, Utensils, Wine, ShoppingBag, Sparkles, ThumbsUp, ThumbsDown, Briefcase } from '../../components/icons';
+import { MapPin, Clock, Coffee, Utensils, Wine, ShoppingBag, Sparkles, ThumbsUp, ThumbsDown, Briefcase, Star, Store, Building, GraduationCap, Cross, Film, Dumbbell, Home } from '../../components/icons';
 import { DarkTheme } from '../../constants/theme';
 import type { DecideStackScreenProps } from '../../navigation/types';
 import { createValidatedCityContext, CityContext } from '../../services/cityContext';
@@ -225,18 +225,20 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
 
   // UI helper functions - simplified for direct Google Place ID usage
 
-  const getCategoryEmoji = (category: string) => {
-    const emojiMap: Record<string, string> = {
-      cafe: '☕',
-      restaurant: '🍽️',
-      bar: '🍷',
-      market: '🛍️',
-      fine_dining: '🍱',
-      breakfast: '🥐',
-      rooftop: '🌆',
-      shopping: '🛒',
+  const getCategoryIcon = (category: string) => {
+    const iconMap: Record<string, React.ComponentType<any>> = {
+      cafe: Coffee,
+      restaurant: Utensils,
+      bar: Wine,
+      market: ShoppingBag,
+      fine_dining: Utensils,
+      breakfast: Coffee,
+      rooftop: Building,
+      shopping: Store,
+      attraction: MapPin,
+      place: MapPin,
     };
-    return emojiMap[category] || '📍';
+    return iconMap[category] || MapPin;
   };
 
   const getTimeContextMessage = (timeCtx: TimeContext, cityCtx: CityContext | null) => {
@@ -384,17 +386,30 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                 alignItems: 'center',
               }}
             >
-              <Text style={[
-                DarkTheme.typography.caption1,
-                { 
-                  color: userPreference === 'eat' 
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+              }}>
+                <Utensils 
+                  size={16} 
+                  color={userPreference === 'eat' 
                     ? DarkTheme.colors.system.black 
-                    : DarkTheme.colors.semantic.label,
-                  fontWeight: '600',
-                }
-              ]}>
-                🍽️ Food
-              </Text>
+                    : DarkTheme.colors.semantic.label} 
+                  strokeWidth={2}
+                />
+                <Text style={[
+                  DarkTheme.typography.caption1,
+                  { 
+                    color: userPreference === 'eat' 
+                      ? DarkTheme.colors.system.black 
+                      : DarkTheme.colors.semantic.label,
+                    fontWeight: '600',
+                  }
+                ]}>
+                  Food
+                </Text>
+              </View>
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -410,17 +425,30 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                 alignItems: 'center',
               }}
             >
-              <Text style={[
-                DarkTheme.typography.caption1,
-                { 
-                  color: userPreference === 'drink' 
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+              }}>
+                <Coffee 
+                  size={16} 
+                  color={userPreference === 'drink' 
                     ? DarkTheme.colors.system.black 
-                    : DarkTheme.colors.semantic.label,
-                  fontWeight: '600',
-                }
-              ]}>
-                ☕ Coffee
-              </Text>
+                    : DarkTheme.colors.semantic.label} 
+                  strokeWidth={2}
+                />
+                <Text style={[
+                  DarkTheme.typography.caption1,
+                  { 
+                    color: userPreference === 'drink' 
+                      ? DarkTheme.colors.system.black 
+                      : DarkTheme.colors.semantic.label,
+                    fontWeight: '600',
+                  }
+                ]}>
+                  Coffee
+                </Text>
+              </View>
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -436,17 +464,30 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                 alignItems: 'center',
               }}
             >
-              <Text style={[
-                DarkTheme.typography.caption1,
-                { 
-                  color: userPreference === 'work' 
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+              }}>
+                <Briefcase 
+                  size={16} 
+                  color={userPreference === 'work' 
                     ? DarkTheme.colors.system.black 
-                    : DarkTheme.colors.semantic.label,
-                  fontWeight: '600',
-                }
-              ]}>
-                💼 Work
-              </Text>
+                    : DarkTheme.colors.semantic.label} 
+                  strokeWidth={2}
+                />
+                <Text style={[
+                  DarkTheme.typography.caption1,
+                  { 
+                    color: userPreference === 'work' 
+                      ? DarkTheme.colors.system.black 
+                      : DarkTheme.colors.semantic.label,
+                    fontWeight: '600',
+                  }
+                ]}>
+                  Work
+                </Text>
+              </View>
             </TouchableOpacity>
           </View>
           
@@ -572,9 +613,16 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                       justifyContent: 'center',
                       marginRight: DarkTheme.spacing.md,
                     }}>
-                      <Text style={{ fontSize: 20 }}>
-                        {getCategoryEmoji(category)}
-                      </Text>
+                      {(() => {
+                        const IconComponent = getCategoryIcon(category);
+                        return (
+                          <IconComponent 
+                            size={20} 
+                            color={DarkTheme.colors.bangkok.gold} 
+                            strokeWidth={2}
+                          />
+                        );
+                      })()}
                     </View>
 
                     {/* Place Info */}
@@ -633,14 +681,25 @@ export default function RecommendationsScreen({ navigation }: RecommendationsScr
                           )}
                           
                           {place.rating && (
-                            <Text style={[
-                              DarkTheme.typography.caption2,
-                              { 
-                                color: DarkTheme.colors.semantic.secondaryLabel,
-                              }
-                            ]}>
-                              ⭐ {place.rating.toFixed(1)}
-                            </Text>
+                            <View style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}>
+                              <Star 
+                                size={12} 
+                                color={DarkTheme.colors.semantic.secondaryLabel} 
+                                strokeWidth={2}
+                              />
+                              <Text style={[
+                                DarkTheme.typography.caption2,
+                                { 
+                                  color: DarkTheme.colors.semantic.secondaryLabel,
+                                }
+                              ]}>
+                                {place.rating.toFixed(1)}
+                              </Text>
+                            </View>
                           )}
                         </View>
                       </View>

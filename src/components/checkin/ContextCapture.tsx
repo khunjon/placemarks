@@ -44,7 +44,7 @@ export default function ContextCapture({
   
   const renderOptionButtons = <T extends string>(
     title: string,
-    options: { value: T; label: string; icon?: React.ComponentType<any> }[],
+    options: { value: T; label: string; icon?: React.ComponentType<any> | string }[],
     selectedValue: T | undefined,
     onSelect: (value: T) => void,
     allowMultiple: boolean = false
@@ -61,7 +61,13 @@ export default function ContextCapture({
             ]}
             onPress={() => onSelect(option.value)}
           >
-            {option.icon && <option.icon size={16} color="#666" style={styles.optionIconComponent} />}
+            {option.icon && (
+              typeof option.icon === 'string' ? (
+                <Text style={styles.optionIcon}>{option.icon}</Text>
+              ) : (
+                <option.icon size={16} color="#666" style={styles.optionIconComponent} />
+              )
+            )}
             <Text style={[
               styles.optionText,
               selectedValue === option.value && styles.selectedOptionText,
@@ -93,7 +99,13 @@ export default function ContextCapture({
               [option.key]: !context[option.key],
             })}
           >
-            {option.icon && <option.icon size={16} color="#666" style={styles.optionIconComponent} />}
+            {option.icon && (
+              typeof option.icon === 'string' ? (
+                <Text style={styles.optionIcon}>{option.icon}</Text>
+              ) : (
+                <option.icon size={16} color="#666" style={styles.optionIconComponent} />
+              )
+            )}
             <Text style={[
               styles.optionText,
               context[option.key] && styles.selectedOptionText,

@@ -16,6 +16,7 @@ import Toast from '../../components/ui/Toast';
 import { useAuth } from '../../services/auth-context';
 import { checkInsService, ThumbsRating, checkInUtils } from '../../services/checkInsService';
 import type { CheckInStackScreenProps } from '../../navigation/types';
+import { ThumbsUp, ThumbsDown, CheckCircle } from '../../components/icons';
 
 type CheckInFormScreenProps = CheckInStackScreenProps<'CheckInForm'>;
 
@@ -127,7 +128,7 @@ export default function CheckInFormScreen({ navigation, route }: CheckInFormScre
   };
 
   // Render rating option
-  const renderRatingOption = (rating: ThumbsRating, emoji: string, label: string) => {
+  const renderRatingOption = (rating: ThumbsRating, IconComponent: React.ComponentType<any>, label: string) => {
     const isSelected = selectedRating === rating;
     
     return (
@@ -153,17 +154,15 @@ export default function CheckInFormScreen({ navigation, route }: CheckInFormScre
         }}
         activeOpacity={0.7}
       >
-        <Typography 
-          variant="body" 
+        <IconComponent 
+          size={28}
+          color={isSelected 
+            ? checkInUtils.getRatingColor(rating)
+            : Colors.semantic.textSecondary}
           style={{ 
-            fontSize: 28, 
             marginBottom: Spacing.sm,
-            lineHeight: 32,
-            textAlign: 'center',
           }}
-        >
-          {emoji}
-        </Typography>
+        />
         <Body 
           style={{ 
             fontWeight: isSelected ? '600' : '400',
@@ -244,16 +243,6 @@ export default function CheckInFormScreen({ navigation, route }: CheckInFormScre
           {/* Place Information */}
           <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
             <View style={{ alignItems: 'center', paddingVertical: Spacing.sm }}>
-              <Typography 
-                variant="body" 
-                style={{ 
-                  fontSize: 20, 
-                  marginBottom: Spacing.sm,
-                  lineHeight: 24,
-                }}
-              >
-                📍
-              </Typography>
               <Title3 style={{ textAlign: 'center', marginBottom: Spacing.xs }}>
                 {placeName}
               </Title3>
@@ -278,9 +267,9 @@ export default function CheckInFormScreen({ navigation, route }: CheckInFormScre
               justifyContent: 'space-between',
               marginHorizontal: Spacing.sm,
             }}>
-              {renderRatingOption('thumbs_down', '👎', 'Not Great')}
-              {renderRatingOption('neutral', '👌', 'Okay')}
-              {renderRatingOption('thumbs_up', '👍', 'Great!')}
+              {renderRatingOption('thumbs_down', ThumbsDown, 'Not Great')}
+              {renderRatingOption('neutral', CheckCircle, 'Okay')}
+              {renderRatingOption('thumbs_up', ThumbsUp, 'Great!')}
             </View>
           </View>
 

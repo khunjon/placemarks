@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, ScrollView, TouchableOpacity, TextInput, Alert, ActionSheetIOS, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, ScrollView, TouchableOpacity, TextInput, Alert, Platform, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { Spacing } from '../../constants/Spacing';
@@ -10,14 +10,14 @@ import {
   SecondaryText,
   ElevatedCard,
   PrimaryButton,
-  OutlineButton,
+  DestructiveButton,
   LoadingState,
 } from '../../components/common';
 import Toast from '../../components/ui/Toast';
 import { useAuth } from '../../services/auth-context';
 import { checkInsService, ThumbsRating, checkInUtils, CheckInWithPlace } from '../../services/checkInsService';
-import { listsService, ListWithPlaces } from '../../services/listsService';
 import type { CheckInStackScreenProps } from '../../navigation/types';
+import { ThumbsUp, ThumbsDown, CheckCircle, Trash2, X } from '../../components/icons';
 
 type CheckInDetailScreenProps = CheckInStackScreenProps<'CheckInDetail'>;
 
@@ -32,7 +32,6 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
   const [saving, setSaving] = useState(false);
   const [selectedRating, setSelectedRating] = useState<ThumbsRating | null>(null);
   const [comment, setComment] = useState('');
-  const [userLists, setUserLists] = useState<ListWithPlaces[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' }>({
     visible: false,
@@ -43,9 +42,6 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
   // Load check-in details
   useEffect(() => {
     loadCheckInDetails();
-    if (user) {
-      loadUserLists();
-    }
   }, [checkInId, user]);
 
   const loadCheckInDetails = async () => {
@@ -77,15 +73,6 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
     }
   };
 
-  const loadUserLists = async () => {
-    try {
-      if (!user) return;
-      const lists = await listsService.getUserListsWithPlaces(user.id);
-      setUserLists(lists);
-    } catch (error) {
-      console.error('Error loading user lists:', error);
-    }
-  };
 
   const handleRatingSelect = (rating: ThumbsRating | null) => {
     setSelectedRating(rating);
@@ -158,58 +145,6 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
     }
   };
 
-  const handleAddToList = () => {
-    if (!checkIn || userLists.length === 0) {
-      Alert.alert('No Lists', 'Create a list first to add places to it.');
-      return;
-    }
-
-    const listOptions = userLists.map(list => list.name);
-    listOptions.push('Cancel');
-
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: listOptions,
-          cancelButtonIndex: listOptions.length - 1,
-          title: 'Add to List',
-        },
-        async (buttonIndex) => {
-          if (buttonIndex < userLists.length && checkIn.place) {
-            const selectedList = userLists[buttonIndex];
-            try {
-              await listsService.addPlaceToList(selectedList.id, checkIn.place.google_place_id);
-              Alert.alert('Added', `Added ${checkIn.place.name || 'this place'} to ${selectedList.name}`);
-            } catch (error) {
-              console.error('Error adding to list:', error);
-              Alert.alert('Error', 'Failed to add to list');
-            }
-          }
-        }
-      );
-    } else {
-      Alert.alert(
-        'Add to List',
-        'Choose a list:',
-        [
-          ...userLists.map(list => ({
-            text: list.name,
-            onPress: async () => {
-              if (!checkIn.place) return;
-              try {
-                await listsService.addPlaceToList(list.id, checkIn.place.google_place_id);
-                Alert.alert('Added', `Added ${checkIn.place.name || 'this place'} to ${list.name}`);
-              } catch (error) {
-                console.error('Error adding to list:', error);
-                Alert.alert('Error', 'Failed to add to list');
-              }
-            },
-          })),
-          { text: 'Cancel', style: 'cancel' },
-        ]
-      );
-    }
-  };
 
   const handleDeleteCheckIn = () => {
     Alert.alert(
@@ -243,7 +178,7 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
     );
   };
 
-  const renderRatingOption = (rating: ThumbsRating, emoji: string, label: string) => {
+  const renderRatingOption = (rating: ThumbsRating, IconComponent: React.ComponentType<any>, label: string) => {
     const isSelected = selectedRating === rating;
     
     return (
@@ -269,17 +204,15 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
         }}
         activeOpacity={0.7}
       >
-        <Typography 
-          variant="body" 
+        <IconComponent 
+          size={24}
+          color={isSelected 
+            ? checkInUtils.getRatingColor(rating)
+            : Colors.semantic.textSecondary}
           style={{ 
-            fontSize: 24, 
             marginBottom: Spacing.xs,
-            lineHeight: 28,
-            textAlign: 'center',
           }}
-        >
-          {emoji}
-        </Typography>
+        />
         <Body 
           style={{ 
             fontWeight: isSelected ? '600' : '400',
@@ -355,11 +288,12 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
       }}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          style={{ marginRight: Spacing.md }}
+          style={{ 
+            marginRight: Spacing.md,
+            padding: Spacing.xs,
+          }}
         >
-          <Typography variant="body" color="primary">
-            ← Back
-          </Typography>
+          <X size={20} color={Colors.primary[500]} />
         </TouchableOpacity>
         <Typography variant="title2" style={{ fontWeight: 'bold', flex: 1 }}>
           Check-in Details
@@ -375,42 +309,29 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
           style={{ flex: 1 }}
           contentContainerStyle={{ 
             paddingHorizontal: Spacing.layout.screenPadding,
-            paddingVertical: Spacing.lg,
-            paddingBottom: Spacing.xl,
+            paddingVertical: Spacing.md,
+            paddingBottom: Spacing.lg,
           }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           ref={scrollViewRef}
         >
-          <ElevatedCard padding="lg" style={{ marginBottom: Spacing.lg }}>
-            <View style={{ alignItems: 'center', marginBottom: Spacing.md }}>
-              <Typography 
-                variant="body" 
-                style={{ 
-                  fontSize: 20, 
-                  marginBottom: Spacing.sm,
-                  lineHeight: 24,
-                }}
-              >
-                📍
-              </Typography>
-              <Title2 style={{ textAlign: 'center', marginBottom: Spacing.xs }}>
+          <ElevatedCard padding="md" style={{ marginBottom: Spacing.md }}>
+            <View style={{ alignItems: 'center', marginBottom: Spacing.sm }}>
+              <Title2 style={{ textAlign: 'center', marginBottom: Spacing.sm }}>
                 {checkIn.place?.name || 'Unknown Place'}
               </Title2>
-              <SecondaryText style={{ textAlign: 'center', fontSize: 14, marginBottom: Spacing.sm }}>
-                {checkIn.place?.address || 'Address not available'}
-              </SecondaryText>
               <SecondaryText style={{ textAlign: 'center', fontSize: 12 }}>
                 {formatDateTime(checkIn.timestamp)}
               </SecondaryText>
             </View>
           </ElevatedCard>
 
-          <ElevatedCard padding="lg" style={{ marginBottom: Spacing.lg }}>
+          <ElevatedCard padding="md" style={{ marginBottom: Spacing.md }}>
             <Body style={{ 
               fontWeight: '600', 
-              marginBottom: Spacing.md,
+              marginBottom: Spacing.sm,
               textAlign: 'center',
             }}>
               How was your experience?
@@ -420,30 +341,19 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
               flexDirection: 'row', 
               justifyContent: 'space-between',
               marginHorizontal: Spacing.sm,
-              marginBottom: Spacing.md,
+              marginBottom: Spacing.sm,
             }}>
-              {renderRatingOption('thumbs_down', '👎', 'Not Great')}
-              {renderRatingOption('neutral', '👌', 'Okay')}
-              {renderRatingOption('thumbs_up', '👍', 'Great!')}
+              {renderRatingOption('thumbs_down', ThumbsDown, 'Not Great')}
+              {renderRatingOption('neutral', CheckCircle, 'Okay')}
+              {renderRatingOption('thumbs_up', ThumbsUp, 'Great!')}
             </View>
 
-            <TouchableOpacity
-              onPress={() => handleRatingSelect(null)}
-              style={{
-                alignItems: 'center',
-                paddingVertical: Spacing.sm,
-              }}
-            >
-              <SecondaryText style={{ fontSize: 14 }}>
-                {selectedRating ? 'Clear Rating' : 'No rating selected'}
-              </SecondaryText>
-            </TouchableOpacity>
           </ElevatedCard>
 
-          <ElevatedCard padding="lg" style={{ marginBottom: Spacing.lg }}>
+          <ElevatedCard padding="md" style={{ marginBottom: Spacing.md }}>
             <Body style={{ 
               fontWeight: '600', 
-              marginBottom: Spacing.md 
+              marginBottom: Spacing.sm 
             }}>
               Your thoughts
             </Body>
@@ -481,7 +391,7 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
             </SecondaryText>
           </ElevatedCard>
 
-          <View style={{ gap: Spacing.md }}>
+          <View style={{ gap: Spacing.sm }}>
             {hasUnsavedChanges && (
               <PrimaryButton
                 title={saving ? "Saving..." : "Save Changes"}
@@ -490,23 +400,12 @@ export default function CheckInDetailScreen({ navigation, route }: CheckInDetail
               />
             )}
 
-            <OutlineButton
-              title="Add to List"
-              onPress={handleAddToList}
-              disabled={userLists.length === 0}
-            />
 
-            <TouchableOpacity
+            <DestructiveButton
+              title="Delete Check-in"
               onPress={handleDeleteCheckIn}
-              style={{
-                paddingVertical: Spacing.md,
-                alignItems: 'center',
-              }}
-            >
-              <Typography variant="body" style={{ color: Colors.semantic.error }}>
-                Delete Check-in
-              </Typography>
-            </TouchableOpacity>
+              icon={Trash2}
+            />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

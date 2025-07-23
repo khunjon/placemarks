@@ -171,7 +171,6 @@ There is a separate web admin UI project that connects to the same Supabase back
 - The centralized system provides consistent sizing, styling, and type safety
 - All icons support props: `size`, `color`, `strokeWidth`, `style`
 - For new icons not in the system, add them to the centralized file first
-- **Emoji preservation guideline**: Keep culturally meaningful emojis (price tiers, social contexts, meal types) but replace technical/UI emojis with Lucide icons
 
 ## Current App State
 
