@@ -13,5 +13,8 @@ export { default as PhotoUploadButton } from './PhotoUploadButton';
 
 export { default as PhotoGallery } from './PhotoGallery';
 
+export { default as SwipeablePhotoViewer } from './SwipeablePhotoViewer';
+export type { SwipeablePhoto } from './SwipeablePhotoViewer';
+
 // Navigation utilities
 export { PlaceNavigationHelper, usePlaceNavigation } from './PlaceNavigationHelper';

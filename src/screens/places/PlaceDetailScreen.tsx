@@ -709,6 +709,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
           <PhotoGallery 
             place={place} 
             onPhotoUpload={() => loadPlaceDetails()}
+            userPhotos={userPhotos}
           />
 
           <View style={{ padding: Spacing.lg }}>

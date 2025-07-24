@@ -4,14 +4,13 @@ import {
   Text, 
   ScrollView, 
   TouchableOpacity, 
-  Modal,
   ActivityIndicator,
   Alert,
   Dimensions
 } from 'react-native';
 import { Image } from 'expo-image';
-import { X, Trash2, Star, Camera } from '../icons';
 import PhotoUploadButton from './PhotoUploadButton';
+import SwipeablePhotoViewer, { SwipeablePhoto } from './SwipeablePhotoViewer';
 import { DarkTheme } from '../../constants/theme';
 import { photoService } from '../../services/photoService';
 import { useAuth } from '../../services/auth-context';
@@ -20,33 +19,25 @@ import { UserPlacePhoto, Place } from '../../types';
 interface PhotoGalleryProps {
   place: Place;
   onPhotoUpload?: () => void;
+  userPhotos?: UserPlacePhoto[]; // Optional pre-loaded photos to avoid duplicate loading
 }
-
-// Define a type for combined photos
-type CombinedPhoto = {
-  url: string;
-  thumbnailUrl?: string;
-  displayUrl?: string;
-  caption?: string;
-  isUserPhoto: boolean;
-  photoId?: string;
-  isPrimary?: boolean;
-  userId?: string;
-};
 
 const { width: screenWidth } = Dimensions.get('window');
 const PHOTO_SIZE = (screenWidth - DarkTheme.spacing.lg * 3) / 2;
 
-export default function PhotoGallery({ place, onPhotoUpload }: PhotoGalleryProps) {
+export default function PhotoGallery({ place, onPhotoUpload, userPhotos: initialUserPhotos }: PhotoGalleryProps) {
   const { user } = useAuth();
-  const [userPhotos, setUserPhotos] = useState<UserPlacePhoto[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedPhoto, setSelectedPhoto] = useState<CombinedPhoto | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [userPhotos, setUserPhotos] = useState<UserPlacePhoto[]>(initialUserPhotos || []);
+  const [loading, setLoading] = useState(!initialUserPhotos); // Only show loading if photos weren't provided
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
+  const [viewerVisible, setViewerVisible] = useState(false);
 
   useEffect(() => {
-    loadUserPhotos();
-  }, [place.google_place_id]);
+    // Only load photos if they weren't provided as props
+    if (!initialUserPhotos) {
+      loadUserPhotos();
+    }
+  }, [place.google_place_id, initialUserPhotos]);
 
   const loadUserPhotos = async () => {
     setLoading(true);
@@ -74,11 +65,11 @@ export default function PhotoGallery({ place, onPhotoUpload }: PhotoGalleryProps
           text: 'Delete', 
           style: 'destructive',
           onPress: async () => {
-            setDeleting(true);
             try {
               const { error } = await photoService.deletePhoto(photoId, user.id);
               if (!error) {
-                setSelectedPhoto(null);
+                setViewerVisible(false);
+                setSelectedPhotoIndex(null);
                 await loadUserPhotos();
                 onPhotoUpload?.();
               } else {
@@ -86,8 +77,6 @@ export default function PhotoGallery({ place, onPhotoUpload }: PhotoGalleryProps
               }
             } catch (error) {
               Alert.alert('Error', 'Failed to delete photo');
-            } finally {
-              setDeleting(false);
             }
           }
         }
@@ -114,7 +103,7 @@ export default function PhotoGallery({ place, onPhotoUpload }: PhotoGalleryProps
   };
 
   // Only use user photos (no Google photos to avoid API charges)
-  const sortedPhotos: CombinedPhoto[] = userPhotos
+  const sortedPhotos: SwipeablePhoto[] = userPhotos
     .map(photo => ({
       url: photo.photo_url,
       thumbnailUrl: photo.thumbnail_url,
@@ -131,6 +120,11 @@ export default function PhotoGallery({ place, onPhotoUpload }: PhotoGalleryProps
       if (!a.isPrimary && b.isPrimary) return 1;
       return 0;
     });
+  
+  const handlePhotoPress = (index: number) => {
+    setSelectedPhotoIndex(index);
+    setViewerVisible(true);
+  };
 
   if (loading) {
     return (
@@ -178,7 +172,7 @@ export default function PhotoGallery({ place, onPhotoUpload }: PhotoGalleryProps
         {sortedPhotos.map((photo, index) => (
           <TouchableOpacity
             key={`${photo.url}-${index}`}
-            onPress={() => setSelectedPhoto(photo)}
+            onPress={() => handlePhotoPress(index)}
             style={{ marginRight: DarkTheme.spacing.sm }}
           >
             <View>
@@ -235,123 +229,19 @@ export default function PhotoGallery({ place, onPhotoUpload }: PhotoGalleryProps
         ))}
       </ScrollView>
 
-      {/* Photo Viewer Modal */}
-      <Modal
-        visible={!!selectedPhoto}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSelectedPhoto(null)}
-      >
-        {selectedPhoto && (
-          <View style={{
-            flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.9)',
-            justifyContent: 'center',
-          }}>
-            <TouchableOpacity
-              style={{
-                position: 'absolute',
-                top: 50,
-                right: DarkTheme.spacing.lg,
-                padding: DarkTheme.spacing.sm,
-                zIndex: 1,
-              }}
-              onPress={() => setSelectedPhoto(null)}
-            >
-              <X size={24} color="white" />
-            </TouchableOpacity>
-
-            <Image
-              source={{ uri: selectedPhoto.displayUrl || selectedPhoto.url }}
-              style={{
-                width: screenWidth,
-                height: screenWidth,
-              }}
-              contentFit="contain"
-              transition={300}
-              cachePolicy="memory-disk"
-              priority="high"
-            />
-
-            {selectedPhoto.caption && (
-              <View style={{
-                position: 'absolute',
-                bottom: 100,
-                left: 0,
-                right: 0,
-                paddingHorizontal: DarkTheme.spacing.lg,
-              }}>
-                <Text style={{
-                  fontSize: 16,
-                  color: 'white',
-                  textAlign: 'center',
-                  backgroundColor: 'rgba(0,0,0,0.7)',
-                  padding: DarkTheme.spacing.md,
-                  borderRadius: DarkTheme.borderRadius.md,
-                }}>
-                  {selectedPhoto.caption}
-                </Text>
-              </View>
-            )}
-
-            {selectedPhoto.isUserPhoto && selectedPhoto.userId === user?.id && (
-              <View style={{
-                position: 'absolute',
-                bottom: DarkTheme.spacing.xl,
-                left: 0,
-                right: 0,
-                flexDirection: 'row',
-                justifyContent: 'center',
-                gap: DarkTheme.spacing.md,
-              }}>
-                {!selectedPhoto.isPrimary && (
-                  <TouchableOpacity
-                    onPress={() => handleSetPrimary(selectedPhoto.photoId!)}
-                    style={{
-                      backgroundColor: DarkTheme.colors.accent.blue,
-                      paddingVertical: DarkTheme.spacing.sm,
-                      paddingHorizontal: DarkTheme.spacing.lg,
-                      borderRadius: DarkTheme.borderRadius.md,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Star size={16} color="white" style={{ marginRight: DarkTheme.spacing.xs }} />
-                    <Text style={{ color: 'white', fontWeight: '500' }}>
-                      Set as Primary
-                    </Text>
-                  </TouchableOpacity>
-                )}
-                
-                <TouchableOpacity
-                  onPress={() => handleDeletePhoto(selectedPhoto.photoId!)}
-                  disabled={deleting}
-                  style={{
-                    backgroundColor: DarkTheme.colors.status.error,
-                    paddingVertical: DarkTheme.spacing.sm,
-                    paddingHorizontal: DarkTheme.spacing.lg,
-                    borderRadius: DarkTheme.borderRadius.md,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    opacity: deleting ? 0.5 : 1,
-                  }}
-                >
-                  {deleting ? (
-                    <ActivityIndicator size="small" color="white" />
-                  ) : (
-                    <>
-                      <Trash2 size={16} color="white" style={{ marginRight: DarkTheme.spacing.xs }} />
-                      <Text style={{ color: 'white', fontWeight: '500' }}>
-                        Delete
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
-      </Modal>
+      {/* Swipeable Photo Viewer */}
+      <SwipeablePhotoViewer
+        photos={sortedPhotos}
+        initialIndex={selectedPhotoIndex || 0}
+        visible={viewerVisible}
+        onClose={() => {
+          setViewerVisible(false);
+          setSelectedPhotoIndex(null);
+        }}
+        onSetPrimary={handleSetPrimary}
+        onDelete={handleDeletePhoto}
+        currentUserId={user?.id}
+      />
     </>
   );
 }
