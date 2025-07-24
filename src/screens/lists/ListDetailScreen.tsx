@@ -566,6 +566,15 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
 
   const sortedPlaces = getSortedPlaces();
 
+  // Determine permissions for Add and Edit buttons
+  // Can add places to all editable lists (including Favorites and Want-to-go)
+  const canAddPlaces = effectiveIsEditable;
+  
+  // Can edit list details only if not curated, favorites, or want_to_go
+  const canEditList = effectiveIsEditable && 
+    list?.default_list_type !== 'favorites' && 
+    list?.list_type !== 'want_to_go';
+
   return (
     <SafeAreaView 
       style={{ flex: 1, backgroundColor: DarkTheme.colors.semantic.systemBackground }} 
@@ -607,7 +616,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
               </TouchableOpacity>
               
               <View style={{ flexDirection: 'row', gap: Spacing.xs }}>
-                {effectiveIsEditable && (
+                {canAddPlaces && (
                   <TouchableOpacity
                     onPress={handleAddPlace}
                     style={{ 
@@ -625,7 +634,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
                   </TouchableOpacity>
                 )}
                 
-                {effectiveIsEditable && (
+                {canEditList && (
                   <TouchableOpacity
                     onPress={handleEditList}
                     style={{ 
@@ -665,7 +674,7 @@ export default function ListDetailScreen({ navigation, route }: ListDetailScreen
           <EmptyState
             title="No Places Yet"
             description="Start building your list by adding some amazing places!"
-            primaryAction={effectiveIsEditable ? {
+            primaryAction={canAddPlaces ? {
               title: "Add Place",
               onPress: handleAddPlace
             } : undefined}
