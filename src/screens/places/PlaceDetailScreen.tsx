@@ -616,8 +616,14 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
           <X size={20} color={DarkTheme.colors.semantic.label} />
         </TouchableOpacity>
         
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <Headline style={{ textAlign: 'center' }}>Place Details</Headline>
+        <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: Spacing.sm }}>
+          <Headline 
+            style={{ textAlign: 'center' }}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {place?.name || placeName}
+          </Headline>
         </View>
         
         <View style={{ width: 44 }} />
@@ -638,11 +644,23 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
             paddingBottom: keyboardHeight > 0 ? keyboardHeight + 20 : 20,
           }}
         >
-          {/* Place Title - just the title at the top */}
-          <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: Spacing.md }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Title2 style={{ flex: 1 }}>{place.name}</Title2>
-              
+
+          {/* Photo Gallery */}
+          <PhotoGallery 
+            place={place} 
+            onPhotoUpload={() => loadPlaceDetails()}
+            userPhotos={userPhotos}
+          />
+
+          {/* Price level and editorial badges */}
+          {(place.price_level || place.is_featured || place.has_editorial_content) && (
+            <View style={{ 
+              flexDirection: 'row', 
+              paddingHorizontal: Spacing.lg, 
+              paddingTop: Spacing.sm,
+              paddingBottom: Spacing.xs,
+              gap: Spacing.xs
+            }}>
               {/* Price level */}
               {place.price_level && (
                 <View style={{
@@ -650,7 +668,6 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                   paddingHorizontal: Spacing.sm,
                   paddingVertical: Spacing.xs,
                   borderRadius: DarkTheme.borderRadius.sm,
-                  marginLeft: Spacing.sm,
                 }}>
                   <Body style={{ color: DarkTheme.colors.accent.green, fontWeight: '600' }}>
                     {getPriceLevel(place.price_level)}
@@ -665,7 +682,6 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                   paddingHorizontal: Spacing.sm,
                   paddingVertical: Spacing.xs,
                   borderRadius: DarkTheme.borderRadius.sm,
-                  marginLeft: Spacing.sm,
                   flexDirection: 'row',
                   alignItems: 'center',
                 }}>
@@ -687,7 +703,6 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                   paddingHorizontal: Spacing.sm,
                   paddingVertical: Spacing.xs,
                   borderRadius: DarkTheme.borderRadius.sm,
-                  marginLeft: Spacing.sm,
                   flexDirection: 'row',
                   alignItems: 'center',
                 }}>
@@ -703,14 +718,7 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                 </View>
               )}
             </View>
-          </View>
-
-          {/* Photo Gallery */}
-          <PhotoGallery 
-            place={place} 
-            onPhotoUpload={() => loadPlaceDetails()}
-            userPhotos={userPhotos}
-          />
+          )}
 
           <View style={{ padding: Spacing.lg }}>
             {/* Ratings - moved directly below photo gallery */}
@@ -838,8 +846,8 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
               </ElevatedCard>
             )}
             {/* Description/Notes Section - Always displayed since access is only from lists */}
-            <ElevatedCard padding="md" style={{ marginBottom: Spacing.lg }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md }}>
+            <ElevatedCard padding="sm" style={{ marginBottom: Spacing.lg }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm }}>
                 <Title3>Note</Title3>
                 {contextListPlace && (
                   <View style={{ marginLeft: Spacing.sm, flexDirection: 'row', alignItems: 'center' }}>
@@ -862,10 +870,10 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                         borderColor: DarkTheme.colors.semantic.separator,
                         borderWidth: 1,
                         borderRadius: DarkTheme.borderRadius.sm,
-                        padding: Spacing.sm,
+                        padding: Spacing.xs,
                         color: DarkTheme.colors.semantic.label,
                         fontSize: 16,
-                        minHeight: 80,
+                        minHeight: 60,
                         textAlignVertical: 'top',
                       }
                     ]}
@@ -925,8 +933,8 @@ export default function PlaceDetailScreen({ navigation, route }: PlaceDetailScre
                     borderColor: DarkTheme.colors.semantic.separator,
                     borderWidth: 1,
                     borderRadius: DarkTheme.borderRadius.sm,
-                    padding: Spacing.sm,
-                    minHeight: 60,
+                    padding: Spacing.xs,
+                    minHeight: 50,
                     justifyContent: 'center',
                   }}
                 >
