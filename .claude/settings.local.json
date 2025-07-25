@@ -40,7 +40,11 @@
       "Bash(npm install:*)",
       "Bash(watchman watch-del:*)",
       "Bash(watchman watch-project:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(pkill:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm:*)"
     ],
     "deny": []
   },

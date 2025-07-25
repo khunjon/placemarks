@@ -226,6 +226,9 @@ export const Tag = createIcon(LucideTag);
 // Legacy compatibility type export
 export type LucideIcon = React.ComponentType<IconProps>;
 
+// Export the dynamic icon component for production build compatibility
+export { default as DynamicIcon } from './DynamicIcon';
+
 // Default export for convenience
 export default {
   AlertCircle,
